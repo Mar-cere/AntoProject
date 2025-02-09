@@ -35,4 +35,22 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-app-example
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Expo & React Native
+.expo/
+.expo-shared/
+android/
+ios/
+*.apk
+*.aab
+
+# VSCode
+.vscode/
+
+# Configuración de entorno
+.env
+
