@@ -9,6 +9,7 @@ import ChatScreen from "../screens/ChatScreen";
 import JournalScreen from "../screens/JournalScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import SettingsScreen from "../screens/SettingsScreen";
+import RegisterScreen from "../screens/RegisterScreen";
 
 // Crear navegadores
 const Tab = createBottomTabNavigator();
@@ -18,6 +19,7 @@ const Stack = createNativeStackNavigator();
 const SecondaryStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="Journal" component={JournalScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
