@@ -4,6 +4,7 @@ import HomeScreen from "../screens/HomeScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import SignInScreen from "../screens/SignInScreen";
+import DashScreen from "../screens/DashScreen";
 
 const Stack = createStackNavigator();
 
@@ -21,6 +22,7 @@ export default function StackNavigator() {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="SignIn" component={SignInScreen} />
+      <Stack.Screen name="Dash" component={DashScreen}/>
     </Stack.Navigator>
   );
 }

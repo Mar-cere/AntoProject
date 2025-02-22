@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { 
-  View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Animated
+  View, Text, StyleSheet, TextInput, StatusBar, ImageBackground, TouchableOpacity, Alert, ActivityIndicator
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+
+const API_BASE_URL = 'https://antobackend.onrender.com';
 
 const RegisterScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
@@ -15,7 +17,6 @@ const RegisterScreen = ({ navigation }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setPasswordVisible] = useState(false);
   const [isTermsAccepted, setTermsAccepted] = useState(false);
-  const progressAnim = useRef(new Animated.Value(0)).current;
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -28,14 +29,6 @@ const RegisterScreen = ({ navigation }) => {
     const completedFields = Object.values(formData).filter(Boolean).length;
     return (completedFields / totalFields) * 100;
   };
-
-  useEffect(() => {
-    Animated.timing(progressAnim, {
-      toValue: calculateProgress(),
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
-  }, [formData]);
 
   const handleSignUp = async () => {
     const { name, email, password, confirmPassword } = formData;
@@ -63,7 +56,7 @@ const RegisterScreen = ({ navigation }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('http://localhost:5001/api/users/register', {
+      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),
@@ -81,43 +74,76 @@ const RegisterScreen = ({ navigation }) => {
 
   return (
     <KeyboardAwareScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Crear Cuenta</Text>
-      <Text style={styles.subtitle}>Por favor, llena los campos para registrarte.</Text>
-      
-      <View style={styles.progressBarContainer}>
-        <Animated.View style={[styles.progressBar, { width: `${progressAnim.__getValue()}%` }]} />
-      </View>
+      <StatusBar barStyle="light-content" />
+      <ImageBackground source={require('../images/back.png')} style={styles.background} imageStyle={styles.imageStyle}>
 
-      <TextInput style={styles.input} placeholder="Nombre" onChangeText={(text) => handleInputChange('name', text)} value={formData.name} />
-      <TextInput style={styles.input} placeholder="Correo Electrónico" keyboardType="email-address" onChangeText={(text) => handleInputChange('email', text)} value={formData.email} />
-      
-      <View style={styles.passwordContainer}>
-        <TextInput
-          style={styles.passwordInput}
-          placeholder="Contraseña"
-          secureTextEntry={!isPasswordVisible}
-          onChangeText={(text) => handleInputChange('password', text)}
-          value={formData.password}
-        />
-        <TouchableOpacity onPress={() => setPasswordVisible(!isPasswordVisible)}>
-          <Text style={styles.toggleText}>{isPasswordVisible ? 'Ocultar' : 'Mostrar'}</Text>
-        </TouchableOpacity>
-      </View>
-      
-      <TextInput style={styles.input} placeholder="Confirma tu Contraseña" secureTextEntry onChangeText={(text) => handleInputChange('confirmPassword', text)} value={formData.confirmPassword} />
-      
-      <TouchableOpacity style={styles.checkboxContainer} onPress={() => setTermsAccepted(!isTermsAccepted)}>
-        <View style={[styles.checkbox, isTermsAccepted && styles.checkboxChecked]} />
-        <Text style={styles.termsText}>Acepto los <Text style={styles.termsLink}>términos y condiciones</Text>.</Text>
-      </TouchableOpacity>
+        <View style={styles.content}>
+          <Text style={styles.title}>Crear Cuenta</Text>
+          <Text style={styles.subtitle}>Por favor, llena los campos para registrarte.</Text>
+          
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { width: `${calculateProgress()}%` }]} />
+          </View>
 
-      <TouchableOpacity style={[styles.button, isSubmitting && styles.disabledButton]} onPress={handleSignUp} disabled={isSubmitting}>
-        {isSubmitting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.buttonText}>Registrarse</Text>}
-      </TouchableOpacity>
-      
-      <TouchableOpacity onPress={() => navigation.navigate('SignIn')} style={styles.linkContainer}>
-        <Text style={styles.linkText}>¿Ya tienes una cuenta? Inicia Sesión</Text>
-      </TouchableOpacity>
+          <TextInput 
+            style={styles.input} 
+            placeholder="Nombre" 
+            placeholderTextColor="#A3B8E8"
+            onChangeText={(text) => handleInputChange('name', text)} 
+            value={formData.name} 
+          />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Correo Electrónico" 
+            placeholderTextColor="#A3B8E8"
+            keyboardType="email-address" 
+            onChangeText={(text) => handleInputChange('email', text)} 
+            value={formData.email} 
+          />
+
+          {/* Campo de Contraseña y Confirmación de Contraseña */}
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Contraseña"
+              placeholderTextColor="#A3B8E8"
+              secureTextEntry={!isPasswordVisible}
+              onChangeText={(text) => handleInputChange('password', text)}
+              value={formData.password}
+            />
+            <TouchableOpacity onPress={() => setPasswordVisible(!isPasswordVisible)}>
+              <Text style={styles.toggleText}>{isPasswordVisible ? 'Ocultar' : 'Mostrar'}</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <TextInput 
+            style={styles.passwordInput} 
+            placeholder="Confirma tu Contraseña" 
+            placeholderTextColor="#A3B8E8"
+            secureTextEntry 
+            onChangeText={(text) => handleInputChange('confirmPassword', text)} 
+            value={formData.confirmPassword} 
+          />
+          
+          <TouchableOpacity style={styles.checkboxContainer} onPress={() => setTermsAccepted(!isTermsAccepted)}>
+            <View style={[styles.checkbox, isTermsAccepted && styles.checkboxChecked]} />
+            <Text style={styles.termsText}>Acepto los <Text style={styles.termsLink}>términos y condiciones</Text>.</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.button, isSubmitting && styles.disabledButton]} 
+            onPress={handleSignUp} 
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.buttonText}>Registrarse</Text>}
+          </TouchableOpacity>
+          
+          <TouchableOpacity onPress={() => navigation.navigate('SignIn')} style={styles.linkContainer}>
+            <Text style={styles.linkText}>¿Ya tienes una cuenta? Inicia Sesión</Text>
+          </TouchableOpacity>
+        </View>
+
+      </ImageBackground>
     </KeyboardAwareScrollView>
   );
 };
@@ -128,63 +154,95 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    backgroundColor: '#0E1A57',
+    backgroundColor: '#030A24',
+  },
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  imageStyle: {
+    opacity: 0.1,
+  },
+  content: {
+    alignItems: 'center',
+    width: '100%',
   },
   title: {
-    fontSize: 28,
+    fontSize: 34, 
     fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 10,
+    color: '#FFFFFF',
+    marginBottom: 50, 
   },
   subtitle: {
-    fontSize: 16,
-    color: '#A3ADDB',
-    marginBottom: 20,
+    fontSize: 20, 
+    color: '#A3B8E8',
+    marginBottom: 40, 
   },
   progressBarContainer: {
     width: '100%',
     height: 8,
-    backgroundColor: '#A3ADDB',
+    backgroundColor: '#A3B8E8',
     borderRadius: 5,
     marginBottom: 20,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#5127DB',
+    backgroundColor: 'rgba(26, 221, 219, 0.9)',
     borderRadius: 5,
   },
-  input: {
-    width: '100%',
-    backgroundColor: '#CECFDB',
-    borderRadius: 20,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 15,
-    color: '#1D1B70',
-  },
   passwordContainer: {
+    width: '100%',
+    marginBottom: 20, 
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#CECFDB',
-    borderRadius: 20,
+    backgroundColor: '#1D2B5F',
+    borderRadius: 10,
     paddingHorizontal: 15,
   },
   passwordInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#0E1A57',
+    fontSize: 18, 
+    color: '#FFFFFF',
+    paddingVertical: 14,
+    backgroundColor: '#1D2B5F',
+    width: '100%',
+    
+  },
+  toggleText: {
+    color: '#1ADDDB',
+    fontWeight: 'bold',
+  },
+  input: {
+    width: '100%',
+    backgroundColor: '#1D2B5F',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 18, 
+    color: '#FFFFFF',
+    marginBottom: 20, 
   },
   button: {
-    backgroundColor: '#5127DB',
-    paddingVertical: 12,
-    borderRadius: 25,
+    backgroundColor: 'rgba(26, 221, 219, 0.9)',
+    paddingVertical: 18, 
+    borderRadius: 30, 
     width: '100%',
     alignItems: 'center',
+    marginBottom: 16, 
   },
   buttonText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: 20, 
     fontWeight: 'bold',
+  },
+  linkContainer: {
+    marginTop: 20,
+  },
+  linkText: {
+    fontSize: 16, 
+    color: '#1ADDDB',
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });
 
