@@ -78,7 +78,7 @@ const DashScreen = () => {
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity onPress={() => alert(`Seleccionaste: ${item.label}`)}>
-                  <View style={styles.emotionCard}><Text style={styles.emoji}>{item.emoji}</Text><Text style={styles.cardText}>{item.label}</Text></View>
+                  <View style={styles.card}><Text style={styles.emoji}>{item.emoji}</Text><Text style={styles.cardText}>{item.label}</Text></View>
                 </TouchableOpacity>
               )}
             />
@@ -133,19 +133,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   card: {
-    backgroundColor: '#1D2B5F',
-    borderRadius: 10,
-    padding: 14,
-    marginHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  emotionCard: {
     backgroundColor: '#1D2B5F',
     borderRadius: 10,
     padding: 14,
