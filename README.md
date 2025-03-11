@@ -1,50 +1,33 @@
-# Welcome to your Expo app 👋
+# Anto - Tu Acompañante Virtual Inteligente
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Anto es una aplicación diseñada para ayudarte a gestionar tu bienestar emocional y productividad. Con un enfoque en la asistencia personalizada, Anto combina inteligencia artificial con herramientas de organización para mejorar tu día a día.
 
-## Get started
+## 🌟 Características Principales
 
-1. Install dependencies
+### 🧠 Chat con Inteligencia Artificial
+El corazón de Anto es su **chat inteligente**, diseñado para ofrecer apoyo emocional y acompañamiento en cualquier momento. Puedes conversar sobre cómo te sientes, recibir consejos motivacionales y hasta obtener estrategias para manejar el estrés o la ansiedad.
 
-   ```bash
-   npm install
-   ```
+### 📅 Gestor de Hábitos
+Crea, sigue y mantén tus hábitos saludables con **visualizaciones de progreso**. Cada hábito es medido a través de gráficos intuitivos, permitiéndote ver tu avance de manera clara y motivadora.
 
-2. Start the app
+### 🗒️ Tareas y Recordatorios
+Organiza tu día con el sistema de **tareas** de Anto. Agrega actividades, márcalas como completadas y recibe recordatorios para asegurarte de que no se te pase nada importante.
 
-   ```bash
-    npx expo start
-   ```
+### 📝 Journal Personal
+Registra tus pensamientos y reflexiones en el **Journal** integrado. Ideal para desahogarte, plasmar ideas o simplemente llevar un seguimiento de tu estado de ánimo.
 
-In the output, you'll find options to open the app in a
+### 🛏️ Dashboard Personalizado
+Una vista rápida con toda tu información clave:
+- Estado de ánimo del día
+- Avance en hábitos
+- Tareas pendientes
+- Acceso directo al chat con IA
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🌐 Disponible para ti en cualquier momento
+Anto está diseñado para acompañarte donde y cuando lo necesites, con una interfaz intuitiva, amigable y fácil de usar.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+🔍 **Pronto más actualizaciones!** Estamos mejorando continuamente para ofrecerte la mejor experiencia posible.
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+✨ **Anto, tu espacio de bienestar y organización personal.**
