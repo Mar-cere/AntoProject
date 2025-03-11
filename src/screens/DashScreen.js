@@ -1,31 +1,90 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  View, Text, FlatList, StyleSheet, StatusBar, ImageBackground, 
-  TouchableOpacity, Animated, Image, RefreshControl, ActivityIndicator, Alert 
+  View, Text, StyleSheet, ImageBackground, TouchableOpacity, 
+  FlatList, Image, Animated, StatusBar, ActivityIndicator, 
+  Alert, RefreshControl, Dimensions, ScrollView
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Dimensions } from 'react-native';
-import Svg, { Circle, Text as SvgText, G, Line, Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { LineChart } from 'react-native-chart-kit';
+import Svg, { Circle, Text as SvgText, G, Line } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const screenWidth = Dimensions.get('window').width;
 
-// Sistema de puntos y logros
+// Constantes
 const POINTS = {
   COMPLETE_TASK: 10,
-  MAINTAIN_HABIT: 15,
-  STREAK_BONUS: 5, // puntos extra por día consecutivo
+  MAINTAIN_HABIT: 20,
+  UNLOCK_ACHIEVEMENT: 50
 };
 
-const ACHIEVEMENTS = [
-  { id: 'a1', title: 'Primer Paso', description: 'Completa tu primera tarea', points: 50, icon: '🏆', unlocked: false },
-  { id: 'a2', title: 'Constancia', description: 'Mantén un hábito por 7 días', points: 100, icon: '🔥', unlocked: false },
-  { id: 'a3', title: 'Maestro Organizador', description: 'Completa 50 tareas', points: 200, icon: '⭐', unlocked: false },
-  { id: 'a4', title: 'Hábito Saludable', description: 'Mantén un hábito de salud por 30 días', points: 300, icon: '💪', unlocked: false },
-  { id: 'a5', title: 'Productividad Total', description: 'Completa todas las tareas del día 5 veces', points: 250, icon: '🚀', unlocked: false },
+// Datos de ejemplo
+const motivationalQuotes = [
+  "El único modo de hacer un gran trabajo es amar lo que haces.",
+  "No cuentes los días, haz que los días cuenten.",
+  "El éxito es la suma de pequeños esfuerzos repetidos día tras día.",
+  "La mejor forma de predecir el futuro es creándolo.",
+  "Nunca es demasiado tarde para ser lo que podrías haber sido."
 ];
+
+const ACHIEVEMENTS = [
+  { id: '1', title: 'Primer Paso', description: 'Completa tu primera tarea', points: 50, icon: '🏆', unlocked: false },
+  { id: '2', title: 'Constancia', description: 'Mantén un hábito por 7 días', points: 100, icon: '🔄', unlocked: false },
+  { id: '3', title: 'Productividad', description: 'Completa 10 tareas en una semana', points: 150, icon: '⚡', unlocked: false },
+  { id: '4', title: 'Maestría', description: 'Alcanza el 100% en un hábito', points: 200, icon: '🌟', unlocked: false },
+];
+
+// Componente de partículas para el fondo (reutilizado de HomeScreen)
+const ParticleBackground = () => {
+  // Crea 10 partículas con posiciones y animaciones aleatorias
+  const particles = Array(10).fill(0).map((_, i) => {
+    // Posiciones iniciales fijas (no animadas)
+    const initialPosX = Math.random() * Dimensions.get('window').width;
+    const initialPosY = Math.random() * Dimensions.get('window').height;
+    
+    // Solo animamos la opacidad con el controlador nativo
+    const opacity = useRef(new Animated.Value(Math.random() * 0.5 + 0.1)).current;
+    const size = Math.random() * 4 + 2; // Tamaño entre 2 y 6
+    
+    // Anima cada partícula (solo opacidad)
+    useEffect(() => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(opacity, {
+            toValue: Math.random() * 0.5 + 0.1,
+            duration: 2000 + Math.random() * 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: Math.random() * 0.3 + 0.05,
+            duration: 2000 + Math.random() * 3000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }, []);
+    
+    return (
+      <Animated.View
+        key={i}
+        style={{
+          position: 'absolute',
+          left: initialPosX,
+          top: initialPosY,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: '#1ADDDB',
+          opacity: opacity,
+        }}
+      />
+    );
+  });
+  
+  return <>{particles}</>;
+};
 
 // Componente de esqueleto para carga
 const SkeletonLoader = ({ width, height, style }) => {
@@ -68,7 +127,6 @@ const SkeletonLoader = ({ width, height, style }) => {
   );
 };
 
-
 // Componente para mostrar errores con opciones de recuperación
 const ErrorMessage = ({ message, onRetry, onDismiss }) => (
   <View style={styles.errorContainer}>
@@ -87,32 +145,6 @@ const ErrorMessage = ({ message, onRetry, onDismiss }) => (
     </View>
   </View>
 );
-
-// Componente para gráficos semanales
-const WeeklyStatsChart = ({ data, title }) => {
-  const chartConfig = {
-    backgroundGradientFrom: '#1D2B5F',
-    backgroundGradientTo: '#1D2B5F',
-    color: (opacity = 1) => `rgba(163, 184, 232, ${opacity})`,
-    strokeWidth: 2,
-    barPercentage: 0.5,
-    useShadowColorFromDataset: false,
-  };
-  
-  return (
-    <View style={styles.chartContainer}>
-      <Text style={styles.chartTitle}>{title}</Text>
-      <LineChart
-        data={data}
-        width={Dimensions.get('window').width - 40}
-        height={180}
-        chartConfig={chartConfig}
-        bezier
-        style={styles.chart}
-      />
-    </View>
-  );
-};
 
 // Componente para mostrar logros y medallas
 const AchievementItem = ({ achievement, onPress }) => (
@@ -137,7 +169,7 @@ const AchievementItem = ({ achievement, onPress }) => (
   </TouchableOpacity>
 );
 
-
+// Componente de anillo de progreso
 const ProgressRing = ({ radius, strokeWidth, progress, color }) => {
   const normalizedRadius = radius - strokeWidth / 2;
   const circumference = normalizedRadius * 2 * Math.PI;
@@ -168,13 +200,13 @@ const ProgressRing = ({ radius, strokeWidth, progress, color }) => {
         cx={radius}
         cy={radius}
       />
-      <Circle
+      <AnimatedCircle
         stroke={color}
         fill="transparent"
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeDasharray={circumference}
-        strokeDashoffset={strokeDashoffset}
+        strokeDashoffset={animatedStrokeDashoffset}
         r={normalizedRadius}
         cx={radius}
         cy={radius}
@@ -183,32 +215,12 @@ const ProgressRing = ({ radius, strokeWidth, progress, color }) => {
   );
 };
 
-const screenWidth = Dimensions.get('window').width;
-
-const sampleHabits = [
-  { id: '1', title: 'Leer 10 páginas', progress: 0.7, color: '#FF6384' },
-  { id: '2', title: 'Beber 2L de agua', progress: 0.5, color: '#36A2EB' },
-];
-
-const sampleTasks = [
-  { id: '1', title: 'Terminar reporte', completed: false },
-  { id: '2', title: 'Comprar víveres', completed: false },
-  { id: '3', title: 'Hacer ejercicio', completed: false },
-];
-
-const motivationalQuotes = [
-  "Hoy es un buen día para intentarlo.",
-  "Pequeños pasos te llevan lejos.",
-  "Tu esfuerzo no pasa desapercibido.",
-  "Cada día es una nueva oportunidad.",
-];
-
-const baseRadius = 20;
-const strokeWidth = 14;
-
 const DashScreen = () => {
   const navigation = useNavigation();
-  const [fadeAnim] = useState(new Animated.Value(0));
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateYAnim = useRef(new Animated.Value(20)).current;
+  
+  // Estados
   const [greeting, setGreeting] = useState('');
   const [userName, setUserName] = useState('Usuario');
   const [userAvatar, setUserAvatar] = useState(null);
@@ -243,6 +255,7 @@ const DashScreen = () => {
     legend: ["Progreso de hábitos"]
   });
 
+  // Cargar datos
   const loadData = useCallback(async () => {
     try {
       if (!refreshing) {
@@ -282,9 +295,18 @@ const DashScreen = () => {
         setHabits([
           { id: '1', title: 'Leer 10 páginas', progress: 0.7, color: '#FF6384' },
           { id: '2', title: 'Beber 2L de agua', progress: 0.5, color: '#36A2EB' },
+          { id: '3', title: 'Meditar 10 minutos', progress: 0.3, color: '#FFCE56' },
         ]);
       }
       
+      // Generar datos aleatorios para las gráficas
+      setWeeklyStats({
+        ...weeklyStats,
+        datasets: [{
+          ...weeklyStats.datasets[0],
+          data: Array(7).fill().map(() => Math.floor(Math.random() * 5))
+        }]
+      });
       
       setHabitStats({
         ...habitStats,
@@ -307,266 +329,372 @@ const DashScreen = () => {
       // Establecer cita motivacional
       setQuote(motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)]);
       
+      // Animación de entrada
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      
     } catch (err) {
-      console.error('Error cargando datos:', err);
-      setError('No pudimos cargar tus datos. Por favor, intenta de nuevo.');
+      console.error('Error al cargar datos:', err);
+      setError('No se pudieron cargar los datos. Por favor, intenta de nuevo.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  }, [refreshing]);
+  
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    loadData();
   }, []);
   
-  function handleRefresh() {
+  // Manejar pull-to-refresh
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     loadData();
-  }
-
-  function navigateToStatistics() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('Statistics');
-  }
-
-  function showAchievementDetails(achievement) {
-    Alert.alert(
-      achievement.title,
-      `${achievement.description}\n\nRecompensa: ${achievement.points} puntos`,
-      [{ text: 'Cerrar', style: 'default' }]
-    );
-  }
-
-  function toggleTaskCompletion(id) {
+  }, [loadData]);
+  
+  // Manejar completar tarea
+  const handleCompleteTask = useCallback((taskId) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     setTasks(prevTasks => {
-      const updatedTasks = prevTasks.map(task => {
-        if (task.id === id) {
-          const completed = !task.completed;
-          
-          // Otorgar puntos si se completa
-          if (completed) {
-            setUserPoints(prev => {
-              const newPoints = prev + POINTS.COMPLETE_TASK;
-              AsyncStorage.setItem('userPoints', newPoints.toString());
-              return newPoints;
-            });
-          }
-          
-          return { ...task, completed };
-        }
-        return task;
-      });
+      const updatedTasks = prevTasks.map(task => 
+        task.id === taskId ? { ...task, completed: !task.completed } : task
+      );
       
-      // Guardar tareas actualizadas
+      // Guardar en AsyncStorage
       AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
+      
       return updatedTasks;
     });
-  }
-
-  function updateHabitProgress(id, newProgress) {
+    
+    // Actualizar puntos si la tarea se completa
+    const task = tasks.find(t => t.id === taskId);
+    if (task && !task.completed) {
+      const newPoints = userPoints + POINTS.COMPLETE_TASK;
+      setUserPoints(newPoints);
+      AsyncStorage.setItem('userPoints', newPoints.toString());
+      
+      // Verificar logros
+      checkAchievements(newPoints);
+    }
+  }, [tasks, userPoints]);
+  
+  // Verificar logros
+  const checkAchievements = useCallback((points) => {
+    const completedTasks = tasks.filter(task => task.completed).length;
+    
+    // Actualizar logros basados en el progreso
+    const updatedAchievements = userAchievements.map(achievement => {
+      if (achievement.unlocked) return achievement;
+      
+      let shouldUnlock = false;
+      
+      // Verificar condiciones para desbloquear logros
+      if (achievement.id === '1' && completedTasks > 0) {
+        shouldUnlock = true;
+      } else if (achievement.id === '3' && completedTasks >= 10) {
+        shouldUnlock = true;
+      }
+      
+      if (shouldUnlock && !achievement.unlocked) {
+        // Mostrar notificación
+        Alert.alert(
+          '¡Logro desbloqueado!',
+          `Has desbloqueado: ${achievement.title}\n+${achievement.points} puntos`,
+          [{ text: 'Genial', style: 'default' }]
+        );
+        
+        // Actualizar puntos
+        const newPoints = points + achievement.points;
+        setUserPoints(newPoints);
+        AsyncStorage.setItem('userPoints', newPoints.toString());
+        
+        return { ...achievement, unlocked: true };
+      }
+      
+      return achievement;
+    });
+    
+    setUserAchievements(updatedAchievements);
+    AsyncStorage.setItem('userAchievements', JSON.stringify(updatedAchievements));
+  }, [tasks, userAchievements]);
+  
+  // Manejar actualizar hábito
+  const handleUpdateHabit = useCallback((habitId, newProgress) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
     setHabits(prevHabits => {
-      const updatedHabits = prevHabits.map(habit => {
-        if (habit.id === id) {
-          // Otorgar puntos si se alcanza cierto progreso
-          if (newProgress >= 0.9 && habit.progress < 0.9) {
-            setUserPoints(prev => {
-              const newPoints = prev + POINTS.MAINTAIN_HABIT;
-              AsyncStorage.setItem('userPoints', newPoints.toString());
-              return newPoints;
-            });
-          }
-          
-          return { ...habit, progress: newProgress };
-        }
-        return habit;
-      });
+      const updatedHabits = prevHabits.map(habit => 
+        habit.id === habitId ? { ...habit, progress: newProgress } : habit
+      );
       
-      // Guardar hábitos actualizados
+      // Guardar en AsyncStorage
       AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
+      
       return updatedHabits;
     });
-  }
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    }).start();
-
-    loadData();
+    
+    // Actualizar puntos si el hábito alcanza el 100%
+    const habit = habits.find(h => h.id === habitId);
+    if (habit && habit.progress < 1 && newProgress >= 1) {
+      const newPoints = userPoints + POINTS.MAINTAIN_HABIT;
+      setUserPoints(newPoints);
+      AsyncStorage.setItem('userPoints', newPoints.toString());
+      
+      // Verificar logros
+      checkAchievements(newPoints);
+    }
+  }, [habits, userPoints]);
+  
+  // Manejar presionar logro
+  const handleAchievementPress = useCallback((achievement) => {
+    if (achievement.unlocked) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        achievement.title,
+        `${achievement.description}\nPuntos: +${achievement.points}`,
+        [{ text: 'Cerrar', style: 'default' }]
+      );
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        'Logro bloqueado',
+        `${achievement.description}\nCompleta los requisitos para desbloquear este logro.`,
+        [{ text: 'Entendido', style: 'default' }]
+      );
+    }
   }, []);
-
+  
+  // Renderizar pantalla de carga
   if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
-        <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#A3B8E8" style={{marginBottom: 20}} />
-        <Text style={styles.loadingText}>Cargando tus datos...</Text>
+        <StatusBar barStyle="light-content" backgroundColor="#030A24" />
+        <ActivityIndicator size="large" color="#1ADDDB" />
+        <Text style={styles.loadingText}>Cargando tu dashboard...</Text>
       </View>
     );
   }
-
+  
+  // Renderizar pantalla de error
+  if (error && !refreshing) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <StatusBar barStyle="light-content" backgroundColor="#030A24" />
+        <ErrorMessage 
+          message={error}
+          onRetry={loadData}
+          onDismiss={() => setError(null)}
+        />
+      </View>
+    );
+  }
+  
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <ImageBackground source={require('../images/back.png')} style={styles.background} imageStyle={styles.imageStyle}>
-        <View style={styles.contentContainer}>
-          {error && (
-            <ErrorMessage 
-              message={error}
-              onRetry={loadData}
-              onDismiss={() => setError(null)}
+      <StatusBar barStyle="light-content" backgroundColor="#030A24" />
+      <ImageBackground
+        source={require('../images/back.png')}
+        style={styles.background}
+        imageStyle={styles.imageStyle}
+      >
+        <ParticleBackground />
+        
+        <Animated.ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#1ADDDB"
+              colors={["#1ADDDB"]}
             />
-          )}
-          <View style={styles.headerContainer}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.greetingText}>{greeting},</Text>
-              <Text style={styles.nameText}>{userName}</Text>
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: translateYAnim }],
+            }}
+          >
+            {/* Encabezado */}
+            <View style={styles.headerContainer}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.greetingText}>{greeting}</Text>
+                <Text style={styles.nameText}>{userName}</Text>
+              </View>
+              <View style={styles.headerRight}>
+                <View style={styles.pointsContainer}>
+                  <Text style={styles.pointsIcon}>⭐</Text>
+                  <Text style={styles.pointsText}>{userPoints}</Text>
+                </View>
+                {userAvatar ? (
+                  <Image source={{ uri: userAvatar }} style={styles.userAvatar} />
+                ) : (
+                  <View style={[styles.userAvatar, { backgroundColor: '#1D2B5F' }]}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>
+                      {userName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View style={styles.headerRight}>
-              <TouchableOpacity 
-                style={styles.statsButton}
-                onPress={navigateToStatistics}
-              >
-                <Text style={styles.statsButtonIcon}>📊</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.pointsContainer}>
-                <Text style={styles.pointsIcon}>⭐</Text>
-                <Text style={styles.pointsText}>{userPoints}</Text>
+            
+            {/* Cita motivacional */}
+            <View style={styles.card}>
+              <Text style={styles.quoteText}>"{quote}"</Text>
+            </View>
+            
+            {/* Sección de tareas */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Mis Tareas</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
+                  <Text style={styles.seeAllText}>Ver todas</Text>
+                </TouchableOpacity>
               </View>
               
-              <Image 
-                source={userAvatar ? { uri: userAvatar } : require('../images/avatar.png')} 
-                style={styles.userAvatar} 
-              />
-            </View>
-          </View>
-
-          <Animated.View style={[styles.sectionContainer, { opacity: fadeAnim }]}> 
-            <Text style={styles.sectionTitle}>¿Cómo te sientes hoy?</Text>
-            <View style={styles.moodContainer}>
-              {['😊', '😐', '😔', '😤', '😴'].map((emoji, index) => (
-                <TouchableOpacity 
-                  key={index}
-                  style={styles.moodItem}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    // Lógica para guardar estado de ánimo
-                  }}
-                >
-                  <Text style={styles.moodEmoji}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </Animated.View>
-
-          <Animated.View style={[styles.sectionContainer, { opacity: fadeAnim }]}> 
-            <Text style={styles.sectionTitle}>Tareas</Text>
-            <FlatList
-              data={tasks}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity onPress={() => toggleTaskCompletion(item.id)}>
-                  <View style={[styles.card, styles.taskCard, item.completed && styles.completedTask]}>
+              <FlatList
+                data={tasks.slice(0, 3)}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.card,
+                      styles.taskCard,
+                      item.completed && styles.completedTask,
+                    ]}
+                    onPress={() => handleCompleteTask(item.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.cardText,
+                        item.completed && styles.completedTaskText,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {item.title}
+                    </Text>
                     {item.completed && (
                       <View style={styles.completedCheckmark}>
                         <Text style={styles.checkmarkText}>✓</Text>
                       </View>
                     )}
-                    <Text style={[styles.cardText, item.completed && styles.completedTaskText]}>
-                      {item.title}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
-          </Animated.View>
-
-          <Text style={styles.quoteText}>{quote}</Text>
-
-
-
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Hábitos</Text>
-            <View style={styles.card}>
-              <View style={styles.ringsSection}>
-                <View style={styles.ringsContainer}>
-                  {sampleHabits.map((habit, index) => (
-                    <ProgressRing
-                      key={habit.id}
-                      radius={baseRadius + index * (strokeWidth + 5)}
-                      strokeWidth={strokeWidth}
-                      progress={habit.progress}
-                      color={habit.color}
-                    />
-                  ))}
-                </View>
-              </View>
-              <View style={styles.legendsSection}>
-                {habits.map(habit => (
-                  <TouchableOpacity 
-                    key={habit.id} 
-                    onPress={() => {
-                      // Simular actualización de progreso al tocar
-                      const newProgress = Math.min(1, habit.progress + 0.1);
-                      updateHabitProgress(habit.id, newProgress);
-                    }}
-                  >
-                    <View style={styles.habitLegend}>
-                      <View style={[styles.habitColor, { backgroundColor: habit.color }]} />
-                      <Text style={styles.cardText}>{habit.title}</Text>
-                      <Text style={styles.habitProgress}>{Math.round(habit.progress * 100)}%</Text>
-                    </View>
                   </TouchableOpacity>
-                ))}
-              </View>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.card}>
+                    <Text style={styles.cardText}>No hay tareas pendientes</Text>
+                  </View>
+                }
+              />
             </View>
-          </View>
-
-          <Animated.View style={[styles.sectionContainer, { opacity: fadeAnim }]}>
-            <Text style={styles.sectionTitle}>Logros</Text>
-            <FlatList
-              data={userAchievements.filter(a => a.unlocked).length > 0 
-                ? userAchievements.filter(a => a.unlocked) 
-                : userAchievements.slice(0, 2)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <AchievementItem 
-                  achievement={item} 
-                  onPress={showAchievementDetails}
-                />
+            
+            {/* Sección de hábitos */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Mis Hábitos</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Habits')}>
+                  <Text style={styles.seeAllText}>Ver todos</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {habits.length > 0 ? (
+                habits.map((habit) => (
+                  <View key={habit.id} style={styles.card}>
+                    <View style={styles.habitCardContentAbsolute}>
+                      <View style={styles.progressRingContainer}>
+                        <ProgressRing
+                          radius={30}
+                          strokeWidth={5}
+                          progress={habit.progress}
+                          color={habit.color}
+                        />
+                      </View>
+                      
+                      <View style={styles.habitTextContainerAbsolute}>
+                        <Text style={styles.habitTitle}>{habit.title}</Text>
+                        <Text style={styles.habitProgress}>
+                          {Math.round(habit.progress * 100)}% completado
+                        </Text>
+                      </View>
+                      
+                      <TouchableOpacity
+                        style={styles.updateButtonAbsolute}
+                        onPress={() => {
+                          const newProgress = Math.min(habit.progress + 0.1, 1);
+                          handleUpdateHabit(habit.id, newProgress);
+                        }}
+                      >
+                        <Text style={styles.updateButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.card}>
+                  <Text style={styles.cardText}>No hay hábitos configurados</Text>
+                </View>
               )}
-            />
-            {userAchievements.filter(a => a.unlocked).length > 0 && (
-              <TouchableOpacity 
-                style={styles.viewAllButton}
-                onPress={() => navigation.navigate('Achievements')}
-              >
-                <Text style={styles.viewAllButtonText}>Ver todos los logros</Text>
-              </TouchableOpacity>
-            )}
+            </View>
+            
+            {/* Sección de logros */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Logros</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Achievements')}>
+                  <Text style={styles.seeAllText}>Ver todos</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {userAchievements.slice(0, 2).map((achievement) => (
+                <AchievementItem
+                  key={achievement.id}
+                  achievement={achievement}
+                  onPress={handleAchievementPress}
+                />
+              ))}
+            </View>
           </Animated.View>
-
-          {/* Barra Flotante */}
-          <View style={styles.floatingBar}>
-            <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('Journal')}> 
-              <Text style={styles.floatingButtonText}>📖 Journal</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('Chat')}> 
-              <Text style={styles.floatingButtonText}>💬 Chat</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('Settings')}> 
-              <Text style={styles.floatingButtonText}>⚙️ Configuración</Text>
-            </TouchableOpacity>
-          </View>
+        </Animated.ScrollView>
+        
+        {/* Barra flotante */}
+        <View style={styles.floatingBar}>
+          <TouchableOpacity
+            style={styles.floatingButton}
+            onPress={() => navigation.navigate('AddTask')}
+          >
+            <Text style={styles.floatingButtonText}>+ Tarea</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.floatingButton}
+            onPress={() => navigation.navigate('AddHabit')}
+          >
+            <Text style={styles.floatingButtonText}>+ Hábito</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.floatingButton}
+            onPress={() => navigation.navigate('Stats')}
+          >
+            <Text style={styles.floatingButtonText}>Estadísticas</Text>
+          </TouchableOpacity>
         </View>
       </ImageBackground>
     </View>
@@ -574,38 +702,47 @@ const DashScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  imageStyle: {
-    opacity: 0.1,
-  },
-  contentContainer: {
-    marginTop:20,
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 40,
-  },
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#030A24',
-  },
-  background: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
   },
   loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingAnimation: {
-    width: 200,
-    height: 200,
-  },
   loadingText: {
     color: '#A3B8E8',
     fontSize: 18,
-    marginTop: 20,
+    marginTop: 10,
+  },
+  background: {
+    flex: 1,
+    width: '100%',
+  },
+  imageStyle: {
+    opacity: 0.1,
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 80, // Espacio para la barra flotante
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadingAnimation: {
+    width: 200,
+    height: 200,
   },
   errorContainer: {
     backgroundColor: 'rgba(255, 99, 71, 0.2)',
@@ -635,16 +772,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     marginLeft: 10,
   },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   greetingText: {
     fontSize: 22,
     color: '#A3B8E8',
@@ -653,10 +780,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#FFFFFF',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   statsButton: {
     width: 40,
@@ -823,7 +946,6 @@ const styles = StyleSheet.create({
   habitLegend: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
   },
   habitColor: {
     width: 20,
@@ -838,6 +960,45 @@ const styles = StyleSheet.create({
   habitProgress: {
     color: '#A3B8E8',
     fontSize: 14,
+  },
+  habitCardContentAbsolute: {
+    position: 'relative',
+    width: '100%',
+    height: 50, // Altura fija para la tarjeta
+  },
+  progressRingContainer: {
+    position: 'absolute',
+    left: 5,
+  },
+  habitTextContainerAbsolute: {
+    position: 'absolute',
+    left: 80, // Posición exacta desde la izquierda
+    top: '50%',
+    transform: [{ translateY: -20 }], // Ajustar según la altura del texto
+    width: '60%', // Ancho controlado
+  },
+  updateButtonAbsolute: {
+    position: 'absolute',
+    right: 10,
+    top: '50%',
+    transform: [{ translateY: -18 }], // Mitad del tamaño del botón
+    backgroundColor: 'rgba(26, 221, 219, 0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  updateButtonText: {
+    color: '#1ADDDB',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  habitTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
 });
 
