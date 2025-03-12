@@ -211,6 +211,15 @@ const ProgressRing = ({ radius, strokeWidth, progress, color }) => {
         cx={radius}
         cy={radius}
       />
+      <SvgText
+        x={radius}
+        y={radius + 5}
+        textAnchor="middle"
+        fill="#FFFFFF"
+        fontSize="12"
+      >
+        {`${Math.round(progress * 100)}%`}
+      </SvgText>
     </Svg>
   );
 };
@@ -254,6 +263,69 @@ const DashScreen = () => {
     ],
     legend: ["Progreso de hábitos"]
   });
+
+  // Añadir un indicador visual para el pull-to-refresh
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const refreshIndicatorOpacity = scrollY.interpolate({
+    inputRange: [-50, -20, 0],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp'
+  });
+
+  // Animación para el botón central
+  const centerButtonScale = useRef(new Animated.Value(1)).current;
+  const centerButtonRotate = useRef(new Animated.Value(0)).current;
+
+  // Interpolación para la rotación
+  const spin = centerButtonRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '45deg']
+  });
+
+  // Estado para controlar si el menú está abierto
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Función para manejar el botón central
+  const handleCenterButton = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    // Cambiar el estado del menú
+    setMenuOpen(!menuOpen);
+    
+    // Animar el botón
+    Animated.parallel([
+      Animated.spring(centerButtonScale, {
+        toValue: menuOpen ? 1 : 1.2,
+        friction: 5,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(centerButtonRotate, {
+        toValue: menuOpen ? 0 : 1,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      // Si el menú se está cerrando, volver al tamaño normal
+      if (menuOpen) {
+        Animated.spring(centerButtonScale, {
+          toValue: 1,
+          friction: 5,
+          tension: 40,
+          useNativeDriver: true,
+        }).start();
+      }
+    });
+    
+    // Aquí puedes mostrar un modal o navegar a otra pantalla
+    if (!menuOpen) {
+      // Mostrar opciones de añadir
+      // Por ejemplo: setShowAddOptions(true);
+    } else {
+      // Ocultar opciones
+      // Por ejemplo: setShowAddOptions(false);
+    }
+  };
 
   // Cargar datos
   const loadData = useCallback(async () => {
@@ -476,6 +548,68 @@ const DashScreen = () => {
     }
   }, []);
   
+  // Animación para la barra flotante
+  const floatingBarAnim = useRef(new Animated.Value(100)).current;
+  const floatingBarOpacity = useRef(new Animated.Value(0)).current;
+  const [activeTab, setActiveTab] = useState('home');
+  
+  useEffect(() => {
+    // Animar la barra flotante después de que el contenido principal se haya cargado
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.spring(floatingBarAnim, {
+          toValue: 0,
+          friction: 6,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatingBarOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }, 800);
+  }, []);
+
+  // Componente de efecto de ondas
+  const RippleEffect = () => {
+    const rippleScale = useRef(new Animated.Value(0.5)).current;
+    const rippleOpacity = useRef(new Animated.Value(1)).current;
+    
+    useEffect(() => {
+      // Animar el efecto de ondas
+      Animated.parallel([
+        Animated.timing(rippleScale, {
+          toValue: 2,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(rippleOpacity, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        // Resetear la animación
+        rippleScale.setValue(0.5);
+        rippleOpacity.setValue(1);
+      });
+    }, [menuOpen]); // Se activa cuando cambia el estado del menú
+    
+    return (
+      <Animated.View
+        style={[
+          styles.rippleEffect,
+          {
+            transform: [{ scale: rippleScale }],
+            opacity: rippleOpacity,
+          }
+        ]}
+      />
+    );
+  };
+
   // Renderizar pantalla de carga
   if (loading && !refreshing) {
     return (
@@ -541,20 +675,12 @@ const DashScreen = () => {
                   <Text style={styles.pointsIcon}>⭐</Text>
                   <Text style={styles.pointsText}>{userPoints}</Text>
                 </View>
-                {userAvatar ? (
-                  <Image source={{ uri: userAvatar }} style={styles.userAvatar} />
-                ) : (
-                  <View style={[styles.userAvatar, { backgroundColor: '#1D2B5F' }]}>
-                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>
-                      {userName.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
+                  <Image source={require('../images/avatar.png')} style={styles.userAvatar} />
               </View>
             </View>
             
             {/* Cita motivacional */}
-            <View style={styles.card}>
+            <View style={styles.sectionContainer}>
               <Text style={styles.quoteText}>"{quote}"</Text>
             </View>
             
@@ -567,42 +693,86 @@ const DashScreen = () => {
                 </TouchableOpacity>
               </View>
               
-              <FlatList
-                data={tasks.slice(0, 3)}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.card,
-                      styles.taskCard,
-                      item.completed && styles.completedTask,
-                    ]}
-                    onPress={() => handleCompleteTask(item.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.cardText,
-                        item.completed && styles.completedTaskText,
-                      ]}
-                      numberOfLines={2}
+              {tasks.length > 0 ? (
+                <View style={styles.tasksGridContainer}>
+                  {tasks
+                    .sort((a, b) => (a.priority || 3) - (b.priority || 3))
+                    .slice(0, 3)
+                    .map((task) => (
+                      <TouchableOpacity
+                        key={task.id}
+                        style={[
+                          styles.taskCard,
+                          task.completed && styles.completedTaskCard
+                        ]}
+                        onPress={() => handleCompleteTask(task.id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[
+                          styles.priorityIndicator, 
+                          { backgroundColor: 
+                            task.priority === 1 ? '#FF5252' : 
+                            task.priority === 2 ? '#FFC107' : '#8BC34A' 
+                          }
+                        ]} />
+                        
+                        <Text style={styles.taskTitle} numberOfLines={2}>
+                          {task.title}
+                        </Text>
+                        
+                        {task.dueDate && (
+                          <Text style={styles.taskDueDate}>
+                            {new Date(task.dueDate).toLocaleDateString()}
+                          </Text>
+                        )}
+                        
+                        <View style={styles.taskFooter}>
+                          {task.completed ? (
+                            <View style={styles.statusBadge}>
+                              <Text style={styles.statusBadgeText}>
+                                Completada • Prioridad {task.priority || 3}
+                              </Text>
+                            </View>
+                          ) : (
+                            <View style={[
+                              styles.statusBadge,
+                              { backgroundColor: 
+                                task.priority === 1 ? 'rgba(255, 82, 82, 0.7)' : 
+                                task.priority === 2 ? 'rgba(255, 193, 7, 0.7)' : 
+                                'rgba(26, 221, 219, 0.7)' 
+                              }
+                            ]}>
+                              <Text style={styles.statusBadgeText}>
+                                Pendiente • Prioridad {task.priority || 3}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  
+                  {tasks.length > 3 && (
+                    <TouchableOpacity 
+                      style={styles.viewAllButton}
+                      onPress={() => navigation.navigate('Tasks')}
                     >
-                      {item.title}
-                    </Text>
-                    {item.completed && (
-                      <View style={styles.completedCheckmark}>
-                        <Text style={styles.checkmarkText}>✓</Text>
-                      </View>
-                    )}
+                      <Text style={styles.viewAllButtonText}>
+                        +{tasks.length - 3} más
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.emptyTasksContainer}>
+                  <Text style={styles.emptyTasksText}>No hay tareas pendientes</Text>
+                  <TouchableOpacity 
+                    style={styles.addTaskButton}
+                    onPress={() => navigation.navigate('AddTask')}
+                  >
+                    <Text style={styles.addTaskButtonText}>+ Añadir tarea</Text>
                   </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <View style={styles.card}>
-                    <Text style={styles.cardText}>No hay tareas pendientes</Text>
-                  </View>
-                }
-              />
+                </View>
+              )}
             </View>
             
             {/* Sección de hábitos */}
@@ -617,25 +787,18 @@ const DashScreen = () => {
               {habits.length > 0 ? (
                 habits.map((habit) => (
                   <View key={habit.id} style={styles.card}>
-                    <View style={styles.habitCardContentAbsolute}>
-                      <View style={styles.progressRingContainer}>
-                        <ProgressRing
-                          radius={30}
-                          strokeWidth={5}
-                          progress={habit.progress}
-                          color={habit.color}
-                        />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <ProgressRing
+                        radius={25}
+                        strokeWidth={5}
+                        progress={habit.progress}
+                        color={habit.color}
+                      />
+                      <View style={{ marginLeft: 75, flex: 1 }}>
+                        <Text style={styles.cardText}>{habit.title}</Text>
                       </View>
-                      
-                      <View style={styles.habitTextContainerAbsolute}>
-                        <Text style={styles.habitTitle}>{habit.title}</Text>
-                        <Text style={styles.habitProgress}>
-                          {Math.round(habit.progress * 100)}% completado
-                        </Text>
-                      </View>
-                      
                       <TouchableOpacity
-                        style={styles.updateButtonAbsolute}
+                        style={styles.updateButton}
                         onPress={() => {
                           const newProgress = Math.min(habit.progress + 0.1, 1);
                           handleUpdateHabit(habit.id, newProgress);
@@ -674,28 +837,115 @@ const DashScreen = () => {
         </Animated.ScrollView>
         
         {/* Barra flotante */}
-        <View style={styles.floatingBar}>
-          <TouchableOpacity
-            style={styles.floatingButton}
-            onPress={() => navigation.navigate('AddTask')}
+        <Animated.View 
+          style={[
+            styles.floatingBar,
+            {
+              transform: [{ translateY: floatingBarAnim }],
+              opacity: floatingBarOpacity
+            }
+          ]}
+        >
+          {/* Botón Home */}
+          <TouchableOpacity 
+            style={[styles.floatingBarButton, activeTab === 'home' && styles.activeFloatingBarButton]} 
+            onPress={() => handleNavigation('Dash', 'home')}
           >
-            <Text style={styles.floatingButtonText}>+ Tarea</Text>
+            <View style={styles.floatingBarIconContainer}>
+              <Image 
+                source={require('../images/Anto.png')} 
+                style={[styles.floatingBarIcon, activeTab === 'home' && styles.activeFloatingBarIcon]} 
+              />
+            </View>
+            <Text style={[styles.floatingBarText, activeTab === 'home' && styles.activeFloatingBarText]}>
+              Inicio
+            </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            style={styles.floatingButton}
-            onPress={() => navigation.navigate('AddHabit')}
+          {/* Botón Tareas */}
+          <TouchableOpacity 
+            style={[styles.floatingBarButton, activeTab === 'tasks' && styles.activeFloatingBarButton]} 
+            onPress={() => handleNavigation('Tasks', 'tasks')}
           >
-            <Text style={styles.floatingButtonText}>+ Hábito</Text>
+            <View style={styles.floatingBarIconContainer}>
+              <Image 
+                source={require('../images/list.png')} 
+                style={[styles.floatingBarIcon, activeTab === 'tasks' && styles.activeFloatingBarIcon]} 
+              />
+            </View>
+            <Text style={[styles.floatingBarText, activeTab === 'tasks' && styles.activeFloatingBarText]}>
+              Tareas
+            </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            style={styles.floatingButton}
-            onPress={() => navigation.navigate('Stats')}
+          {/* Botón central (Chat) */}
+          <View style={styles.floatingBarCenterButtonContainer}>
+            {menuOpen && <RippleEffect />}
+            <Animated.View 
+              style={[
+                styles.floatingBarCenterButton,
+                {
+                  transform: [
+                    { scale: centerButtonScale },
+                  ]
+                }
+              ]}
+            >
+              <TouchableOpacity 
+                onPress={handleCenterButton}
+              >
+                <Image 
+                source={require('../images/Anto.png')} 
+                style={[styles.floatingChatIcon, activeTab === 'home' && styles.activeFloatingChatIcon]} 
+              />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+          
+          {/* Botón Hábitos */}
+          <TouchableOpacity 
+            style={[styles.floatingBarButton, activeTab === 'habits' && styles.activeFloatingBarButton]} 
+            onPress={() => handleNavigation('Habits', 'habits')}
           >
-            <Text style={styles.floatingButtonText}>Estadísticas</Text>
+            <View style={styles.floatingBarIconContainer}>
+              <Image 
+                source={require('../images/habits.png')} 
+                style={[styles.floatingBarIcon, activeTab === 'habits' && styles.activeFloatingBarIcon]} 
+              />
+            </View>
+            <Text style={[styles.floatingBarText, activeTab === 'habits' && styles.activeFloatingBarText]}>
+              Hábitos
+            </Text>
           </TouchableOpacity>
-        </View>
+          
+          {/* Botón Perfil */}
+          <TouchableOpacity 
+            style={[styles.floatingBarButton, activeTab === 'profile' && styles.activeFloatingBarButton]} 
+            onPress={() => handleNavigation('Profile', 'profile')}
+          >
+            <View style={styles.floatingBarIconContainer}>
+              <Image 
+                source={require('../images/avatar.png')} 
+                style={[styles.floatingBarIcon, activeTab === 'profile' && styles.activeFloatingBarIcon]} 
+              />
+            </View>
+            <Text style={[styles.floatingBarText, activeTab === 'profile' && styles.activeFloatingBarText]}>
+              Perfil
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Añadir este componente en la parte superior del ScrollView */}
+        <Animated.View 
+          style={[
+            styles.pullToRefreshIndicator,
+            { opacity: refreshIndicatorOpacity }
+          ]}
+        >
+          <Text style={styles.pullToRefreshText}>
+            ↓ Desliza para actualizar
+          </Text>
+        </Animated.View>
       </ImageBackground>
     </View>
   );
@@ -730,8 +980,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 10,
+    marginBottom: 16,
+    marginTop: 44,
   },
   headerLeft: {
     flex: 1,
@@ -814,12 +1064,18 @@ const styles = StyleSheet.create({
   userAvatar: {
     width: 50,
     height: 50,
+    borderWidth: 1.4,
     borderRadius: 25,
-    marginRight: 10,
+    borderColor: '#1ADDDB',
+    shadowColor: "#1ADDDB",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
   },
   sectionContainer: {
     backgroundColor: '#1D2B5F',
-    marginBottom: 20,
+    marginBottom: 16,
     borderRadius: 15,
     padding: 8,
   },
@@ -833,16 +1089,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#A3B8E8',
     textAlign: 'center',
-    marginBottom: 20,
   },
   card: {
     flexDirection: 'row',
     backgroundColor: '#1D2B5F',
     borderRadius: 10,
-    padding: 20,
+    padding: 28,
     marginVertical: 10,
     alignItems: 'center',
-    width: '90%',
+    width: '100%',
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -898,37 +1153,105 @@ const styles = StyleSheet.create({
   },
   floatingBar: {
     position: 'absolute',
-    bottom: 20,
-    width: '90%',
+    bottom: 25,
+    left: 20,
+    right: 20,
+    height: 55,
+    backgroundColor: 'rgba(29, 43, 95, 0.9)',
+    borderRadius: 35,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#1D2B5F',
-    borderRadius: 20,
-    paddingVertical: 10,
-    alignSelf: 'center',
-  },
-  floatingButton: {
-    paddingVertical: 10,
+    alignItems: 'center',
     paddingHorizontal: 15,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(26, 221, 219, 0.3)',
   },
-  floatingButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
+  floatingBarButton: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 12,
+  },
+  activeFloatingBarButton: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#1ADDDB',
+  },
+  activeFloatingChatButton: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#1ADDDB',
+  },
+  floatingBarIconContainer: {
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingBarIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#A3B8E8',
+    marginBottom:6,
+  },
+  floatingChatIcon: {
+    width: 50,
+    height: 50,
+  },
+  activeFloatingBarIcon: {
+    tintColor: '#1ADDDB',
+  },
+  floatingBarText: {
+    fontSize: 12,
+    color: '#A3B8E8',
+    textAlign: 'center',
+  },
+  activeFloatingBarText: {
+    color: '#1ADDDB',
+    fontWeight: 'bold',
+  },
+  floatingBarCenterButtonContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingBarCenterButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 25,
+    backgroundColor: 'rgba(26, 221, 219, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -20, // Para que sobresalga de la barra
+    borderWidth: 1,
+    borderColor: '#1ADDDB',
+    shadowColor: "#1ADDDB",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
   },
   viewAllButton: {
-    alignSelf: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 15,
-    marginTop: 10,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderColor: 'rgba(26, 221, 219, 0.3)',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 5,
   },
   viewAllButtonText: {
-    color: '#A3B8E8',
+    color: '#1ADDDB',
     fontSize: 14,
+    fontWeight: 'bold',
   },
   chartContainer: {
     marginVertical: 10,
@@ -946,6 +1269,7 @@ const styles = StyleSheet.create({
   habitLegend: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
   },
   habitColor: {
     width: 20,
@@ -961,44 +1285,112 @@ const styles = StyleSheet.create({
     color: '#A3B8E8',
     fontSize: 14,
   },
-  habitCardContentAbsolute: {
-    position: 'relative',
+  tasksGridContainer: {
+    flexDirection: 'column',
+    marginTop: 10,
+  },
+  taskCard: {
     width: '100%',
-    height: 50, // Altura fija para la tarjeta
+    backgroundColor: 'rgba(29, 43, 95, 0.8)',
+    borderRadius: 20,
+    padding: 8,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    position: 'relative',
   },
-  progressRingContainer: {
+  completedTaskCard: {
+    backgroundColor: 'rgba(39, 174, 96, 0.2)',
+    borderColor: '#27AE60',
+    borderWidth: 1,
+  },
+  priorityIndicator: {
     position: 'absolute',
-    left: 5,
+    top: 15,
+    right: 15,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  habitTextContainerAbsolute: {
-    position: 'absolute',
-    left: 80, // Posición exacta desde la izquierda
-    top: '50%',
-    transform: [{ translateY: -20 }], // Ajustar según la altura del texto
-    width: '60%', // Ancho controlado
-  },
-  updateButtonAbsolute: {
-    position: 'absolute',
-    right: 10,
-    top: '50%',
-    transform: [{ translateY: -18 }], // Mitad del tamaño del botón
-    backgroundColor: 'rgba(26, 221, 219, 0.2)',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  updateButtonText: {
-    color: '#1ADDDB',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  habitTitle: {
+  taskTitle: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 6,
+    paddingRight: 20,
+  },
+  taskDueDate: {
+    color: '#A3B8E8',
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  taskFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusBadge: {
+    backgroundColor: 'rgba(39, 174, 96, 0.7)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  statusBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  emptyTasksContainer: {
+    backgroundColor: 'rgba(29, 43, 95, 0.5)',
+    borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTasksText: {
+    color: '#A3B8E8',
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  addTaskButton: {
+    backgroundColor: 'rgba(26, 221, 219, 0.2)',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+  },
+  addTaskButtonText: {
+    color: '#1ADDDB',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  pullToRefreshIndicator: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    paddingVertical: 10,
+  },
+  pullToRefreshText: {
+    color: '#1ADDDB',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  rippleEffect: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    top:-10,
+    borderRadius: 30,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#1ADDDB',
   },
 });
 

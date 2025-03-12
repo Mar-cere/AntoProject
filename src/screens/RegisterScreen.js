@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TextInput, StatusBar, ImageBackground, TouchableOpacity, Alert, ActivityIndicator, Animated
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { Ionicons } from '@expo/vector-icons';
 
 const API_BASE_URL = 'https://antobackend.onrender.com';
 
@@ -138,9 +139,16 @@ const RegisterScreen = ({ navigation }) => {
               onChangeText={(text) => handleInputChange('password', text)}
               value={formData.password}
             />
-            <TouchableOpacity onPress={() => setPasswordVisible(!isPasswordVisible)}>
-              <Text style={styles.toggleText}>{isPasswordVisible ? 'Ocultar' : 'Mostrar'}</Text>
-            </TouchableOpacity>
+            <TouchableOpacity 
+                      onPress={() => setPasswordVisible(!isPasswordVisible)}
+                      style={styles.eyeIcon}
+                    >
+                      <Ionicons 
+                        name={isPasswordVisible ? "eye-off" : "eye"} 
+                        size={24} 
+                        color="#A3B8E8" 
+                      />
+                    </TouchableOpacity>
           </View>
           {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
           
@@ -153,9 +161,16 @@ const RegisterScreen = ({ navigation }) => {
               onChangeText={(text) => handleInputChange('confirmPassword', text)} 
               value={formData.confirmPassword} 
             />
-            <TouchableOpacity onPress={() => setPasswordVisible(!isPasswordVisible)}>
-              <Text style={styles.toggleText}>{isPasswordVisible ? 'Ocultar' : 'Mostrar'}</Text>
-            </TouchableOpacity>
+            <TouchableOpacity 
+                      onPress={() => setPasswordVisible(!isPasswordVisible)}
+                      style={styles.eyeIcon}
+                    >
+                      <Ionicons 
+                        name={isPasswordVisible ? "eye-off" : "eye"} 
+                        size={24} 
+                        color="#A3B8E8" 
+                      />
+                    </TouchableOpacity>
           </View>
           {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
           
@@ -266,8 +281,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16, 
     paddingHorizontal: 50,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: '#1ADDDB',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 5,
