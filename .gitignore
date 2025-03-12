@@ -51,7 +51,13 @@ ios/
 # VSCode
 .vscode/
 
-# Configuración de entorno
+# Env files
 .env
-services/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backend env files
+backend/.env
 
