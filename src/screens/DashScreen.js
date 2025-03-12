@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, ImageBackground, TouchableOpacity, 
   FlatList, Image, Animated, StatusBar, ActivityIndicator, 
-  Alert, RefreshControl, Dimensions, ScrollView
+  Alert, RefreshControl, Dimensions, ScrollView, Easing
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -224,6 +224,33 @@ const ProgressRing = ({ radius, strokeWidth, progress, color }) => {
   );
 };
 
+// Componente de efecto de brillo
+const ShineEffect = () => {
+  const translateX = useRef(new Animated.Value(-100)).current;
+  
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(translateX, {
+        toValue: 250,
+        duration: 2000,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+  
+  return (
+    <Animated.View
+      style={[
+        styles.shineEffect,
+        {
+          transform: [{ translateX }]
+        }
+      ]}
+    />
+  );
+};
+
 const DashScreen = () => {
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -284,47 +311,29 @@ const DashScreen = () => {
 
   // Estado para controlar si el menú está abierto
   const [menuOpen, setMenuOpen] = useState(false);
+  const [navigationDestination, setNavigationDestination] = useState(null);
 
-  // Función para manejar el botón central
-  const handleCenterButton = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // Cambiar el estado del menú
-    setMenuOpen(!menuOpen);
-    
-    // Animar el botón
-    Animated.parallel([
-      Animated.spring(centerButtonScale, {
-        toValue: menuOpen ? 1 : 1.2,
-        friction: 5,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.timing(centerButtonRotate, {
-        toValue: menuOpen ? 0 : 1,
-        duration: 300,
-        useNativeDriver: true,
-      })
-    ]).start(() => {
-      // Si el menú se está cerrando, volver al tamaño normal
-      if (menuOpen) {
-        Animated.spring(centerButtonScale, {
-          toValue: 1,
-          friction: 5,
-          tension: 40,
-          useNativeDriver: true,
-        }).start();
-      }
-    });
-    
-    // Aquí puedes mostrar un modal o navegar a otra pantalla
-    if (!menuOpen) {
-      // Mostrar opciones de añadir
-      // Por ejemplo: setShowAddOptions(true);
-    } else {
-      // Ocultar opciones
-      // Por ejemplo: setShowAddOptions(false);
+  // Manejar la navegación en un efecto separado
+  useEffect(() => {
+    if (navigationDestination) {
+      // Usar setTimeout para asegurar que la navegación ocurra después del renderizado
+      const timer = setTimeout(() => {
+        navigation.navigate(navigationDestination);
+        setNavigationDestination(null);
+      }, 0);
+      
+      return () => clearTimeout(timer);
     }
+  }, [navigationDestination, navigation]);
+
+  // Función optimizada para el botón central con useRef para el estado del menú
+  const menuOpenRef = useRef(false);
+
+  const handleCenterButton = (navigateTo) => {
+    Animated.parallel([
+    ]).start(() => {
+      if (navigateTo) navigation.navigate(navigateTo);
+    });
   };
 
   // Cargar datos
@@ -826,11 +835,75 @@ const DashScreen = () => {
               </View>
               
               {userAchievements.slice(0, 2).map((achievement) => (
-                <AchievementItem
+                <TouchableOpacity
                   key={achievement.id}
-                  achievement={achievement}
-                  onPress={handleAchievementPress}
-                />
+                  style={[
+                    styles.achievementCard,
+                    achievement.unlocked && styles.unlockedAchievementCard
+                  ]}
+                  onPress={() => handleAchievementPress(achievement)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.achievementIconContainer}>
+                    {achievement.unlocked ? (
+                      <Image
+                        source={achievement.icon || require('../images/medal.png')}
+                        style={styles.achievementIcon}
+                      />
+                    ) : (
+                      <View style={styles.lockedIconContainer}>
+                        <Image
+                          source={require('../images/lock.png')}
+                          style={styles.lockedIcon}
+                        />
+                      </View>
+                    )}
+                  </View>
+                  
+                  <View style={styles.achievementContent}>
+                    <Text style={styles.achievementTitle} numberOfLines={1}>
+                      {achievement.title}
+                    </Text>
+                    
+                    <Text style={styles.achievementDescription} numberOfLines={2}>
+                      {achievement.unlocked 
+                        ? achievement.description 
+                        : '¡Completa este desafío para desbloquear!'}
+                    </Text>
+                    
+                    {achievement.progress !== undefined && (
+                      <View style={styles.achievementProgressContainer}>
+                        <View style={styles.achievementProgressBar}>
+                          <View 
+                            style={[
+                              styles.achievementProgressFill,
+                              { width: `${Math.min(100, achievement.progress)}%` }
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.achievementProgressText}>
+                          {achievement.progress}%
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  {achievement.unlocked && achievement.date && (
+                    <View style={styles.achievementDateContainer}>
+                      <Text style={styles.achievementDateText}>
+                        {new Date(achievement.date).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {achievement.unlocked && achievement.reward && (
+                    <View style={styles.achievementRewardBadge}>
+                      <Text style={styles.achievementRewardText}>
+                        +{achievement.reward}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
               ))}
             </View>
           </Animated.View>
@@ -862,89 +935,66 @@ const DashScreen = () => {
             </Text>
           </TouchableOpacity>
           
-          {/* Botón Tareas */}
+          {/* Botón Recordatorios */}
           <TouchableOpacity 
-            style={[styles.floatingBarButton, activeTab === 'tasks' && styles.activeFloatingBarButton]} 
-            onPress={() => handleNavigation('Tasks', 'tasks')}
+            style={[styles.floatingBarButton, activeTab === 'calendar' && styles.activeFloatingBarButton]} 
+            onPress={() => handleNavigation('Calendar', 'calendar')}
           >
             <View style={styles.floatingBarIconContainer}>
               <Image 
                 source={require('../images/list.png')} 
-                style={[styles.floatingBarIcon, activeTab === 'tasks' && styles.activeFloatingBarIcon]} 
+                style={[styles.floatingBarIcon, activeTab === 'calendar' && styles.activeFloatingBarIcon]} 
               />
             </View>
-            <Text style={[styles.floatingBarText, activeTab === 'tasks' && styles.activeFloatingBarText]}>
-              Tareas
+            <Text style={[styles.floatingBarText, activeTab === 'calendar' && styles.activeFloatingBarText]}>
+              Recordatorios
             </Text>
           </TouchableOpacity>
           
-          {/* Botón central (Chat) */}
+          {/* Botón central Chat */}
           <View style={styles.floatingBarCenterButtonContainer}>
-            {menuOpen && <RippleEffect />}
-            <Animated.View 
-              style={[
-                styles.floatingBarCenterButton,
-                {
-                  transform: [
-                    { scale: centerButtonScale },
-                  ]
-                }
-              ]}
+            <TouchableOpacity 
+              style={styles.floatingBarCenterButton}
+              onPress={() => navigation.navigate('Chat')}
             >
-              <TouchableOpacity 
-                onPress={handleCenterButton}
-              >
-                <Image 
+              <Image 
                 source={require('../images/Anto.png')} 
-                style={[styles.floatingChatIcon, activeTab === 'home' && styles.activeFloatingChatIcon]} 
+                style={styles.floatingChatIcon} 
               />
-              </TouchableOpacity>
-            </Animated.View>
+            </TouchableOpacity>
           </View>
           
-          {/* Botón Hábitos */}
+          {/* Botón Journal */}
           <TouchableOpacity 
-            style={[styles.floatingBarButton, activeTab === 'habits' && styles.activeFloatingBarButton]} 
-            onPress={() => handleNavigation('Habits', 'habits')}
+            style={[styles.floatingBarButton, activeTab === 'journal' && styles.activeFloatingBarButton]} 
+            onPress={() => handleNavigation('Journal', 'journal')}
           >
             <View style={styles.floatingBarIconContainer}>
               <Image 
-                source={require('../images/habits.png')} 
-                style={[styles.floatingBarIcon, activeTab === 'habits' && styles.activeFloatingBarIcon]} 
+                source={require('../images/notebook.png')} 
+                style={[styles.floatingBarIcon, activeTab === 'journal' && styles.activeFloatingBarIcon]} 
               />
             </View>
-            <Text style={[styles.floatingBarText, activeTab === 'habits' && styles.activeFloatingBarText]}>
-              Hábitos
+            <Text style={[styles.floatingBarText, activeTab === 'journal' && styles.activeFloatingBarText]}>
+              Journal
             </Text>
           </TouchableOpacity>
           
-          {/* Botón Perfil */}
+          {/* Botón Ajustes */}
           <TouchableOpacity 
-            style={[styles.floatingBarButton, activeTab === 'profile' && styles.activeFloatingBarButton]} 
-            onPress={() => handleNavigation('Profile', 'profile')}
+            style={[styles.floatingBarButton, activeTab === 'settings' && styles.activeFloatingBarButton]} 
+            onPress={() => handleNavigation('Settings', 'settings')}
           >
             <View style={styles.floatingBarIconContainer}>
               <Image 
-                source={require('../images/avatar.png')} 
-                style={[styles.floatingBarIcon, activeTab === 'profile' && styles.activeFloatingBarIcon]} 
+                source={require('../images/gear.png')} 
+                style={[styles.floatingBarIcon, activeTab === 'settings' && styles.activeFloatingBarIcon]} 
               />
             </View>
-            <Text style={[styles.floatingBarText, activeTab === 'profile' && styles.activeFloatingBarText]}>
-              Perfil
+            <Text style={[styles.floatingBarText, activeTab === 'settings' && styles.activeFloatingBarText]}>
+              Ajustes
             </Text>
           </TouchableOpacity>
-        </Animated.View>
-
-        {/* Añadir este componente en la parte superior del ScrollView */}
-        <Animated.View 
-          style={[
-            styles.pullToRefreshIndicator,
-            { opacity: refreshIndicatorOpacity }
-          ]}
-        >
-          <Text style={styles.pullToRefreshText}>
-            ↓ Desliza para actualizar
-          </Text>
         </Animated.View>
       </ImageBackground>
     </View>
@@ -1153,16 +1203,16 @@ const styles = StyleSheet.create({
   },
   floatingBar: {
     position: 'absolute',
-    bottom: 25,
-    left: 20,
-    right: 20,
-    height: 55,
+    bottom: 30,
+    left: 8,
+    right: 8,
+    height: 50,
     backgroundColor: 'rgba(29, 43, 95, 0.9)',
-    borderRadius: 35,
+    borderRadius: 40,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -1176,37 +1226,37 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 10,
   },
   activeFloatingBarButton: {
-    borderBottomWidth: 3,
+    borderBottomWidth: 2,
     borderBottomColor: '#1ADDDB',
   },
   activeFloatingChatButton: {
-    borderBottomWidth: 3,
+    borderBottomWidth: 2,
     borderBottomColor: '#1ADDDB',
   },
   floatingBarIconContainer: {
-    width: 16,
-    height: 16,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   floatingBarIcon: {
-    width: 20,
-    height: 20,
+    width: 24,
+    height: 24,
     tintColor: '#A3B8E8',
-    marginBottom:6,
+    marginBottom:4,
   },
   floatingChatIcon: {
-    width: 50,
-    height: 50,
+    width: 55,
+    height: 55,
   },
   activeFloatingBarIcon: {
     tintColor: '#1ADDDB',
   },
   floatingBarText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#A3B8E8',
     textAlign: 'center',
   },
@@ -1223,8 +1273,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   floatingBarCenterButton: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: 25,
     backgroundColor: 'rgba(26, 221, 219, 0.2)',
     justifyContent: 'center',
@@ -1391,6 +1441,157 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: '#1ADDDB',
+  },
+  shineEffect: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 60,
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    transform: [{ skewX: '-20deg' }],
+  },
+  achievementCard: {
+    backgroundColor: 'rgba(29, 43, 95, 0.8)',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(163, 184, 232, 0.3)',
+  },
+  unlockedAchievementCard: {
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderColor: 'rgba(26, 221, 219, 0.5)',
+  },
+  achievementIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(26, 221, 219, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  achievementIcon: {
+    width: 30,
+    height: 30,
+    tintColor: '#1ADDDB',
+  },
+  lockedIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(163, 184, 232, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  lockedIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#A3B8E8',
+  },
+  achievementContent: {
+    flex: 1,
+  },
+  achievementTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  achievementDescription: {
+    color: '#A3B8E8',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  achievementProgressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  achievementProgressBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(163, 184, 232, 0.2)',
+    borderRadius: 3,
+    marginRight: 8,
+    overflow: 'hidden',
+  },
+  achievementProgressFill: {
+    height: '100%',
+    backgroundColor: '#1ADDDB',
+    borderRadius: 3,
+  },
+  achievementProgressText: {
+    color: '#1ADDDB',
+    fontSize: 12,
+    fontWeight: 'bold',
+    width: 35,
+    textAlign: 'right',
+  },
+  achievementDateContainer: {
+    position: 'absolute',
+    bottom: 10,
+    right: 15,
+  },
+  achievementDateText: {
+    color: '#A3B8E8',
+    fontSize: 10,
+  },
+  achievementRewardBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 15,
+    backgroundColor: 'rgba(39, 174, 96, 0.7)',
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+  },
+  achievementRewardText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  emptyAchievementsContainer: {
+    backgroundColor: 'rgba(29, 43, 95, 0.5)',
+    borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyAchievementsIcon: {
+    width: 40,
+    height: 40,
+    tintColor: '#A3B8E8',
+    marginBottom: 10,
+    opacity: 0.7,
+  },
+  emptyAchievementsText: {
+    color: '#A3B8E8',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  viewAllAchievementsButton: {
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderColor: 'rgba(26, 221, 219, 0.3)',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 5,
+  },
+  viewAllAchievementsText: {
+    color: '#1ADDDB',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 
