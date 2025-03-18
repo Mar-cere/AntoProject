@@ -119,12 +119,23 @@ app.post('/api/users/reset-password', async (req, res) => {
   }
 });
 
-// Configuración del transporter de correo
+// Configuración del transporter de correo con más opciones
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // o cualquier otro servicio
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD
+  },
+  debug: true, // Activa logs para depuración
+  logger: true // Muestra logs detallados
+});
+
+// Verificar la configuración al iniciar
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('❌ Error en la configuración del servidor de correo:', error);
+  } else {
+    console.log('✅ Servidor de correo listo para enviar mensajes');
   }
 });
 
