@@ -6,7 +6,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { generateAIResponse } from '../services/openaiService';
+import { generateAIResponse } from '../src/services/openaiService';
 
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
