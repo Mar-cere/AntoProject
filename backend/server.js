@@ -8,7 +8,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
-import openaiService from '../src/services/openaiService.js';
+import openaiService from './services/openaiService.js';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -188,6 +188,15 @@ app.get('/api/chat/history', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Error al obtener el historial' });
   }
 });
+
+// Función para formatear mensajes para OpenAI
+const formatMessagesForOpenAI = (userId, messages) => {
+  // Transformar mensajes de MongoDB al formato esperado por OpenAI
+  return messages.map(message => ({
+    role: message.sender === 'user' ? 'user' : 'assistant',
+    content: message.text
+  }));
+};
 
 // Endpoint para generar respuestas de OpenAI (sin autenticación)
 app.post('/api/chat/generate', async (req, res) => {
