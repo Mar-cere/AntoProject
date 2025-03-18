@@ -9,7 +9,9 @@ const API_BASE_URL = 'https://antobackend.onrender.com';
 export const ROUTES = {
   SIGN_IN: 'SignIn',
   REGISTER: 'Register',
-  RECOVER_PASSWORD: 'Recover',
+  RECOVER_PASSWORD: 'RecoverPassword',
+  VERIFY_CODE: 'VerifyCode',
+  NEW_PASSWORD: 'NewPassword',
   DASHBOARD: 'Dash',
   CHAT: 'Chat',
   PROFILE: 'Profile',
@@ -20,7 +22,8 @@ export const ROUTES = {
 const ENDPOINTS = {
   LOGIN: '/api/users/login',
   REGISTER: '/api/users/register',
-  RECOVER_PASSWORD: '/api/users/recover',
+  RECOVER: '/api/users/recover',
+  VERIFY_CODE: '/api/users/verify-code',
   RESET_PASSWORD: '/api/users/reset-password'
 };
 
@@ -87,7 +90,7 @@ const userService = {
       // Normalizar email a minúsculas
       const normalizedEmail = email.toLowerCase().trim();
       
-      const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.RECOVER_PASSWORD}`, {
+      const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.RECOVER}`, {
         email: normalizedEmail
       });
       
@@ -98,15 +101,33 @@ const userService = {
     }
   },
 
-  // Método para establecer una nueva contraseña
-  setNewPassword: async (token, email, newPassword) => {
+  // Método para verificar código de recuperación
+  verifyCode: async (email, code) => {
+    try {
+      // Normalizar email a minúsculas
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.VERIFY_CODE}`, {
+        email: normalizedEmail,
+        code
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error al verificar código:', error);
+      throw error;
+    }
+  },
+
+  // Método para establecer nueva contraseña con código
+  resetPassword: async (email, code, newPassword) => {
     try {
       // Normalizar email a minúsculas
       const normalizedEmail = email.toLowerCase().trim();
       
       const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.RESET_PASSWORD}`, {
-        token,
         email: normalizedEmail,
+        code,
         password: newPassword
       });
       

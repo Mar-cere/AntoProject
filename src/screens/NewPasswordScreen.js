@@ -15,8 +15,8 @@ const NewPasswordScreen = ({ navigation, route }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateYAnim = useRef(new Animated.Value(30)).current;
 
-  // Extraer el token y email de los parámetros de la ruta
-  const { token, email } = route.params || {};
+  // Extraer el código y email de los parámetros de la ruta
+  const { code, email } = route.params || {};
 
   // Estados
   const [formData, setFormData] = useState({
@@ -134,8 +134,8 @@ const NewPasswordScreen = ({ navigation, route }) => {
 
     setIsSubmitting(true);
     try {
-      // Implementar método para establecer nueva contraseña
-      await userService.setNewPassword(token, email, formData.password);
+      // Usar el código en lugar del token para establecer nueva contraseña
+      await userService.resetPassword(email, code, formData.password);
       setSuccess(true);
     } catch (error) {
       Alert.alert('Error', handleApiError(error) || 'Error al cambiar la contraseña');
@@ -166,6 +166,13 @@ const NewPasswordScreen = ({ navigation, route }) => {
               }
             ]}
           >
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFF" />
+            </TouchableOpacity>
+
             <Text style={styles.title}>Nueva Contraseña</Text>
             
             {success ? (
@@ -305,6 +312,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingVertical: 40,
+    position: 'relative',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 10,
   },
   title: {
     fontSize: 34, 

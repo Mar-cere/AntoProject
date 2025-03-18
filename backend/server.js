@@ -90,24 +90,106 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Endpoint para establecer nueva contraseña
-app.post('/api/users/reset-password', async (req, res) => {
+// Endpoint para solicitar restablecimiento con código
+app.post('/api/users/recover', async (req, res) => {
   try {
-    const { token, email, password } = req.body;
+    const { email } = req.body;
     
-    // Buscar usuario con el token y email proporcionados
+    // Buscar usuario en la base de datos
+    const user = await User.findOne({ email: email.toLowerCase() });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'No existe una cuenta con este correo' });
+    }
+    
+    // Generar código numérico aleatorio de 6 dígitos
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Guardar código en la base de datos con tiempo de expiración
+    user.resetPasswordToken = resetCode;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
+    await user.save();
+    
+    // Configuración del correo con código
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Código de recuperación de contraseña',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #1ADDDB;">Recuperación de contraseña</h1>
+          <p>Has solicitado restablecer tu contraseña.</p>
+          <p>Usa el siguiente código para completar el proceso:</p>
+          <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0; letter-spacing: 5px;">
+            <span style="font-size: 32px; font-weight: bold; color: #333;">${resetCode}</span>
+          </div>
+          <p>Este código expirará en 1 hora.</p>
+          <p>Si no has solicitado este cambio, puedes ignorar este correo.</p>
+        </div>
+      `
+    };
+    
+    // Enviar correo
+    await transporter.sendMail(mailOptions);
+    
+    res.json({ 
+      message: 'Se ha enviado un código de verificación a tu correo',
+      email: email // Devolver el email para la siguiente pantalla
+    });
+  } catch (error) {
+    console.error('Error en recuperación de contraseña:', error);
+    res.status(500).json({ message: 'Error al procesar la solicitud: ' + error.message });
+  }
+});
+
+// Nuevo endpoint para verificar código antes de restablecer contraseña
+app.post('/api/users/verify-code', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    
+    // Buscar usuario con el código y email proporcionados
     const user = await User.findOne({
       email: email.toLowerCase(),
-      resetPasswordToken: token,
+      resetPasswordToken: code,
       resetPasswordExpires: { $gt: Date.now() }
     });
     
     if (!user) {
-      return res.status(400).json({ message: 'El token de restablecimiento es inválido o ha expirado' });
+      return res.status(400).json({ message: 'El código es inválido o ha expirado' });
     }
     
+    // Si el código es válido, devolver confirmación
+    res.json({ 
+      message: 'Código verificado correctamente',
+      verified: true
+    });
+  } catch (error) {
+    console.error('Error al verificar código:', error);
+    res.status(500).json({ message: 'Error al procesar la solicitud' });
+  }
+});
+
+// Modificar endpoint para restablecer contraseña
+app.post('/api/users/reset-password', async (req, res) => {
+  try {
+    const { email, code, password } = req.body;
+    
+    // Buscar usuario con el código y email proporcionados
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      resetPasswordToken: code,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+    
+    if (!user) {
+      return res.status(400).json({ message: 'El código es inválido o ha expirado' });
+    }
+    
+    // Hashear la nueva contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
     // Actualizar contraseña
-    user.password = password; // Asumiendo que tienes un hook para hashear la contraseña
+    user.password = hashedPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
@@ -138,57 +220,6 @@ transporter.verify(function(error, success) {
     console.log('✅ Servidor de correo listo para enviar mensajes');
   }
 });
-
-// Endpoint para solicitar restablecimiento
-app.post('/api/users/recover', async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    // Buscar usuario en la base de datos
-    const user = await User.findOne({ email: email.toLowerCase() });
-    
-    if (!user) {
-      return res.status(404).json({ message: 'No existe una cuenta con este correo' });
-    }
-    
-    // Generar token único
-    const token = crypto.randomBytes(20).toString('hex');
-    
-    // Guardar token en la base de datos con tiempo de expiración
-    user.resetPasswordToken = token;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
-    await user.save();
-    
-    // URL para restablecer contraseña (usando deeplink para apps móviles)
-    const resetUrl = `yourapp://resetpassword?token=${token}&email=${email}`;
-    
-    // Configuración del correo
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Restablecimiento de contraseña',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #1ADDDB;">Restablecimiento de contraseña</h1>
-          <p>Has solicitado restablecer tu contraseña.</p>
-          <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
-          <a href="${resetUrl}" style="background-color: #1ADDDB; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 20px 0;">Restablecer contraseña</a>
-          <p>Si no has solicitado este cambio, puedes ignorar este correo.</p>
-          <p>Este enlace expirará en 1 hora.</p>
-        </div>
-      `
-    };
-    
-    // Enviar correo
-    await transporter.sendMail(mailOptions);
-    
-    res.json({ message: 'Se ha enviado un correo con instrucciones para restablecer tu contraseña' });
-  } catch (error) {
-    console.error('Error en recuperación de contraseña:', error);
-    res.status(500).json({ message: 'Error al procesar la solicitud' });
-  }
-});
-
 
 // Ruta protegida de historial de chat
 app.get('/api/chat/history', authenticateToken, async (req, res) => {
