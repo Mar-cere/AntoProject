@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Keyboard,
   ActivityIndicator,
   StatusBar,
+  Dimensions
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +21,11 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
-import { generateAIResponse, formatMessagesForOpenAI } from '../services/openaiService.js';
+import { generateAIResponse } from '../services/openaiService';
+import { initializeSocket, sendMessage, onMessage, onTyping, onError, closeSocket } from '../services/chatService';
+import ParticleBackground from '../components/ParticleBackground';
+
+const { width } = Dimensions.get('window');
 
 const ChatScreen = () => {
   // Estados
@@ -32,6 +37,7 @@ const ChatScreen = () => {
   const [showClearModal, setShowClearModal] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const [error, setError] = useState(null);
   
   // Referencias
   const flatListRef = useRef(null);
@@ -67,6 +73,42 @@ const ChatScreen = () => {
     return () => unsubscribe();
   }, []);
   
+  // Efecto para inicializar WebSocket
+  useEffect(() => {
+    // Inicializar socket al montar el componente
+    const initSocket = async () => {
+      try {
+        await initializeSocket();
+      } catch (err) {
+        console.error('Error al conectar socket:', err);
+        setError('Error de conexión');
+      }
+    };
+    
+    initSocket();
+    
+    // Registrar callbacks
+    const messageUnsubscribe = onMessage((message) => {
+      setMessages(prev => [...prev, message]);
+    });
+    
+    const typingUnsubscribe = onTyping((typing) => {
+      setIsTyping(typing);
+    });
+    
+    const errorUnsubscribe = onError((err) => {
+      setError(err.message);
+    });
+    
+    // Limpiar al desmontar
+    return () => {
+      messageUnsubscribe();
+      typingUnsubscribe();
+      errorUnsubscribe();
+      closeSocket();
+    };
+  }, []);
+  
   // Cargar mensajes desde AsyncStorage
   const loadMessages = async () => {
     try {
@@ -92,16 +134,16 @@ const ChatScreen = () => {
   };
   
   // Guardar mensajes en AsyncStorage
-  const saveMessages = async (newMessages) => {
+  const saveMessages = useCallback(async (newMessages) => {
     try {
       await AsyncStorage.setItem('chatMessages', JSON.stringify(newMessages));
     } catch (error) {
       console.error('Error al guardar mensajes:', error);
     }
-  };
+  }, []);
   
   // Enviar mensaje
-  const sendMessage = async () => {
+  const handleSend = async () => {
     if (inputText.trim() === '') return;
     
     try {
@@ -110,56 +152,59 @@ const ChatScreen = () => {
       console.log('Haptics error:', error);
     }
     
+    // Crear mensaje del usuario
     const userMessage = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: inputText,
       sender: 'user',
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString()
     };
     
+    // Limpiar input antes de procesar para mejor UX
+    const messageToSend = inputText;
+    setInputText('');
+    
+    // Actualizar estado con el mensaje del usuario
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
-    saveMessages(updatedMessages);
-    setInputText('');
     
     // Mostrar indicador de escritura
     setIsTyping(true);
     
     try {
-      // Formatear mensajes para OpenAI
-      const formattedMessages = formatMessagesForOpenAI(updatedMessages);
-      
-      // Generar respuesta con OpenAI
-      const aiResponse = await generateAIResponse(formattedMessages);
+      // Generar respuesta de la IA
+      const aiResponse = await generateAIResponse(updatedMessages);
       
       // Crear mensaje de respuesta
-      const botResponse = {
+      const responseMessage = {
         id: (Date.now() + 1).toString(),
-        text: aiResponse.text,
-        sender: 'bot',
-        timestamp: new Date().toISOString(),
-        error: aiResponse.error
+        text: aiResponse.text || "Entiendo. ¿Hay algo más en lo que pueda ayudarte?",
+        sender: 'assistant',
+        timestamp: new Date().toISOString()
       };
       
       // Actualizar mensajes con la respuesta
-      const messagesWithResponse = [...updatedMessages, botResponse];
+      const messagesWithResponse = [...updatedMessages, responseMessage];
       setMessages(messagesWithResponse);
+      
+      // Guardar mensajes
       saveMessages(messagesWithResponse);
     } catch (error) {
       console.error('Error al generar respuesta:', error);
       
-      // Mensaje de error en caso de fallo
-      const errorResponse = {
+      // Mensaje de error
+      const errorMessage = {
         id: (Date.now() + 1).toString(),
-        text: 'Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo.',
-        sender: 'bot',
+        text: isOnline 
+          ? 'Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo.'
+          : 'Lo siento, no puedo conectarme en este momento. Por favor, verifica tu conexión a internet e intenta de nuevo.',
+        sender: 'assistant',
         timestamp: new Date().toISOString(),
-        error: true
+        isError: true
       };
       
-      const messagesWithError = [...updatedMessages, errorResponse];
-      setMessages(messagesWithError);
-      saveMessages(messagesWithError);
+      setMessages([...updatedMessages, errorMessage]);
+      saveMessages([...updatedMessages, errorMessage]);
     } finally {
       setIsTyping(false);
     }
@@ -168,7 +213,8 @@ const ChatScreen = () => {
   // Renderizar cada mensaje
   const renderMessage = ({ item }) => {
     const isUser = item.sender === 'user';
-    const hasError = item.error;
+    const isAssistant = item.sender === 'assistant' || item.sender === 'bot';
+    const hasError = item.isError;
     
     return (
       <View style={[
@@ -177,61 +223,16 @@ const ChatScreen = () => {
       ]}>
         <View style={[
           styles.messageBubble,
-          isUser ? styles.userMessageBubble : styles.botMessageBubble,
-          hasError ? styles.errorMessageBubble : {}
+          isUser ? styles.userBubble : styles.botBubble,
+          hasError && styles.errorBubble
         ]}>
-          {isUser ? (
-            <Text style={[
-              styles.messageText,
-              styles.userMessageText
-            ]}>
-              {item.text}
-            </Text>
-          ) : (
-            <Markdown
-              style={{
-                body: {
-                  color: '#FFFFFF',
-                  fontSize: 16,
-                  lineHeight: 22,
-                },
-                heading1: {
-                  color: '#FFFFFF',
-                  fontWeight: 'bold',
-                  fontSize: 20,
-                  marginTop: 10,
-                  marginBottom: 5,
-                },
-                heading2: {
-                  color: '#FFFFFF',
-                  fontWeight: 'bold',
-                  fontSize: 18,
-                  marginTop: 8,
-                  marginBottom: 4,
-                },
-                link: {
-                  color: '#1ADDDB',
-                  textDecorationLine: 'underline',
-                },
-                list: {
-                  color: '#FFFFFF',
-                },
-                listItem: {
-                  color: '#FFFFFF',
-                },
-                strong: {
-                  color: '#FFFFFF',
-                  fontWeight: 'bold',
-                },
-                em: {
-                  color: '#FFFFFF',
-                  fontStyle: 'italic',
-                },
-              }}
-            >
-              {item.text}
-            </Markdown>
-          )}
+          <Text style={[
+            styles.messageText,
+            isUser ? styles.userMessageText : styles.botMessageText,
+            hasError && styles.errorText
+          ]}>
+            {item.text}
+          </Text>
           
           {hasError && (
             <TouchableOpacity 
@@ -252,6 +253,12 @@ const ChatScreen = () => {
     
     return (
       <View style={styles.typingContainer}>
+        <View style={styles.avatarContainer}>
+          <Image 
+            source={require('../images/Anto.png')} 
+            style={styles.avatar} 
+          />
+        </View>
         <View style={styles.typingBubble}>
           <View style={styles.typingIndicator}>
             <Animated.View style={[styles.typingDot, useTypingAnimation(0)]} />
@@ -311,7 +318,7 @@ const ChatScreen = () => {
     setShowScrollButton(!isCloseToBottom);
   };
   
-  // Añade esta propiedad al FlatList
+  // Función para desplazarse al final de la lista
   const scrollToBottom = (animated = true) => {
     if (flatListRef.current && messages.length > 0) {
       flatListRef.current.scrollToEnd({ animated });
@@ -367,7 +374,7 @@ const ChatScreen = () => {
       // Reintentar con el mensaje del usuario
       setRetryCount(retryCount + 1);
       setInputText(userMessage.text);
-      sendMessage();
+      setTimeout(() => handleSend(), 100);
     }
   };
   
@@ -379,6 +386,7 @@ const ChatScreen = () => {
         style={styles.backgroundImage} 
         resizeMode="cover"
       />
+      <ParticleBackground />
       
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       
@@ -388,12 +396,13 @@ const ChatScreen = () => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Image 
-            source={require('../images/back.png')} 
-            style={styles.backIcon} 
-          />
+          <Ionicons name="arrow-back" size={24} color="#1ADDDB" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
+          <Image 
+            source={require('../images/Anto.png')} 
+            style={styles.headerAvatar} 
+          />
           <Text style={styles.headerTitle}>Anto</Text>
         </View>
         <TouchableOpacity 
@@ -451,7 +460,7 @@ const ChatScreen = () => {
             styles.sendButton,
             inputText.trim() === '' ? styles.sendButtonDisabled : {}
           ]}
-          onPress={sendMessage}
+          onPress={handleSend}
           disabled={inputText.trim() === ''}
         >
           <Ionicons 
@@ -468,10 +477,7 @@ const ChatScreen = () => {
           style={styles.scrollToBottomButton}
           onPress={() => scrollToBottom()}
         >
-          <Image 
-            source={require('../images/gear.png')} 
-            style={styles.scrollToBottomIcon} 
-          />
+          <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       )}
       
@@ -518,21 +524,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical:6,
-    borderBottomWidth: 2,
-    borderBottomColor: 'rgba(26, 221, 219, 0.3)',
-    borderRadius:2,
+    paddingTop: Platform.OS === 'ios' ? 30 : 40,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(8, 16, 40, 0.3)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(26, 221, 218, 0.3)',
   },
   backButton: {
-    padding: 10,
-  },
-  backIcon: {
-    width: 22,
-    height: 22,
-    tintColor: '#FFFFFF',
+    padding: 8,
   },
   headerTitleContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
   headerTitle: {
@@ -540,8 +543,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  headerAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+  },
+  avatarContainer: {
+    width: 36,
+    height: 36,
+    marginRight: 8,
+    alignSelf: 'flex-end',
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
   menuButton: {
-    padding: 18,
+    padding: 10,
   },
   chatContainer: {
     flex: 1,
@@ -553,184 +573,157 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: '#A3B8E8',
-    marginTop: 20,
-    fontSize: 14,
+    marginTop: 16,
+    fontSize: 16,
   },
   messagesList: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   messageContainer: {
-    marginBottom: 10,
-    maxWidth: '85%',
+    flexDirection: 'row',
+    marginBottom: 16,
+    maxWidth: '100%',
   },
   userMessageContainer: {
-    alignSelf: 'flex-end',
-    marginLeft: 'auto',
+    justifyContent: 'flex-end',
   },
   botMessageContainer: {
-    alignSelf: 'flex-start',
-    marginRight: 'auto',
+    justifyContent: 'flex-start',
   },
+
+  messageBubble: {
+    borderRadius: 18,
+  },
+
   messageBubble: {
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 10,
-    maxWidth: '100%',
+    maxWidth: '90%',
   },
-  userMessageBubble: {
-    backgroundColor: 'rgba(26, 221, 219, 0.3)', // Color más intenso para el usuario
-    borderTopRightRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.5)', // Borde más visible
-    shadowColor: "#1ADDDB",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+  userBubble: {
+    backgroundColor: '#1ADDDB',
+    borderBottomRightRadius: 4,
   },
-  botMessageBubble: {
-    backgroundColor: 'rgba(29, 43, 95, 0.7)', // Color más oscuro para el bot
-    borderTopLeftRadius: 4,
+  botBubble: {
+    backgroundColor: '#1D2B5F',
+    borderBottomLeftRadius: 4,
+  },
+  errorBubble: {
+    backgroundColor: 'rgba(255, 100, 100, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(163, 184, 232, 0.5)', // Borde más visible
-    shadowColor: "#A3B8E8",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+    borderColor: 'rgba(255, 100, 100, 0.5)',
   },
   messageText: {
     fontSize: 16,
-    marginBottom: 2,
-    lineHeight: 22, // Mejor espaciado entre líneas
+    lineHeight: 22,
   },
   userMessageText: {
-    color: '#FFFFFF',
-    fontWeight: '500', // Ligeramente más negrita
+    color: '#030A24',
+    fontWeight: '500',
   },
   botMessageText: {
     color: '#FFFFFF',
   },
+  errorText: {
+    color: '#FFCCCC',
+  },
+  retryButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(26, 221, 219, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1ADDDB',
+  },
+  retryButtonText: {
+    color: '#1ADDDB',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   typingContainer: {
-    marginBottom: 15,
-    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    marginBottom: 16,
   },
   typingBubble: {
-    backgroundColor: 'rgba(29, 43, 95, 0.7)',
+    backgroundColor: '#1D2B5F',
     borderRadius: 18,
-    borderTopLeftRadius: 4,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 184, 232, 0.5)',
-    shadowColor: "#A3B8E8",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 3,
-    maxWidth: '80%',
-  },
-  typingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  typingText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    marginRight: 10,
-    fontStyle: 'italic',
+    borderBottomLeftRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: '75%',
   },
   typingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#1ADDDB',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#A3B8E8',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     paddingVertical: 10,
+    backgroundColor: 'rgba(6, 12, 40, 0.3)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(26, 221, 219, 0.3)',
-    marginBottom:30,
+    marginBottom:28,
   },
   input: {
     flex: 1,
-    backgroundColor: 'rgba(29, 43, 95, 0.7)',
+    backgroundColor: '#0F1A42',
     borderRadius: 20,
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     color: '#FFFFFF',
-    fontSize: 16,
     maxHeight: 100,
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.3)',
+    fontSize: 16,
   },
   sendButton: {
-    padding: 8,
-    marginLeft: 5,
-    backgroundColor: 'rgba(26, 221, 219, 0.3)',
-    borderRadius: 20,
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(26, 221, 219, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.5)',
+    marginLeft: 8,
   },
   sendButtonDisabled: {
     backgroundColor: 'rgba(29, 43, 95, 0.5)',
-    borderColor: 'rgba(163, 184, 232, 0.3)',
-  },
-  listFooter: {
-    paddingBottom: 15,
   },
   scrollToBottomButton: {
     position: 'absolute',
-    right: 15,
-    bottom: 90,
+    right: 16,
+    bottom: 80,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(26, 221, 219, 0.3)',
+    backgroundColor: 'rgba(26, 221, 219, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.5)',
-    shadowColor: "#1ADDDB",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  scrollToBottomIcon: {
-    width: 20,
-    height: 20,
-    tintColor: '#FFFFFF',
+    borderColor: '#1ADDDB',
   },
   modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(3, 10, 36, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
   },
   modalContainer: {
+    width: width * 0.8,
     backgroundColor: '#1D2B5F',
-    borderRadius: 12,
-    padding: 20,
-    width: '80%',
+    borderRadius: 16,
+    padding: 24,
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.3)',
   },
@@ -738,56 +731,42 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 16,
   },
   modalText: {
     color: '#A3B8E8',
-    fontSize: 14,
-    marginBottom: 20,
-    lineHeight: 20,
+    fontSize: 16,
+    marginBottom: 24,
+    lineHeight: 22,
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
   modalButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 8,
-    marginLeft: 10,
+    marginLeft: 12,
   },
   modalCancelButton: {
     backgroundColor: 'rgba(163, 184, 232, 0.2)',
   },
   modalConfirmButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    backgroundColor: 'rgba(255, 100, 100, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.5)',
+    borderColor: 'rgba(255, 100, 100, 0.5)',
   },
   modalButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   modalConfirmButtonText: {
-    color: '#FF3B30',
+    color: '#FF6464',
   },
-  errorMessageBubble: {
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
-    borderColor: 'rgba(255, 59, 48, 0.5)',
-  },
-  retryButton: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    alignSelf: 'flex-end',
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '500',
+  listFooter: {
+    paddingBottom: 16,
   },
 });
 

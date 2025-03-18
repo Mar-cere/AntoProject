@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, StatusBar, ImageBackground, TouchableOpacity, Alert, ActivityIndicator, Animated
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
-
-const API_BASE_URL = 'https://antobackend.onrender.com';
+import ParticleBackground from '../components/ParticleBackground';
+import userService, { ROUTES, handleApiError } from '../../backend/routes/userRoutes';
 
 const RegisterScreen = ({ navigation }) => {
+  // Referencias para animaciones
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateYAnim = useRef(new Animated.Value(30)).current;
+
+  // Estados
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,78 +23,130 @@ const RegisterScreen = ({ navigation }) => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [isTermsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  const buttonScale = new Animated.Value(1);
+  // Efecto de entrada con animación
+  useEffect(() => {
+    setTimeout(() => {
+      setIsLoading(false);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 500);
+  }, []);
 
+  // Validación de email
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+  // Manejo de cambios en los inputs con validación en tiempo real
   const handleInputChange = (field, value) => {
+    // Si el campo es email, normalizar a minúsculas
+    if (field === 'email') {
+      value = value.toLowerCase().trim();
+    }
+    
     setFormData((prevData) => ({ ...prevData, [field]: value }));
 
     // Validación en tiempo real
-    if (field === 'email' && !validateEmail(value)) {
-      setErrors((prevErrors) => ({ ...prevErrors, email: 'Correo no válido' }));
-    } else {
-      setErrors((prevErrors) => ({ ...prevErrors, email: null }));
+    let updatedErrors = { ...errors };
+
+    if (field === 'name') {
+      if (!value.trim()) {
+        updatedErrors.name = 'El nombre es obligatorio';
+      } else {
+        delete updatedErrors.name;
+      }
     }
 
-    if (field === 'password' && value.length < 6) {
-      setErrors((prevErrors) => ({ ...prevErrors, password: 'La contraseña debe tener al menos 6 caracteres' }));
-    } else {
-      setErrors((prevErrors) => ({ ...prevErrors, password: null }));
+    if (field === 'email') {
+      if (!value.trim()) {
+        updatedErrors.email = 'El correo es obligatorio';
+      } else if (!validateEmail(value)) {
+        updatedErrors.email = 'Introduce un correo válido';
+      } else {
+        delete updatedErrors.email;
+      }
     }
 
-    if (field === 'confirmPassword' && value !== formData.password) {
-      setErrors((prevErrors) => ({ ...prevErrors, confirmPassword: 'Las contraseñas no coinciden' }));
-    } else {
-      setErrors((prevErrors) => ({ ...prevErrors, confirmPassword: null }));
+    if (field === 'password') {
+      if (!value) {
+        updatedErrors.password = 'La contraseña es obligatoria';
+      } else if (value.length < 6) {
+        updatedErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+      } else {
+        delete updatedErrors.password;
+      }
+      
+      // Actualizar validación de confirmPassword si ya tiene un valor
+      if (formData.confirmPassword) {
+        if (value !== formData.confirmPassword) {
+          updatedErrors.confirmPassword = 'Las contraseñas no coinciden';
+        } else {
+          delete updatedErrors.confirmPassword;
+        }
+      }
     }
+
+    if (field === 'confirmPassword') {
+      if (!value) {
+        updatedErrors.confirmPassword = 'Debes confirmar la contraseña';
+      } else if (value !== formData.password) {
+        updatedErrors.confirmPassword = 'Las contraseñas no coinciden';
+      } else {
+        delete updatedErrors.confirmPassword;
+      }
+    }
+
+    setErrors(updatedErrors);
   };
 
-  const handleSignUp = async () => {
-    const { name, email, password, confirmPassword } = formData;
-
-    if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Por favor, completa todos los campos.');
-      return;
+  // Validación completa del formulario
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'El nombre es obligatorio';
     }
-    if (!validateEmail(email)) {
-      Alert.alert('Error', 'Introduce un correo válido.');
-      return;
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'El correo es obligatorio';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Introduce un correo válido';
     }
-    if (password.length < 6) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres.');
-      return;
+    
+    if (!formData.password) {
+      newErrors.password = 'La contraseña es obligatoria';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
     }
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas no coinciden.');
-      return;
+    
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Debes confirmar la contraseña';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Las contraseñas no coinciden';
     }
+    
     if (!isTermsAccepted) {
-      Alert.alert('Error', 'Debes aceptar los términos y condiciones.');
-      return;
+      newErrors.terms = 'Debes aceptar los términos y condiciones';
     }
 
-    setIsSubmitting(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Error en el registro.');
-      Alert.alert('Éxito', '¡Cuenta creada exitosamente!');
-      navigation.navigate('SignIn');
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
+  // Manejo de animación al presionar
   const handlePressIn = () => {
     Animated.spring(buttonScale, {
       toValue: 0.95,
@@ -103,101 +161,176 @@ const RegisterScreen = ({ navigation }) => {
     }).start();
   };
 
+  // Manejo del registro usando userService
+  const handleSignUp = async () => {
+    if (!validateForm()) {
+      // Si hay errores, mostrar alerta específica del primer error
+      const errorKeys = Object.keys(errors);
+      if (errorKeys.length > 0) {
+        Alert.alert('Error de validación', errors[errorKeys[0]]);
+      }
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Usar el método register del userService existente
+      await userService.register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
+      });
+
+      Alert.alert(
+        'Registro exitoso', 
+        '¡Tu cuenta ha sido creada! Por favor, inicia sesión para continuar.',
+        [{ text: 'OK', onPress: () => navigation.navigate(ROUTES.SIGN_IN) }]
+      );
+    } catch (error) {
+      Alert.alert('Error', handleApiError(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <KeyboardAwareScrollView contentContainerStyle={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#030A24" />
       <ImageBackground source={require('../images/back.png')} style={styles.background} imageStyle={styles.imageStyle}>
+        <ParticleBackground />
 
-        <View style={styles.content}>
-          <Text style={styles.title}>Crear Cuenta</Text>
-          <Text style={styles.subtitle}>Por favor, llena los campos para registrarte.</Text>
+        {isLoading ? (
+          <ActivityIndicator size="large" color="#1ADDDB" style={styles.loadingIndicator} />
+        ) : (
+          <Animated.View 
+            style={[
+              styles.content,
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: translateYAnim }] 
+              }
+            ]}
+          >
+            <Text style={styles.title}>Crear Cuenta</Text>
+            <Text style={styles.subtitle}>Por favor, llena los campos para registrarte.</Text>
 
-          <TextInput 
-            style={styles.input} 
-            placeholder="Nombre" 
-            placeholderTextColor="#A3B8E8"
-            onChangeText={(text) => handleInputChange('name', text)} 
-            value={formData.name} 
-          />
-          <TextInput 
-            style={styles.input} 
-            placeholder="Correo Electrónico" 
-            placeholderTextColor="#A3B8E8"
-            keyboardType="email-address" 
-            onChangeText={(text) => handleInputChange('email', text)} 
-            value={formData.email} 
-          />
-          {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+            <View style={styles.inputWrapper}>
+              <TextInput 
+                style={[styles.input, errors.name && styles.inputError]} 
+                placeholder="Nombre" 
+                placeholderTextColor="#A3B8E8"
+                onChangeText={(text) => handleInputChange('name', text)} 
+                value={formData.name} 
+              />
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+            </View>
 
-          {/* Campo de Contraseña y Confirmación de Contraseña */}
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Contraseña"
-              placeholderTextColor="#A3B8E8"
-              secureTextEntry={!isPasswordVisible}
-              onChangeText={(text) => handleInputChange('password', text)}
-              value={formData.password}
-            />
+            <View style={styles.inputWrapper}>
+              <TextInput 
+                style={[styles.input, errors.email && styles.inputError]} 
+                placeholder="Correo Electrónico" 
+                placeholderTextColor="#A3B8E8"
+                keyboardType="email-address" 
+                autoCapitalize="none"
+                onChangeText={(text) => handleInputChange('email', text)} 
+                value={formData.email} 
+              />
+              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+            </View>
+
+            {/* Campo de Contraseña */}
+            <View style={styles.inputWrapper}>
+              <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Contraseña"
+                  placeholderTextColor="#A3B8E8"
+                  secureTextEntry={!isPasswordVisible}
+                  onChangeText={(text) => handleInputChange('password', text)}
+                  value={formData.password}
+                />
+                <TouchableOpacity 
+                  onPress={() => setPasswordVisible(!isPasswordVisible)}
+                  style={styles.eyeIcon}
+                >
+                  <Ionicons 
+                    name={isPasswordVisible ? "eye-off" : "eye"} 
+                    size={24} 
+                    color="#A3B8E8" 
+                  />
+                </TouchableOpacity>
+              </View>
+              {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+            </View>
+            
+            {/* Confirmación de Contraseña */}
+            <View style={styles.inputWrapper}>
+              <View style={[styles.passwordContainer, errors.confirmPassword && styles.inputError]}>
+                <TextInput 
+                  style={styles.passwordInput} 
+                  placeholder="Confirma tu Contraseña" 
+                  placeholderTextColor="#A3B8E8"
+                  secureTextEntry={!isConfirmPasswordVisible}
+                  onChangeText={(text) => handleInputChange('confirmPassword', text)} 
+                  value={formData.confirmPassword} 
+                />
+                <TouchableOpacity 
+                  onPress={() => setConfirmPasswordVisible(!isConfirmPasswordVisible)}
+                  style={styles.eyeIcon}
+                >
+                  <Ionicons 
+                    name={isConfirmPasswordVisible ? "eye-off" : "eye"} 
+                    size={24} 
+                    color="#A3B8E8" 
+                  />
+                </TouchableOpacity>
+              </View>
+              {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+            </View>
+            
+            {/* Términos y condiciones */}
             <TouchableOpacity 
-                      onPress={() => setPasswordVisible(!isPasswordVisible)}
-                      style={styles.eyeIcon}
-                    >
-                      <Ionicons 
-                        name={isPasswordVisible ? "eye-off" : "eye"} 
-                        size={24} 
-                        color="#A3B8E8" 
-                      />
-                    </TouchableOpacity>
-          </View>
-          {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
-          
-          <View style={styles.passwordContainer}>
-            <TextInput 
-              style={styles.passwordInput} 
-              placeholder="Confirma tu Contraseña" 
-              placeholderTextColor="#A3B8E8"
-              secureTextEntry 
-              onChangeText={(text) => handleInputChange('confirmPassword', text)} 
-              value={formData.confirmPassword} 
-            />
-            <TouchableOpacity 
-                      onPress={() => setPasswordVisible(!isPasswordVisible)}
-                      style={styles.eyeIcon}
-                    >
-                      <Ionicons 
-                        name={isPasswordVisible ? "eye-off" : "eye"} 
-                        size={24} 
-                        color="#A3B8E8" 
-                      />
-                    </TouchableOpacity>
-          </View>
-          {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
-          
-          <TouchableOpacity style={styles.checkboxContainer} onPress={() => setTermsAccepted(!isTermsAccepted)}>
-            <View style={[styles.checkbox, isTermsAccepted && styles.checkboxChecked]} />
-            <Text style={styles.termsText}>Acepto los <Text style={styles.termsLink}>términos y condiciones</Text>.</Text>
-          </TouchableOpacity>
-
-          {/* Añadir feedback visual a los botones */}
-          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-            <TouchableOpacity 
-              style={[styles.button, isSubmitting && styles.disabledButton]} 
-              onPress={handleSignUp} 
-              disabled={isSubmitting}
-              activeOpacity={0.7} // Cambia la opacidad al presionar
-              onPressIn={handlePressIn}
-              onPressOut={handlePressOut}
+              style={styles.checkboxContainer} 
+              onPress={() => setTermsAccepted(!isTermsAccepted)}
+              activeOpacity={0.7}
             >
-              {isSubmitting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.buttonText}>Registrarse</Text>}
+              <View style={[styles.checkbox, isTermsAccepted && styles.checkboxChecked]}>
+                {isTermsAccepted && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+              </View>
+              <Text style={styles.termsText}>
+                Acepto los <Text style={styles.termsLink} onPress={() => Alert.alert('Términos y Condiciones', 'Aquí irían los términos y condiciones de la aplicación.')}>términos y condiciones</Text>.
+              </Text>
+            </TouchableOpacity>
+            {errors.terms && <Text style={styles.errorText}>{errors.terms}</Text>}
+
+            {/* Botón de registro */}
+            <Animated.View style={{ transform: [{ scale: buttonScale }], width: '100%' }}>
+              <TouchableOpacity 
+                style={[styles.button, isSubmitting && styles.disabledButton]} 
+                onPress={handleSignUp} 
+                disabled={isSubmitting}
+                activeOpacity={0.7}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.buttonText}>Registrarse</Text>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+            
+            {/* Link a inicio de sesión */}
+            <TouchableOpacity 
+              onPress={() => navigation.navigate(ROUTES.SIGN_IN)} 
+              style={styles.linkContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.linkText}>¿Ya tienes una cuenta? Inicia Sesión</Text>
             </TouchableOpacity>
           </Animated.View>
-          
-          <TouchableOpacity onPress={() => navigation.navigate('SignIn')} style={styles.linkContainer}>
-            <Text style={styles.linkText}>¿Ya tienes una cuenta? Inicia Sesión</Text>
-          </TouchableOpacity>
-        </View>
-
+        )}
       </ImageBackground>
     </KeyboardAwareScrollView>
   );
@@ -208,59 +341,45 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 0, // Asegúrate de que no haya padding horizontal
     backgroundColor: '#030A24',
   },
   background: {
     flex: 1,
     width: '100%',
     height: '100%',
-    justifyContent: 'center', // Asegura que el contenido esté centrado
+    justifyContent: 'center',
     alignItems: 'center',
   },
   imageStyle: {
     opacity: 0.1,
-    resizeMode: 'cover', // Asegúrate de que la imagen cubra todo el espacio
+    resizeMode: 'cover',
   },
   content: {
     alignItems: 'center',
     width: '100%',
     flex: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 40,
   },
   title: {
     fontSize: 34, 
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 50, 
-    marginTop:80,
+    marginBottom: 10, 
+    marginTop: 60,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   subtitle: {
     fontSize: 20, 
     color: '#A3B8E8',
-    marginBottom: 40, 
+    marginBottom: 30, 
+    textAlign: 'center',
   },
-  passwordContainer: {
+  inputWrapper: {
     width: '100%',
-    marginBottom: 20, 
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1D2B5F',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-  },
-  passwordInput: {
-    flex: 1,
-    fontSize: 18, 
-    color: '#FFFFFF',
-    paddingVertical: 14,
-    backgroundColor: '#1D2B5F',
-    width: '100%',
-    paddingHorizontal: 10,
-  },
-  toggleText: {
-    color: '#1ADDDB',
-    fontWeight: 'bold',
+    marginBottom: 15,
   },
   input: {
     width: '100%',
@@ -269,16 +388,75 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 18, 
     color: '#FFFFFF',
-    marginBottom: 20, 
-    paddingHorizontal: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  passwordContainer: {
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1D2B5F',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 18, 
+    color: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  eyeIcon: {
+    paddingHorizontal: 15,
+  },
+  inputError: {
+    borderColor: '#FF6B6B',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginTop: 5,
+    marginLeft: 10,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 20,
+    marginTop: 5,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#1ADDDB',
+    borderRadius: 4,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#1ADDDB',
+  },
+  termsText: {
+    color: '#A3B8E8',
+    fontSize: 16,
+  },
+  termsLink: {
+    color: '#1ADDDB',
+    textDecorationLine: 'underline',
+    fontWeight: 'bold',
   },
   button: {
     backgroundColor: 'rgba(26, 221, 219, 0.9)',
     paddingVertical: 18, 
-    borderRadius: 30, 
+    borderRadius: 25, 
     width: '100%',
     alignItems: 'center',
+    marginTop: 15,
     marginBottom: 16, 
     paddingHorizontal: 50,
     shadowColor: '#1ADDDB',
@@ -286,11 +464,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 5,
+    maxWidth: 300,
+    alignSelf: 'center',
   },
   buttonText: {
     color: '#FFF',
     fontSize: 20, 
     fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: 'rgba(26, 221, 219, 0.5)',
   },
   linkContainer: {
     marginTop: 20,
@@ -300,36 +483,8 @@ const styles = StyleSheet.create({
     color: '#1ADDDB',
     fontWeight: 'bold',
   },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 1,
-    borderColor: '#A3B8E8',
-    marginRight: 10,
-  },
-  checkboxChecked: {
-    backgroundColor: '#1ADDDB',
-  },
-  termsText: {
-    color: '#A3B8E8',
-  },
-  termsLink: {
-    color: '#1ADDDB',
-    textDecorationLine: 'underline',
-  },
-  disabledButton: {
-    backgroundColor: '#A3B8E8',
-  },
-  errorText: {
-    color: 'red',
-    fontSize: 14,
-    marginBottom: 10,
-    alignSelf: 'flex-start',
+  loadingIndicator: {
+    transform: [{ scale: 1.5 }],
   },
 });
 

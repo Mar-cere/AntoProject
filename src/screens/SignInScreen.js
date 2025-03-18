@@ -1,62 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, ImageBackground, TextInput, TouchableOpacity, 
-  Animated, ActivityIndicator, StatusBar, Alert, Dimensions 
+  Animated, ActivityIndicator, StatusBar, Alert, Dimensions, Keyboard, KeyboardAvoidingView, Platform, TouchableWithoutFeedback 
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-
-const API_BASE_URL = 'https://antobackend.onrender.com';
-
-// Componente de partículas para el fondo (reutilizado de HomeScreen)
-const ParticleBackground = () => {
-  // Crea 10 partículas con posiciones y animaciones aleatorias
-  const particles = Array(10).fill(0).map((_, i) => {
-    // Posiciones iniciales fijas (no animadas)
-    const initialPosX = Math.random() * Dimensions.get('window').width;
-    const initialPosY = Math.random() * Dimensions.get('window').height;
-    
-    // Solo animamos la opacidad con el controlador nativo
-    const opacity = useRef(new Animated.Value(Math.random() * 0.5 + 0.1)).current;
-    const size = Math.random() * 4 + 2; // Tamaño entre 2 y 6
-    
-    // Anima cada partícula (solo opacidad)
-    useEffect(() => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(opacity, {
-            toValue: Math.random() * 0.5 + 0.1,
-            duration: 2000 + Math.random() * 3000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, {
-            toValue: Math.random() * 0.3 + 0.05,
-            duration: 2000 + Math.random() * 3000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    }, []);
-    
-    return (
-      <Animated.View
-        key={i}
-        style={{
-          position: 'absolute',
-          left: initialPosX,
-          top: initialPosY,
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: '#1ADDDB',
-          opacity: opacity,
-        }}
-      />
-    );
-  });
-  
-  return <>{particles}</>;
-};
+import ParticleBackground from '../components/ParticleBackground';
+import userService, { ROUTES, handleApiError } from '../../backend/routes/userRoutes';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SignInScreen = () => {
   const navigation = useNavigation();
@@ -74,7 +25,7 @@ const SignInScreen = () => {
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Efecto de entrada
+  // Efecto de entrada con animación
   useEffect(() => {
     setTimeout(() => {
       setIsLoading(false);
@@ -91,6 +42,22 @@ const SignInScreen = () => {
         }),
       ]).start();
     }, 500);
+  }, []);
+
+  // Opcionalmente, podemos cargar el email si está guardado
+  useEffect(() => {
+    const loadSavedEmail = async () => {
+      try {
+        const savedEmail = await AsyncStorage.getItem('savedEmail');
+        if (savedEmail) {
+          setFormData(prev => ({ ...prev, email: savedEmail }));
+        }
+      } catch (error) {
+        console.error('Error al cargar email guardado:', error);
+      }
+    };
+    
+    loadSavedEmail();
   }, []);
 
   // Manejadores de eventos
@@ -156,7 +123,12 @@ const SignInScreen = () => {
 
   // Manejo de cambios en los inputs
   const handleInputChange = useCallback((field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Si el campo es email, normalizar a minúsculas
+    if (field === 'email') {
+      value = value.toLowerCase().trim();
+    }
+    
+    setFormData((prevData) => ({ ...prevData, [field]: value }));
     
     // Validación en tiempo real
     if (field === 'email') {
@@ -186,25 +158,23 @@ const SignInScreen = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
+      // Limpiar cualquier token anterior para forzar una autenticación completa
+      await userService.logout();
       
-      if (!response.ok) {
-        throw new Error(data.message || 'Error al iniciar sesión');
+      // Iniciar sesión con las credenciales proporcionadas
+      await userService.login(formData.email, formData.password);
+      
+      // Guardar el email para futuras sesiones si el usuario lo desea
+      try {
+        await AsyncStorage.setItem('savedEmail', formData.email);
+      } catch (error) {
+        console.error('Error al guardar email:', error);
       }
-
-      // Guardar token o datos de usuario si es necesario
-      // localStorage.setItem('token', data.token);
       
-      Alert.alert('Éxito', 'Inicio de sesión exitoso');
-      navigation.navigate('Dash');
+      // Navegar al dashboard
+      navigation.replace(ROUTES.DASHBOARD);
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', handleApiError(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -212,122 +182,128 @@ const SignInScreen = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#030A24" />
       <ImageBackground 
         source={require('../images/back.png')} 
         style={styles.background} 
         imageStyle={styles.imageStyle}
       >
         <ParticleBackground />
-        
-        <View style={styles.contentContainer}>
-          {isLoading ? (
-            <ActivityIndicator size="large" color="#1ADDDB" style={styles.loadingIndicator} />
-          ) : (
-            <Animated.View 
-              style={[
-                styles.formContainer, 
-                { 
-                  opacity: fadeAnim,
-                  transform: [{ translateY: translateYAnim }] 
-                }
-              ]}
-            >
-              <View style={styles.textContainer}>
-                <Text style={styles.titleText}>Iniciar Sesión</Text>
-                <Text style={styles.subTitleText}>Accede a tu cuenta</Text>
-              </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.contentContainer}>
+              {isLoading ? (
+                <ActivityIndicator size="large" color="#1ADDDB" style={styles.loadingIndicator} />
+              ) : (
+                <Animated.View 
+                  style={[
+                    styles.formContainer, 
+                    { 
+                      opacity: fadeAnim,
+                      transform: [{ translateY: translateYAnim }] 
+                    }
+                  ]}
+                >
+                  <View style={styles.textContainer}>
+                    <Text style={styles.titleText}>Iniciar Sesión</Text>
+                    <Text style={styles.subTitleText}>Accede a tu cuenta</Text>
+                  </View>
 
-              <View style={styles.inputContainer}>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={[styles.input, errors.email ? styles.inputError : null]}
-                    placeholder="Correo Electrónico"
-                    placeholderTextColor="#A3B8E8"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    onChangeText={(text) => handleInputChange('email', text)}
-                    value={formData.email}
-                  />
-                  {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
-                </View>
-                
-                <View style={styles.inputWrapper}>
-                  <View style={[styles.passwordContainer, errors.password ? styles.inputError : null]}>
-                    <TextInput
-                      style={styles.passwordInput}
-                      placeholder="Contraseña"
-                      placeholderTextColor="#A3B8E8"
-                      secureTextEntry={!isPasswordVisible}
-                      onChangeText={(text) => handleInputChange('password', text)}
-                      value={formData.password}
-                    />
-                    <TouchableOpacity 
-                      onPress={() => setPasswordVisible(!isPasswordVisible)}
-                      style={styles.eyeIcon}
-                    >
-                      <Ionicons 
-                        name={isPasswordVisible ? "eye-off" : "eye"} 
-                        size={24} 
-                        color="#A3B8E8" 
+                  <View style={styles.inputContainer}>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        style={[styles.input, errors.email ? styles.inputError : null]}
+                        placeholder="Correo Electrónico"
+                        placeholderTextColor="#A3B8E8"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        onChangeText={(text) => handleInputChange('email', text)}
+                        value={formData.email}
                       />
+                      {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+                    </View>
+                    
+                    <View style={styles.inputWrapper}>
+                      <View style={[styles.passwordContainer, errors.password ? styles.inputError : null]}>
+                        <TextInput
+                          style={styles.passwordInput}
+                          placeholder="Contraseña"
+                          placeholderTextColor="#A3B8E8"
+                          secureTextEntry={!isPasswordVisible}
+                          onChangeText={(text) => handleInputChange('password', text)}
+                          value={formData.password}
+                        />
+                        <TouchableOpacity 
+                          onPress={() => setPasswordVisible(!isPasswordVisible)}
+                          style={styles.eyeIcon}
+                        >
+                          <Ionicons 
+                            name={isPasswordVisible ? "eye-off" : "eye"} 
+                            size={24} 
+                            color="#A3B8E8" 
+                          />
+                        </TouchableOpacity>
+                      </View>
+                      {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+                    </View>
+                  </View>
+
+                  <View style={styles.buttonContainer}>
+                    <TouchableOpacity
+                      onPressIn={handlePressIn}
+                      onPressOut={isSubmitting ? null : handleSignIn}
+                      disabled={isSubmitting}
+                      style={[
+                        styles.mainButton, 
+                        { transform: [{ scale: buttonScale }], opacity: buttonOpacity }
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.mainButtonText}>Ingresar</Text>
+                      )}
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      onPressIn={handlePressIn}
+                      onPressOut={() => handlePressOut(ROUTES.REGISTER)}
+                      style={[
+                        styles.secondaryButton, 
+                        { transform: [{ scale: buttonScale }], opacity: buttonOpacity }
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.secondaryButtonText}>Crear Cuenta</Text>
                     </TouchableOpacity>
                   </View>
-                  {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
-                </View>
-              </View>
 
-              <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                  onPressIn={handlePressIn}
-                  onPressOut={isSubmitting ? null : handleSignIn}
-                  disabled={isSubmitting}
-                  style={[
-                    styles.mainButton, 
-                    { transform: [{ scale: buttonScale }], opacity: buttonOpacity }
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.mainButtonText}>Ingresar</Text>
-                  )}
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  onPressIn={handlePressIn}
-                  onPressOut={() => handlePressOut('Register')}
-                  style={[
-                    styles.secondaryButton, 
-                    { transform: [{ scale: buttonScale }], opacity: buttonOpacity }
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.secondaryButtonText}>Crear Cuenta</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity 
-                onPress={() => handlePressOut('Recover')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.forgotPasswordText}>
-                  ¿Olvidaste tu contraseña?
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.backButton}
-                onPress={() => navigation.goBack()}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="arrow-back" size={24} color="#1ADDDB" />
-                <Text style={styles.backButtonText}>Volver</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-        </View>
+                  <TouchableOpacity 
+                    onPress={() => handlePressOut(ROUTES.RECOVER_PASSWORD)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.forgotPasswordText}>
+                      ¿Olvidaste tu contraseña?
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-back" size={24} color="#1ADDDB" />
+                    <Text style={styles.backButtonText}>Volver</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </ImageBackground>
     </View>
   );
@@ -495,7 +471,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1ADDDB',
     marginLeft: 5,
-
   },
 });
 

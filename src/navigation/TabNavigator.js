@@ -10,6 +10,7 @@ import JournalScreen from "../screens/JournalScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import RegisterScreen from "../screens/RegisterScreen";
+import FaQScreen from "../screens/FaQScreen";
 
 // Crear navegadores
 const Tab = createBottomTabNavigator();
@@ -23,6 +24,7 @@ const SecondaryStack = () => {
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="Journal" component={JournalScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="FaQ" component={FaQScreen} />
     </Stack.Navigator>
   );
 };
@@ -51,6 +53,7 @@ export default function TabNavigator() {
       <Tab.Screen name="Journal" component={JournalScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
       <Tab.Screen name="Ajustes" component={SettingsScreen} />
+      <Tab.Screen name="FaQ" component={FaQScreen} />
     </Tab.Navigator>
   );
 }

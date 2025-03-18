@@ -6,6 +6,8 @@ import RegisterScreen from "../screens/RegisterScreen";
 import SignInScreen from "../screens/SignInScreen";
 import DashScreen from "../screens/DashScreen";
 import ChatScreen from "../screens/ChatScreen";
+import FaQScreen from "../screens/FaQScreen";
+import RecoverScreen from "../screens/ResetPasswordScreen";
 
 const Stack = createStackNavigator();
 
@@ -25,6 +27,8 @@ export default function StackNavigator() {
       <Stack.Screen name="SignIn" component={SignInScreen} />
       <Stack.Screen name="Dash" component={DashScreen}/>
       <Stack.Screen name="Chat" component={ChatScreen}/>
+      <Stack.Screen name="FaQ" component={FaQScreen}/>
+      <Stack.Screen name="Recover" component={RecoverScreen}/>
     </Stack.Navigator>
   );
 }

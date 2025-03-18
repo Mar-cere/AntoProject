@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useSafeAreaInsetsuseRef, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, ImageBackground, TouchableOpacity, 
   FlatList, Image, Animated, StatusBar, ActivityIndicator, 
@@ -9,8 +9,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText, G, Line } from 'react-native-svg';
+import ParticleBackground from '../components/ParticleBackground';
+import ProgressRing from '../components/ProgressRing';
+import SkeletonLoader from '../components/SkeletonLoader';
+import motivationalQuotes from '../data/quotes';
+import FloatingNavBar from '../components/FloatingNavBar';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const screenWidth = Dimensions.get('window').width;
 
 // Constantes
@@ -20,112 +24,12 @@ const POINTS = {
   UNLOCK_ACHIEVEMENT: 50
 };
 
-// Datos de ejemplo
-const motivationalQuotes = [
-  "El único modo de hacer un gran trabajo es amar lo que haces.",
-  "No cuentes los días, haz que los días cuenten.",
-  "El éxito es la suma de pequeños esfuerzos repetidos día tras día.",
-  "La mejor forma de predecir el futuro es creándolo.",
-  "Nunca es demasiado tarde para ser lo que podrías haber sido."
-];
-
 const ACHIEVEMENTS = [
   { id: '1', title: 'Primer Paso', description: 'Completa tu primera tarea', points: 50, icon: '🏆', unlocked: false },
   { id: '2', title: 'Constancia', description: 'Mantén un hábito por 7 días', points: 100, icon: '🔄', unlocked: false },
   { id: '3', title: 'Productividad', description: 'Completa 10 tareas en una semana', points: 150, icon: '⚡', unlocked: false },
   { id: '4', title: 'Maestría', description: 'Alcanza el 100% en un hábito', points: 200, icon: '🌟', unlocked: false },
 ];
-
-// Componente de partículas para el fondo (reutilizado de HomeScreen)
-const ParticleBackground = () => {
-  // Crea 10 partículas con posiciones y animaciones aleatorias
-  const particles = Array(10).fill(0).map((_, i) => {
-    // Posiciones iniciales fijas (no animadas)
-    const initialPosX = Math.random() * Dimensions.get('window').width;
-    const initialPosY = Math.random() * Dimensions.get('window').height;
-    
-    // Solo animamos la opacidad con el controlador nativo
-    const opacity = useRef(new Animated.Value(Math.random() * 0.5 + 0.1)).current;
-    const size = Math.random() * 4 + 2; // Tamaño entre 2 y 6
-    
-    // Anima cada partícula (solo opacidad)
-    useEffect(() => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(opacity, {
-            toValue: Math.random() * 0.5 + 0.1,
-            duration: 2000 + Math.random() * 3000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, {
-            toValue: Math.random() * 0.3 + 0.05,
-            duration: 2000 + Math.random() * 3000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    }, []);
-    
-    return (
-      <Animated.View
-        key={i}
-        style={{
-          position: 'absolute',
-          left: initialPosX,
-          top: initialPosY,
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: '#1ADDDB',
-          opacity: opacity,
-        }}
-      />
-    );
-  });
-  
-  return <>{particles}</>;
-};
-
-// Componente de esqueleto para carga
-const SkeletonLoader = ({ width, height, style }) => {
-  const opacity = useState(new Animated.Value(0.3))[0];
-  
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.7,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    
-    animation.start();
-    
-    return () => animation.stop();
-  }, []);
-  
-  return (
-    <Animated.View
-      style={[
-        {
-          width,
-          height,
-          backgroundColor: '#3D4B7C',
-          borderRadius: 5,
-          opacity,
-        },
-        style,
-      ]}
-    />
-  );
-};
 
 // Componente para mostrar errores con opciones de recuperación
 const ErrorMessage = ({ message, onRetry, onDismiss }) => (
@@ -168,61 +72,6 @@ const AchievementItem = ({ achievement, onPress }) => (
     )}
   </TouchableOpacity>
 );
-
-// Componente de anillo de progreso
-const ProgressRing = ({ radius, strokeWidth, progress, color }) => {
-  const normalizedRadius = radius - strokeWidth / 2;
-  const circumference = normalizedRadius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (progress * circumference);
-  
-  const [animatedProgress] = useState(new Animated.Value(0));
-  
-  useEffect(() => {
-    Animated.timing(animatedProgress, {
-      toValue: progress,
-      duration: 1000,
-      useNativeDriver: false,
-    }).start();
-  }, [progress]);
-  
-  const animatedStrokeDashoffset = animatedProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [circumference, 0],
-  });
-  
-  return (
-    <Svg height={radius * 2} width={radius * 2} style={styles.svg}>
-      <Circle
-        stroke="#e6e6e6"
-        fill="transparent"
-        strokeWidth={strokeWidth}
-        r={normalizedRadius}
-        cx={radius}
-        cy={radius}
-      />
-      <AnimatedCircle
-        stroke={color}
-        fill="transparent"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={animatedStrokeDashoffset}
-        r={normalizedRadius}
-        cx={radius}
-        cy={radius}
-      />
-      <SvgText
-        x={radius}
-        y={radius + 5}
-        textAnchor="middle"
-        fill="#FFFFFF"
-        fontSize="12"
-      >
-        {`${Math.round(progress * 100)}%`}
-      </SvgText>
-    </Svg>
-  );
-};
 
 // Componente de efecto de brillo
 const ShineEffect = () => {
@@ -581,44 +430,6 @@ const DashScreen = () => {
     }, 800);
   }, []);
 
-  // Componente de efecto de ondas
-  const RippleEffect = () => {
-    const rippleScale = useRef(new Animated.Value(0.5)).current;
-    const rippleOpacity = useRef(new Animated.Value(1)).current;
-    
-    useEffect(() => {
-      // Animar el efecto de ondas
-      Animated.parallel([
-        Animated.timing(rippleScale, {
-          toValue: 2,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(rippleOpacity, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: true,
-        })
-      ]).start(() => {
-        // Resetear la animación
-        rippleScale.setValue(0.5);
-        rippleOpacity.setValue(1);
-      });
-    }, [menuOpen]); // Se activa cuando cambia el estado del menú
-    
-    return (
-      <Animated.View
-        style={[
-          styles.rippleEffect,
-          {
-            transform: [{ scale: rippleScale }],
-            opacity: rippleOpacity,
-          }
-        ]}
-      />
-    );
-  };
-
   // Renderizar pantalla de carga
   if (loading && !refreshing) {
     return (
@@ -909,93 +720,7 @@ const DashScreen = () => {
           </Animated.View>
         </Animated.ScrollView>
         
-        {/* Barra flotante */}
-        <Animated.View 
-          style={[
-            styles.floatingBar,
-            {
-              transform: [{ translateY: floatingBarAnim }],
-              opacity: floatingBarOpacity
-            }
-          ]}
-        >
-          {/* Botón Home */}
-          <TouchableOpacity 
-            style={[styles.floatingBarButton, activeTab === 'home' && styles.activeFloatingBarButton]} 
-            onPress={() => handleNavigation('Dash', 'home')}
-          >
-            <View style={styles.floatingBarIconContainer}>
-              <Image 
-                source={require('../images/Anto.png')} 
-                style={[styles.floatingBarIcon, activeTab === 'home' && styles.activeFloatingBarIcon]} 
-              />
-            </View>
-            <Text style={[styles.floatingBarText, activeTab === 'home' && styles.activeFloatingBarText]}>
-              Inicio
-            </Text>
-          </TouchableOpacity>
-          
-          {/* Botón Recordatorios */}
-          <TouchableOpacity 
-            style={[styles.floatingBarButton, activeTab === 'calendar' && styles.activeFloatingBarButton]} 
-            onPress={() => handleNavigation('Calendar', 'calendar')}
-          >
-            <View style={styles.floatingBarIconContainer}>
-              <Image 
-                source={require('../images/list.png')} 
-                style={[styles.floatingBarIcon, activeTab === 'calendar' && styles.activeFloatingBarIcon]} 
-              />
-            </View>
-            <Text style={[styles.floatingBarText, activeTab === 'calendar' && styles.activeFloatingBarText]}>
-              Recordatorios
-            </Text>
-          </TouchableOpacity>
-          
-          {/* Botón central Chat */}
-          <View style={styles.floatingBarCenterButtonContainer}>
-            <TouchableOpacity 
-              style={styles.floatingBarCenterButton}
-              onPress={() => navigation.navigate('Chat')}
-            >
-              <Image 
-                source={require('../images/Anto.png')} 
-                style={styles.floatingChatIcon} 
-              />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Botón Journal */}
-          <TouchableOpacity 
-            style={[styles.floatingBarButton, activeTab === 'journal' && styles.activeFloatingBarButton]} 
-            onPress={() => handleNavigation('Journal', 'journal')}
-          >
-            <View style={styles.floatingBarIconContainer}>
-              <Image 
-                source={require('../images/notebook.png')} 
-                style={[styles.floatingBarIcon, activeTab === 'journal' && styles.activeFloatingBarIcon]} 
-              />
-            </View>
-            <Text style={[styles.floatingBarText, activeTab === 'journal' && styles.activeFloatingBarText]}>
-              Journal
-            </Text>
-          </TouchableOpacity>
-          
-          {/* Botón Ajustes */}
-          <TouchableOpacity 
-            style={[styles.floatingBarButton, activeTab === 'settings' && styles.activeFloatingBarButton]} 
-            onPress={() => handleNavigation('Settings', 'settings')}
-          >
-            <View style={styles.floatingBarIconContainer}>
-              <Image 
-                source={require('../images/gear.png')} 
-                style={[styles.floatingBarIcon, activeTab === 'settings' && styles.activeFloatingBarIcon]} 
-              />
-            </View>
-            <Text style={[styles.floatingBarText, activeTab === 'settings' && styles.activeFloatingBarText]}>
-              Ajustes
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+        <FloatingNavBar/>
       </ImageBackground>
     </View>
   );
@@ -1169,9 +894,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     marginLeft: 30,
-  },
-  svg: {
-    position: 'absolute',
   },
   textContainer: {
     flex: 1,
