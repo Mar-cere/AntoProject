@@ -6,11 +6,9 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import openaiService from '../services/openaiService.js';
-
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
-
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import openaiService from '../src/services/openaiService.js';
 
 // Configuración de variables de entorno
 dotenv.config();
