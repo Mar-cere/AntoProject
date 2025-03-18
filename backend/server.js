@@ -189,15 +189,6 @@ app.get('/api/chat/history', authenticateToken, async (req, res) => {
   }
 });
 
-// Función para formatear mensajes para OpenAI
-const formatMessagesForOpenAI = (userId, messages) => {
-  // Transformar mensajes de MongoDB al formato esperado por OpenAI
-  return messages.map(message => ({
-    role: message.sender === 'user' ? 'user' : 'assistant',
-    content: message.text
-  }));
-};
-
 // Endpoint para generar respuestas de OpenAI (sin autenticación)
 app.post('/api/chat/generate', async (req, res) => {
   try {

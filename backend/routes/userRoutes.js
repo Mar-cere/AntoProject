@@ -20,7 +20,7 @@ export const ROUTES = {
 const ENDPOINTS = {
   LOGIN: '/api/users/login',
   REGISTER: '/api/users/register',
-  RECOVER: '/api/users/recover',
+  RECOVER_PASSWORD: '/api/users/recover',
   RESET_PASSWORD: '/api/users/reset-password'
 };
 
@@ -77,22 +77,6 @@ const userService = {
       return response.data;
     } catch (error) {
       console.error('Error en registro:', error);
-      throw error;
-    }
-  },
-
-  // Recuperar contraseña
-  recoverPassword: async (email) => {
-    try {
-      // Normalizar email a minúsculas
-      const normalizedEmail = email.toLowerCase().trim();
-      
-      const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.RECOVER}`, {
-        email: normalizedEmail
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error en recuperación de contraseña:', error);
       throw error;
     }
   },
