@@ -6,7 +6,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { generateAIResponse } from '../src/services/openaiService';
+import openaiService from '../src/services/openaiService.js';
 
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
@@ -212,7 +212,7 @@ app.post('/api/chat/generate', async (req, res) => {
     const formattedMessages = formatMessagesForOpenAI(userId, recentMessages);
     
     // Generar respuesta con OpenAI
-    const aiResponse = await generateAIResponse(formattedMessages);
+    const aiResponse = await openaiService.generateAIResponse(formattedMessages);
     
     // Guardar respuesta de la IA
     const aiMessage = new Message({ 
