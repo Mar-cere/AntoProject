@@ -15,7 +15,7 @@ const RegisterScreen = ({ navigation }) => {
 
   // Estados
   const [formData, setFormData] = useState({
-    name: '',
+    username: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -27,6 +27,7 @@ const RegisterScreen = ({ navigation }) => {
   const [isTermsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+  const [showInfo, setShowInfo] = useState(false); // Para mostrar info sobre username
 
   // Efecto de entrada con animación
   useEffect(() => {
@@ -57,16 +58,25 @@ const RegisterScreen = ({ navigation }) => {
       value = value.toLowerCase().trim();
     }
     
+    // Si el campo es username, normalizar (solo alfanuméricos)
+    if (field === 'username') {
+      value = value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    }
+    
     setFormData((prevData) => ({ ...prevData, [field]: value }));
 
     // Validación en tiempo real
     let updatedErrors = { ...errors };
 
-    if (field === 'name') {
+    if (field === 'username') {
       if (!value.trim()) {
-        updatedErrors.name = 'El nombre es obligatorio';
+        updatedErrors.username = 'El nombre de usuario es obligatorio';
+      } else if (value.length < 3) {
+        updatedErrors.username = 'Mínimo 3 caracteres';
+      } else if (value.length > 20) {
+        updatedErrors.username = 'Máximo 20 caracteres';
       } else {
-        delete updatedErrors.name;
+        delete updatedErrors.username;
       }
     }
 
@@ -116,8 +126,12 @@ const RegisterScreen = ({ navigation }) => {
   const validateForm = () => {
     const newErrors = {};
     
-    if (!formData.name.trim()) {
-      newErrors.name = 'El nombre es obligatorio';
+    if (!formData.username.trim()) {
+      newErrors.username = 'El nombre de usuario es obligatorio';
+    } else if (formData.username.length < 3) {
+      newErrors.username = 'El nombre de usuario debe tener al menos 3 caracteres';
+    } else if (formData.username.length > 20) {
+      newErrors.username = 'El nombre de usuario debe tener máximo 20 caracteres';
     }
     
     if (!formData.email.trim()) {
@@ -174,9 +188,10 @@ const RegisterScreen = ({ navigation }) => {
 
     setIsSubmitting(true);
     try {
-      // Usar el método register del userService existente
+      // Usar el método register del userService con el username como nombre inicial
       await userService.register({
-        name: formData.name,
+        name: formData.username.trim(), // Usamos el username como nombre provisional
+        username: formData.username.trim(),
         email: formData.email,
         password: formData.password
       });
@@ -214,17 +229,49 @@ const RegisterScreen = ({ navigation }) => {
             <Text style={styles.title}>Crear Cuenta</Text>
             <Text style={styles.subtitle}>Por favor, llena los campos para registrarte.</Text>
 
+            {/* Campo de Username */}
             <View style={styles.inputWrapper}>
-              <TextInput 
-                style={[styles.input, errors.name && styles.inputError]} 
-                placeholder="Nombre" 
-                placeholderTextColor="#A3B8E8"
-                onChangeText={(text) => handleInputChange('name', text)} 
-                value={formData.name} 
-              />
-              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+              <View style={styles.usernameContainer}>
+                <TextInput 
+                  style={[
+                    styles.input, 
+                    errors.username && styles.inputError,
+                    { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }
+                  ]} 
+                  placeholder="Nombre de usuario" 
+                  placeholderTextColor="#A3B8E8"
+                  autoCapitalize="none"
+                  onChangeText={(text) => handleInputChange('username', text)} 
+                  value={formData.username} 
+                />
+                <TouchableOpacity 
+                  style={styles.infoButton}
+                  onPress={() => setShowInfo(!showInfo)}
+                >
+                  <Ionicons name="information-circle-outline" size={24} color="#A3B8E8" />
+                </TouchableOpacity>
+              </View>
+              {errors.username && <Text style={styles.errorText}>{errors.username}</Text>}
+              
+              {showInfo && (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>
+                    • Tu nombre de usuario es único y se usará para generar tu identidad digital
+                  </Text>
+                  <Text style={styles.infoText}>
+                    • Solo letras minúsculas, números y guiones bajos (_)
+                  </Text>
+                  <Text style={styles.infoText}>
+                    • Entre 3 y 20 caracteres
+                  </Text>
+                  <Text style={styles.infoText}>
+                    • No podrás cambiarlo después
+                  </Text>
+                </View>
+              )}
             </View>
 
+            {/* Campo de Correo */}
             <View style={styles.inputWrapper}>
               <TextInput 
                 style={[styles.input, errors.email && styles.inputError]} 
@@ -391,6 +438,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderWidth: 1,
     borderColor: 'transparent',
+  },
+  usernameContainer: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  infoButton: {
+    backgroundColor: '#1D2B5F',
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  infoBox: {
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 5,
+    marginBottom: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.3)',
+  },
+  infoText: {
+    color: '#A3B8E8',
+    fontSize: 14,
+    marginBottom: 3,
   },
   passwordContainer: {
     width: '100%',

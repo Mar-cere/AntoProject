@@ -9,6 +9,7 @@ import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import openaiService from './services/openaiService.js';
+import User from './models/User.js';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -33,14 +34,6 @@ mongoose.connect(process.env.MONGO_URI, {
 }).then(() => console.log('✅ Conectado a MongoDB'))
   .catch(err => console.error('❌ Error en conexión a MongoDB:', err));
 
-// Modelo de usuario
-const UserSchema = new mongoose.Schema({
-  name: String,
-  email: { type: String, unique: true },
-  password: String,
-});
-const User = mongoose.model('User', UserSchema);
-
 // Modelo de mensajes
 const MessageSchema = new mongoose.Schema({
   userId: String,
@@ -52,14 +45,71 @@ const Message = mongoose.model('Message', MessageSchema);
 
 // Registro de usuario
 app.post('/api/users/register', async (req, res) => {
-  const { name, email, password } = req.body;
   try {
+    const { name, username, email, password } = req.body;
+    
+    // Validación
+    if (!name || !email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Nombre, correo y contraseña son obligatorios' 
+      });
+    }
+    
+    // Verificar si ya existe un usuario con ese email
+    const existingUserEmail = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existingUserEmail) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Este correo ya está registrado' 
+      });
+    }
+    
+    // Verificar si ya existe un usuario con ese username
+    if (username) {
+      const existingUsername = await User.findOne({ username: username.toLowerCase().trim() });
+      if (existingUsername) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Este nombre de usuario ya está en uso' 
+        });
+      }
+    }
+    
+    // Procesar username
+    const processedUsername = username || name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '');
+    
+    // Crear usuario con datos normalizados
+    const userData = {
+      name: name.trim(),
+      username: processedUsername,
+      email: email.toLowerCase().trim(),
+      createdAt: new Date().toISOString()
+    };
+    
+    // Crear instancia de User (que generará usernameHash automáticamente)
+    const newUser = new User(userData);
+    
+    // Hashear la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ name, email, password: hashedPassword });
+    newUser._password = hashedPassword;
+    
+    // Guardar en la base de datos
     await newUser.save();
-    res.status(201).json({ message: 'Usuario registrado exitosamente' });
+    
+    // Respuesta exitosa
+    res.status(201).json({ 
+      success: true, 
+      message: 'Usuario registrado exitosamente',
+      userId: newUser.id,
+      username: newUser.username
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error en el registro' });
+    console.error('Error en el registro:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error en el proceso de registro'
+    });
   }
 });
 
@@ -90,7 +140,7 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Endpoint para solicitar restablecimiento con código
+// Endpoint para solicitar restablecimiento con código - con correo mejorado
 app.post('/api/users/recover', async (req, res) => {
   try {
     const { email } = req.body;
@@ -110,22 +160,151 @@ app.post('/api/users/recover', async (req, res) => {
     user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
     await user.save();
     
-    // Configuración del correo con código
+    // Obtener nombre de usuario para personalizar correo
+    const userName = user.name || 'Usuario';
+    
+    // Configuración del correo con código y diseño mejorado
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `"AntoApp" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Código de recuperación de contraseña',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #1ADDDB;">Recuperación de contraseña</h1>
-          <p>Has solicitado restablecer tu contraseña.</p>
-          <p>Usa el siguiente código para completar el proceso:</p>
-          <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0; letter-spacing: 5px;">
-            <span style="font-size: 32px; font-weight: bold; color: #333;">${resetCode}</span>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Recuperación de contraseña</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+            
+            body {
+              font-family: 'Poppins', Arial, sans-serif;
+              line-height: 1.6;
+              color: #333333;
+              margin: 0;
+              padding: 0;
+              background-color: #f9f9f9;
+            }
+            
+            .container {
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            
+            .header {
+              text-align: center;
+              padding: 25px 0;
+              background: linear-gradient(135deg, #030A24 0%, #1D2B5F 100%);
+              border-radius: 10px 10px 0 0;
+            }
+            
+            .logo {
+              width: 150px;
+              height: auto;
+            }
+            
+            .content {
+              background-color: #ffffff;
+              padding: 30px;
+              border-radius: 0 0 10px 10px;
+              box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+            
+            h1 {
+              color: #1ADDDB;
+              margin-top: 0;
+              margin-bottom: 20px;
+              font-size: 24px;
+              font-weight: 600;
+            }
+            
+            p {
+              margin-bottom: 20px;
+              color: #666666;
+              font-size: 16px;
+            }
+            
+            .code-container {
+              background-color: #f2f2f2;
+              border-radius: 10px;
+              padding: 20px;
+              text-align: center;
+              margin: 30px 0;
+            }
+            
+            .code {
+              font-size: 32px;
+              font-weight: 700;
+              color: #030A24;
+              letter-spacing: 8px;
+              margin: 0;
+            }
+            
+            .note {
+              font-size: 14px;
+              color: #999999;
+              margin-top: 30px;
+            }
+            
+            .footer {
+              text-align: center;
+              padding: 20px;
+              font-size: 12px;
+              color: #999999;
+            }
+            
+            .highlight {
+              color: #1ADDDB;
+              font-weight: 600;
+            }
+            
+            .divider {
+              height: 1px;
+              background-color: #eeeeee;
+              margin: 25px 0;
+            }
+            
+            @media only screen and (max-width: 600px) {
+              .container {
+                width: 100%;
+                padding: 10px;
+              }
+              
+              .content {
+                padding: 20px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <img src="https://i.imgur.com/YckJlnz.png" alt="AntoApp Logo" class="logo">
+            </div>
+            <div class="content">
+              <h1>Recuperación de contraseña</h1>
+              <p>Hola <span class="highlight">${userName}</span>,</p>
+              <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta. Utiliza el siguiente código de verificación para completar el proceso:</p>
+              
+              <div class="code-container">
+                <h2 class="code">${resetCode}</h2>
+              </div>
+              
+              <p>Si no solicitaste este código, puedes ignorar este correo y tu cuenta seguirá segura.</p>
+              
+              <div class="divider"></div>
+              
+              <p class="note">Este código expirará en 60 minutos por motivos de seguridad.</p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} AntoApp. Todos los derechos reservados.</p>
+              <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+            </div>
           </div>
-          <p>Este código expirará en 1 hora.</p>
-          <p>Si no has solicitado este cambio, puedes ignorar este correo.</p>
-        </div>
+        </body>
+        </html>
       `
     };
     

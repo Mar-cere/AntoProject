@@ -58,25 +58,30 @@ const userService = {
     }
   },
 
-  // Registrar nuevo usuario
+  // Registrar nuevo usuario (modificado para usar username como nombre inicial)
   register: async (userData) => {
     try {
-      // Validar datos de entrada
-      if (!userData.email || !userData.password) {
-        throw new Error('El correo y la contraseña son obligatorios');
+      // Validación de datos
+      if (!userData.email || !userData.password || !userData.username) {
+        throw new Error('El nombre de usuario, correo y contraseña son obligatorios');
       }
 
-      // Normalizar email a minúsculas
+      // Normalizar email y username
       const normalizedEmail = userData.email.toLowerCase().trim();
-
+      const normalizedUsername = userData.username.toLowerCase().trim();
+      
       // Crear objeto de datos para la API
       const registerData = {
-        name: userData.name || '',
+        name: normalizedUsername, // Usamos el username como nombre provisional
+        username: normalizedUsername,
         email: normalizedEmail,
         password: userData.password
       };
 
+      // Llamar a la API
       const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.REGISTER}`, registerData);
+      
+      // Si la API devuelve un error, será manejado por el catch
       return response.data;
     } catch (error) {
       console.error('Error en registro:', error);
