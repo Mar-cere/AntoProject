@@ -447,4 +447,5 @@ class User {
   }
 }
 
+// SOLO exporta la clase User sin las líneas problemáticas
 export default User;

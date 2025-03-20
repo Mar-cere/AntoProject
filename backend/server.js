@@ -9,7 +9,7 @@ import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import openaiService from './services/openaiService.js';
-import User from './models/User.js';
+import User from './models/UserSchema.js';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -49,15 +49,25 @@ app.post('/api/users/register', async (req, res) => {
     const { name, username, email, password } = req.body;
     
     // Validación
-    if (!name || !email || !password) {
+    if (!username || !email || !password) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Nombre, correo y contraseña son obligatorios' 
+        message: 'Nombre de usuario, correo y contraseña son obligatorios' 
       });
     }
     
     // Verificar si ya existe un usuario con ese email
-    const existingUserEmail = await User.findOne({ email: email.toLowerCase().trim() });
+    let existingUserEmail;
+    try {
+      existingUserEmail = await User.findOne({ email: email.toLowerCase().trim() });
+    } catch (dbError) {
+      console.error('Error al buscar usuario por email:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor al verificar el correo'
+      });
+    }
+    
     if (existingUserEmail) {
       return res.status(400).json({ 
         success: false, 
