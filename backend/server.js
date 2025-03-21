@@ -46,7 +46,7 @@ const Message = mongoose.model('Message', MessageSchema);
 // Registro de usuario
 app.post('/api/users/register', async (req, res) => {
   try {
-    const { name, username, email, password } = req.body;
+    const { username, email, password } = req.body;
     
     // Validación
     if (!username || !email || !password) {
@@ -86,23 +86,15 @@ app.post('/api/users/register', async (req, res) => {
       }
     }
     
-    // Procesar username
-    const processedUsername = username || name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '');
-    
-    // Crear usuario con datos normalizados
-    const userData = {
-      name: name.trim(),
-      username: processedUsername,
+    // Crear usuario con datos normalizados y generar ID único
+    const newUser = new User({
+      id: `user_${new Date().getTime().toString(36)}_${Math.random().toString(36).substring(2, 10)}`,
+      username: username.toLowerCase().trim(),
+      name: username.toLowerCase().trim(), // Usamos el username como nombre provisional
       email: email.toLowerCase().trim(),
+      password: password, // Mongoose lo hasheará automáticamente
       createdAt: new Date().toISOString()
-    };
-    
-    // Crear instancia de User (que generará usernameHash automáticamente)
-    const newUser = new User(userData);
-    
-    // Hashear la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-    newUser._password = hashedPassword;
+    });
     
     // Guardar en la base de datos
     await newUser.save();
@@ -118,7 +110,7 @@ app.post('/api/users/register', async (req, res) => {
     console.error('Error en el registro:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Error en el proceso de registro'
+      message: 'Error en el proceso de registro: ' + error.message
     });
   }
 });

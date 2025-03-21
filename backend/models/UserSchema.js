@@ -10,8 +10,13 @@ const UserSchema = new mongoose.Schema({
   // Identificación
   id: {
     type: String,
-    required: true,
-    unique: true
+    unique: true,
+    default: function() {
+      const timestamp = new Date().getTime().toString(36);
+      const randomStr = Math.random().toString(36).substring(2, 10);
+      const hash = Math.abs(this.email.hashCode()).toString(36).substring(0, 6);
+      return `user_${timestamp}_${randomStr}_${hash}`;
+    }
   },
   
   // Información básica
@@ -80,7 +85,7 @@ UserSchema.pre('save', async function(next) {
   this.updatedAt = new Date();
   
   // Si la contraseña fue modificada, hashearla
-  if (this.isModified('password')) {
+  if (this.isModified('password') && this.password) {
     try {
       this.password = await bcrypt.hash(this.password, 10);
     } catch (error) {
