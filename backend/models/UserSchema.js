@@ -113,8 +113,13 @@ UserSchema.pre('save', async function(next) {
  */
 UserSchema.methods.verifyPassword = async function(password) {
   try {
+    // Asegurarse de que tanto password como this.password existan
+    if (!password || !this.password) {
+      return false;
+    }
     return await bcrypt.compare(password, this.password);
   } catch (error) {
+    console.error('Error al verificar contraseña:', error);
     throw new Error('Error al verificar contraseña');
   }
 };

@@ -117,16 +117,61 @@ app.post('/api/users/register', async (req, res) => {
 
 // Inicio de sesión
 app.post('/api/users/login', async (req, res) => {
-  const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ message: 'Credenciales incorrectas' });
+    const { email, password } = req.body;
+    
+    // Verificar que email y password existan
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'El correo y la contraseña son obligatorios' 
+      });
     }
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, userId: user._id, name: user.name });
+    
+    // Buscar usuario por email (normalizado)
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    
+    // Verificar si el usuario existe y la contraseña es correcta
+    if (!user || !(await user.verifyPassword(password))) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Credenciales incorrectas' 
+      });
+    }
+    
+    // Actualizar último login
+    user.lastLogin = new Date();
+    await user.save();
+    
+    // Generar token JWT
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        username: user.username 
+      }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: '24h' }
+    );
+    
+    // Devolver información relevante y token
+    res.json({ 
+      success: true,
+      token,
+      user: {
+        userId: user.id,
+        username: user.username,
+        name: user.name || user.username, // Usar nombre o username
+        email: user.email,
+        avatar: user.avatar,
+        preferences: user.preferences
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error al iniciar sesión' });
+    console.error('Error en login:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al iniciar sesión: ' + error.message 
+    });
   }
 });
 

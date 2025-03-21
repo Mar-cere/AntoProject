@@ -7,13 +7,12 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { LineChart } from 'react-native-chart-kit';
-import Svg, { Circle, Text as SvgText, G, Line } from 'react-native-svg';
 import ParticleBackground from '../components/ParticleBackground';
 import ProgressRing from '../components/ProgressRing';
 import SkeletonLoader from '../components/SkeletonLoader';
 import motivationalQuotes from '../data/quotes';
 import FloatingNavBar from '../components/FloatingNavBar';
+import { Ionicons } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -112,6 +111,7 @@ const DashScreen = () => {
   const [quote, setQuote] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState(null);
   const [error, setError] = useState(null);
   const [userPoints, setUserPoints] = useState(0);
   const [userAchievements, setUserAchievements] = useState(ACHIEVEMENTS);
@@ -197,6 +197,7 @@ const DashScreen = () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Cargar datos desde AsyncStorage
+      const storedUserData = await AsyncStorage.getItem('userData');
       const storedUserName = await AsyncStorage.getItem('userName');
       const storedUserAvatar = await AsyncStorage.getItem('userAvatar');
       const storedUserPoints = await AsyncStorage.getItem('userPoints');
@@ -205,7 +206,23 @@ const DashScreen = () => {
       const storedHabits = await AsyncStorage.getItem('habits');
       
       // Actualizar estados con los datos cargados
-      if (storedUserName) setUserName(storedUserName);
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          setUserData(userData);
+          // Usar el nombre del usuario de userData si está disponible
+          if (userData.name) {
+            setUserName(userData.name);
+          } else if (userData.username) {
+            setUserName(userData.username);
+          }
+        } catch (e) {
+          console.error('Error al parsear userData:', e);
+        }
+      } else if (storedUserName) {
+        setUserName(storedUserName);
+      }
+      
       if (storedUserAvatar) setUserAvatar(storedUserAvatar);
       if (storedUserPoints) setUserPoints(parseInt(storedUserPoints));
       if (storedAchievements) setUserAchievements(JSON.parse(storedAchievements));
@@ -249,7 +266,7 @@ const DashScreen = () => {
       // Establecer saludo según hora del día
       const currentHour = new Date().getHours();
       if (currentHour >= 6 && currentHour < 12) {
-        setGreeting('Buen día');
+        setGreeting('Buenos días');
       } else if (currentHour >= 12 && currentHour < 18) {
         setGreeting('Buenas tardes');
       } else {
@@ -455,6 +472,25 @@ const DashScreen = () => {
     );
   }
   
+  const handleLogout = async () => {
+    try {
+      // Limpiar datos de autenticación
+      await AsyncStorage.removeItem('userData');
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('userName');
+      await AsyncStorage.removeItem('userAvatar');
+      
+      // Navegar a la pantalla de inicio de sesión
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'SignIn' }], // Ajusta esto al nombre exacto de tu ruta
+      });
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      Alert.alert('Error', 'No se pudo cerrar sesión. Intenta de nuevo.');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#030A24" />

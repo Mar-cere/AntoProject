@@ -152,33 +152,39 @@ const SignInScreen = () => {
     }
   }, []);
 
-  // Inicio de sesión
-  const handleSignIn = useCallback(async () => {
+  // Función para manejar el inicio de sesión
+  const handleSignIn = async () => {
     if (!validateForm()) return;
-
+    
     setIsSubmitting(true);
+    
     try {
-      // Limpiar cualquier token anterior para forzar una autenticación completa
-      await userService.logout();
+      console.log('Intentando iniciar sesión con:', {
+        email: formData.email,
+        password: formData.password ? '****' : 'undefined'
+      });
       
-      // Iniciar sesión con las credenciales proporcionadas
-      await userService.login(formData.email, formData.password);
+      const response = await userService.login({
+        email: formData.email,
+        password: formData.password
+      });
       
-      // Guardar el email para futuras sesiones si el usuario lo desea
-      try {
-        await AsyncStorage.setItem('savedEmail', formData.email);
-      } catch (error) {
-        console.error('Error al guardar email:', error);
-      }
+      console.log('Respuesta de login:', response);
       
-      // Navegar al dashboard
-      navigation.replace(ROUTES.DASHBOARD);
+      // No es necesario guardar token o datos aquí si ya lo hace el userService
+      
+      // Navegar al Dashboard
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Dash' }], // O el nombre correcto de tu ruta
+      });
     } catch (error) {
-      Alert.alert('Error', handleApiError(error));
+      console.error('Error en SignInScreen:', error);
+      Alert.alert('Error', handleApiError ? handleApiError(error) : 'Error al iniciar sesión');
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, validateForm, navigation]);
+  };
 
   return (
     <View style={styles.container}>

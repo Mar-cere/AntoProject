@@ -30,24 +30,29 @@ const ENDPOINTS = {
 // Servicio de autenticación
 const userService = {
   // Iniciar sesión
-  login: async (email, password) => {
+  login: async (credentials) => {
     try {
-      // Convertir email a minúsculas
-      const normalizedEmail = email.toLowerCase().trim();
+      // Validación de datos
+      if (!credentials || !credentials.email || !credentials.password) {
+        throw new Error('Correo y contraseña son obligatorios');
+      }
       
+      // Normalizar email
+      const normalizedEmail = credentials.email.toLowerCase().trim();
+      
+      // Llamar a la API
       const response = await axios.post(`${API_BASE_URL}${ENDPOINTS.LOGIN}`, {
         email: normalizedEmail,
-        password
+        password: credentials.password
       });
       
-      // Guardar token en localStorage o AsyncStorage
-      if (response.data && response.data.token) {
-        await AsyncStorage.setItem('userToken', response.data.token);
+      // Almacenar token en AsyncStorage
+      if (response.data.token) {
+        await AsyncStorage.setItem('token', response.data.token);
         
-        // Si la API devuelve los datos del usuario, crear instancia
+        // También guardar datos del usuario
         if (response.data.user) {
-          const user = new User(response.data.user);
-          await AsyncStorage.setItem('userData', JSON.stringify(user));
+          await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
         }
       }
       
