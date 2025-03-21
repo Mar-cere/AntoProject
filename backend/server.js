@@ -142,13 +142,13 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Endpoint para solicitar restablecimiento con código - con correo mejorado
+// Endpoint para solicitar restablecimiento con código
 app.post('/api/users/recover', async (req, res) => {
   try {
     const { email } = req.body;
     
     // Buscar usuario en la base de datos
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
     
     if (!user) {
       return res.status(404).json({ message: 'No existe una cuenta con este correo' });
@@ -163,7 +163,7 @@ app.post('/api/users/recover', async (req, res) => {
     await user.save();
     
     // Obtener nombre de usuario para personalizar correo
-    const userName = user.name || 'Usuario';
+    const userName = user.name || user.username || 'Usuario';
     
     // Configuración del correo con código y diseño mejorado
     const mailOptions = {
@@ -323,14 +323,14 @@ app.post('/api/users/recover', async (req, res) => {
   }
 });
 
-// Nuevo endpoint para verificar código antes de restablecer contraseña
+// Endpoint para verificar código
 app.post('/api/users/verify-code', async (req, res) => {
   try {
     const { email, code } = req.body;
     
     // Buscar usuario con el código y email proporcionados
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: email.toLowerCase().trim(),
       resetPasswordToken: code,
       resetPasswordExpires: { $gt: Date.now() }
     });
@@ -350,14 +350,21 @@ app.post('/api/users/verify-code', async (req, res) => {
   }
 });
 
-// Modificar endpoint para restablecer contraseña
+// Endpoint para restablecer contraseña
 app.post('/api/users/reset-password', async (req, res) => {
   try {
     const { email, code, password } = req.body;
     
+    // Validar la nueva contraseña
+    if (!password || password.length < 6) {
+      return res.status(400).json({ 
+        message: 'La contraseña debe tener al menos 6 caracteres' 
+      });
+    }
+    
     // Buscar usuario con el código y email proporcionados
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: email.toLowerCase().trim(),
       resetPasswordToken: code,
       resetPasswordExpires: { $gt: Date.now() }
     });
@@ -366,11 +373,8 @@ app.post('/api/users/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'El código es inválido o ha expirado' });
     }
     
-    // Hashear la nueva contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
     // Actualizar contraseña
-    user.password = hashedPassword;
+    user.password = password; // No es necesario hashear manualmente, el middleware lo hace
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
@@ -378,7 +382,7 @@ app.post('/api/users/reset-password', async (req, res) => {
     res.json({ message: 'Contraseña actualizada correctamente' });
   } catch (error) {
     console.error('Error al restablecer contraseña:', error);
-    res.status(500).json({ message: 'Error al procesar la solicitud' });
+    res.status(500).json({ message: 'Error al procesar la solicitud: ' + error.message });
   }
 });
 
