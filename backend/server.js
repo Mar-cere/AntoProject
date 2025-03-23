@@ -225,6 +225,16 @@ app.post('/api/users/recover', async (req, res) => {
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
             
+            :root {
+              --primary-color: #1ADDDB;
+              --primary-dark: #0FB8C7;
+              --secondary-color: #030A24;
+              --background-color: #1D2B5F;
+              --text-color: #FFFFFF;
+              --text-muted: #A3B8E8;
+              --success-color: #4CAF50;
+            }
+            
             body {
               font-family: 'Poppins', Arial, sans-serif;
               line-height: 1.6;
@@ -242,64 +252,160 @@ app.post('/api/users/recover', async (req, res) => {
             
             .header {
               text-align: center;
-              padding: 25px 0;
+              padding: 30px 0;
               background: linear-gradient(135deg, #030A24 0%, #1D2B5F 100%);
-              border-radius: 10px 10px 0 0;
+              border-radius: 15px 15px 0 0;
+              position: relative;
+              overflow: hidden;
+              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             }
             
-            .logo {
-              width: 150px;
-              height: auto;
+            .header::before {
+              content: '';
+              position: absolute;
+              top: -50%;
+              left: -50%;
+              width: 200%;
+              height: 200%;
+              background: radial-gradient(circle, rgba(26, 221, 219, 0.1) 0%, transparent 70%);
+              animation: pulse 10s infinite;
+            }
+            
+            @keyframes pulse {
+              0% { transform: scale(1); opacity: 0.3; }
+              50% { transform: scale(1.05); opacity: 0.5; }
+              100% { transform: scale(1); opacity: 0.3; }
+            }
+            
+            .app-icon {
+              width: 120px;
+              height: 120px;
+              border-radius: 30px;
+              position: relative;
+              z-index: 1;
+              filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+              margin-bottom: 15px;
+              background-color: rgba(255, 255, 255, 0.1);
+              padding: 10px;
+              box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+              border: 2px solid rgba(255, 255, 255, 0.2);
+              transition: transform 0.3s ease;
+            }
+            
+            .app-icon:hover {
+              transform: scale(1.05);
+            }
+            
+            .app-name {
+              color: var(--primary-color);
+              font-size: 24px;
+              font-weight: 700;
+              margin: 0;
+              text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+              letter-spacing: 1px;
+              position: relative;
+              z-index: 1;
             }
             
             .content {
               background-color: #ffffff;
-              padding: 30px;
-              border-radius: 0 0 10px 10px;
-              box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+              padding: 40px;
+              border-radius: 0 0 15px 15px;
+              box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+              position: relative;
+            }
+            
+            .content::after {
+              content: '';
+              position: absolute;
+              bottom: 0;
+              right: 0;
+              width: 150px;
+              height: 150px;
+              background: radial-gradient(circle, rgba(26, 221, 219, 0.05) 0%, transparent 70%);
+              border-radius: 0 0 15px 0;
+              z-index: 0;
             }
             
             h1 {
               color: #1ADDDB;
               margin-top: 0;
-              margin-bottom: 20px;
-              font-size: 24px;
+              margin-bottom: 25px;
+              font-size: 28px;
               font-weight: 600;
+              text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             }
             
             p {
               margin-bottom: 20px;
-              color: #666666;
+              color: #555555;
               font-size: 16px;
+              position: relative;
+              z-index: 1;
             }
             
             .code-container {
-              background-color: #f2f2f2;
-              border-radius: 10px;
-              padding: 20px;
+              background: linear-gradient(145deg, #f8f8f8, #eeeeee);
+              border-radius: 15px;
+              padding: 25px;
               text-align: center;
-              margin: 30px 0;
+              margin: 35px 0;
+              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+              border: 1px solid rgba(26, 221, 219, 0.3);
+              position: relative;
+              overflow: hidden;
+            }
+            
+            .code-container::before {
+              content: '';
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 5px;
+              background: linear-gradient(90deg, #1ADDDB, #030A24);
             }
             
             .code {
-              font-size: 32px;
+              font-size: 36px;
               font-weight: 700;
               color: #030A24;
-              letter-spacing: 8px;
+              letter-spacing: 10px;
               margin: 0;
+              padding: 10px 0;
+              text-shadow: 0 1px 0 #fff;
+              display: inline-block;
+              border-bottom: 2px dashed rgba(26, 221, 219, 0.4);
+              padding-bottom: 10px;
             }
             
             .note {
               font-size: 14px;
-              color: #999999;
+              color: #888888;
               margin-top: 30px;
+              background-color: rgba(26, 221, 219, 0.1);
+              padding: 15px;
+              border-radius: 10px;
+              border-left: 4px solid rgba(26, 221, 219, 0.7);
+            }
+            
+            .warning {
+              font-size: 14px;
+              color: #856404;
+              background-color: #fff3cd;
+              border-left: 4px solid #ffeeba;
+              padding: 15px;
+              border-radius: 10px;
+              margin-top: 20px;
             }
             
             .footer {
               text-align: center;
-              padding: 20px;
-              font-size: 12px;
+              padding: 25px;
+              font-size: 13px;
               color: #999999;
+              margin-top: 20px;
+              border-top: 1px solid #eeeeee;
             }
             
             .highlight {
@@ -309,8 +415,61 @@ app.post('/api/users/recover', async (req, res) => {
             
             .divider {
               height: 1px;
-              background-color: #eeeeee;
-              margin: 25px 0;
+              background: linear-gradient(90deg, transparent, rgba(26, 221, 219, 0.3), transparent);
+              margin: 30px 0;
+            }
+            
+            .button {
+              display: inline-block;
+              background: linear-gradient(135deg, #1ADDDB 0%, #17C0C1 100%);
+              color: white;
+              padding: 12px 30px;
+              text-decoration: none;
+              border-radius: 50px;
+              font-weight: 600;
+              margin-top: 15px;
+              text-align: center;
+              box-shadow: 0 4px 10px rgba(26, 221, 219, 0.3);
+              transition: all 0.3s ease;
+            }
+            
+            .button:hover {
+              background: linear-gradient(135deg, #17C0C1 0%, #1ADDDB 100%);
+              box-shadow: 0 6px 15px rgba(26, 221, 219, 0.4);
+              transform: translateY(-2px);
+            }
+            
+            .timer {
+              display: inline-block;
+              background-color: rgba(26, 221, 219, 0.1);
+              padding: 5px 15px;
+              border-radius: 30px;
+              font-weight: 600;
+              font-size: 14px;
+              color: #1ADDDB;
+              margin-left: 10px;
+            }
+            
+            .social-links {
+              margin-top: 20px;
+              text-align: center;
+            }
+            
+            .social-icon {
+              display: inline-block;
+              margin: 0 8px;
+              width: 30px;
+              height: 30px;
+              background-color: #f0f0f0;
+              border-radius: 50%;
+              line-height: 30px;
+              text-align: center;
+              transition: all 0.3s ease;
+            }
+            
+            .social-icon:hover {
+              background-color: #1ADDDB;
+              transform: translateY(-3px);
             }
             
             @media only screen and (max-width: 600px) {
@@ -320,7 +479,21 @@ app.post('/api/users/recover', async (req, res) => {
               }
               
               .content {
-                padding: 20px;
+                padding: 25px;
+              }
+              
+              .code {
+                font-size: 28px;
+                letter-spacing: 8px;
+              }
+              
+              h1 {
+                font-size: 24px;
+              }
+              
+              .app-icon {
+                width: 100px;
+                height: 100px;
               }
             }
           </style>
@@ -328,7 +501,8 @@ app.post('/api/users/recover', async (req, res) => {
         <body>
           <div class="container">
             <div class="header">
-              <img src="https://i.imgur.com/YckJlnz.png" alt="AntoApp Logo" class="logo">
+              <img src="https://imgur.com/a/PWUVOBk" alt="AntoApp" class="app-icon">
+              <h2 class="app-name">AntoApp</h2>
             </div>
             <div class="content">
               <h1>Recuperación de contraseña</h1>
@@ -337,17 +511,38 @@ app.post('/api/users/recover', async (req, res) => {
               
               <div class="code-container">
                 <h2 class="code">${resetCode}</h2>
+                <p style="margin-top: 15px; color: #777; font-size: 14px;">Este código es válido durante <span class="timer">60 minutos</span></p>
               </div>
               
               <p>Si no solicitaste este código, puedes ignorar este correo y tu cuenta seguirá segura.</p>
               
+              <div class="warning">
+                <strong>Importante:</strong> Nunca compartas este código con nadie, incluido el personal de AntoApp. Nuestro equipo nunca te pedirá tu código de verificación.
+              </div>
+              
               <div class="divider"></div>
               
-              <p class="note">Este código expirará en 60 minutos por motivos de seguridad.</p>
+              <p class="note">
+                <strong>Nota de seguridad:</strong> Este código expirará en 60 minutos por motivos de seguridad. Si el código expira, puedes solicitar uno nuevo desde la aplicación.
+              </p>
+              
+              <p style="text-align: center; margin-top: 30px;">¿Necesitas ayuda? <a href="#" style="color: #1ADDDB; text-decoration: none;">Contacta a soporte</a></p>
             </div>
             <div class="footer">
               <p>© ${new Date().getFullYear()} AntoApp. Todos los derechos reservados.</p>
               <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+              
+              <div class="social-links">
+                <a href="#" class="social-icon">
+                  <img src="https://i.imgur.com/5tBZFL0.png" alt="Twitter" width="20" height="20">
+                </a>
+                <a href="#" class="social-icon">
+                  <img src="https://i.imgur.com/UUHR41J.png" alt="Facebook" width="20" height="20">
+                </a>
+                <a href="#" class="social-icon">
+                  <img src="https://i.imgur.com/YykMQMV.png" alt="Instagram" width="20" height="20">
+                </a>
+              </div>
             </div>
           </div>
         </body>
