@@ -369,7 +369,7 @@ app.post('/api/users/recover', async (req, res) => {
             .code {
               font-size: 36px;
               font-weight: 700;
-              color: #030A24;
+              color: #1ADDDB;
               letter-spacing: 10px;
               margin: 0;
               padding: 10px 0;
@@ -532,17 +532,6 @@ app.post('/api/users/recover', async (req, res) => {
               <p>© ${new Date().getFullYear()} AntoApp. Todos los derechos reservados.</p>
               <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
               
-              <div class="social-links">
-                <a href="#" class="social-icon">
-                  <img src="https://i.imgur.com/5tBZFL0.png" alt="Twitter" width="20" height="20">
-                </a>
-                <a href="#" class="social-icon">
-                  <img src="https://i.imgur.com/UUHR41J.png" alt="Facebook" width="20" height="20">
-                </a>
-                <a href="#" class="social-icon">
-                  <img src="https://i.imgur.com/YykMQMV.png" alt="Instagram" width="20" height="20">
-                </a>
-              </div>
             </div>
           </div>
         </body>
