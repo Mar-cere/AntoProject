@@ -10,6 +10,9 @@ import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import openaiService from './services/openaiService.js';
 import User from './models/UserSchema.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -210,6 +213,26 @@ app.post('/api/users/recover', async (req, res) => {
     // Obtener nombre de usuario para personalizar correo
     const userName = user.name || user.username || 'Usuario';
     
+    // Obtener la ruta absoluta al directorio actual
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    
+    // Construir la ruta a la imagen
+    // Ajusta esta ruta según donde hayas colocado la carpeta assets
+    const imagePath = path.join(__dirname, '../../assets/images/Anto.png');
+    
+    // Leer la imagen y convertirla a base64
+    let base64Image;
+    try {
+      const imageBuffer = fs.readFileSync(imagePath);
+      base64Image = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+      console.log('✅ Imagen cargada correctamente');
+    } catch (imageError) {
+      console.error('❌ Error al cargar la imagen:', imageError);
+      // Imagen de respaldo en caso de error (un pixel transparente)
+      base64Image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    }
+    
     // Configuración del correo con código y diseño mejorado
     const mailOptions = {
       from: `"AntoApp" <${process.env.EMAIL_USER}>`,
@@ -289,11 +312,6 @@ app.post('/api/users/recover', async (req, res) => {
               padding: 10px;
               box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
               border: 2px solid rgba(255, 255, 255, 0.2);
-              transition: transform 0.3s ease;
-            }
-            
-            .app-icon:hover {
-              transform: scale(1.05);
             }
             
             .app-name {
@@ -369,7 +387,7 @@ app.post('/api/users/recover', async (req, res) => {
             .code {
               font-size: 36px;
               font-weight: 700;
-              color: #1ADDDB;
+              color: #030A24;
               letter-spacing: 10px;
               margin: 0;
               padding: 10px 0;
@@ -501,7 +519,7 @@ app.post('/api/users/recover', async (req, res) => {
         <body>
           <div class="container">
             <div class="header">
-              <img src="https://imgur.com/a/PWUVOBk" alt="AntoApp" class="app-icon">
+              <img src="${base64Image}" alt="AntoApp" class="app-icon">
               <h2 class="app-name">AntoApp</h2>
             </div>
             <div class="content">
@@ -532,6 +550,17 @@ app.post('/api/users/recover', async (req, res) => {
               <p>© ${new Date().getFullYear()} AntoApp. Todos los derechos reservados.</p>
               <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
               
+              <div class="social-links">
+                <a href="#" class="social-icon">
+                  <img src="https://i.imgur.com/5tBZFL0.png" alt="Twitter" width="20" height="20">
+                </a>
+                <a href="#" class="social-icon">
+                  <img src="https://i.imgur.com/UUHR41J.png" alt="Facebook" width="20" height="20">
+                </a>
+                <a href="#" class="social-icon">
+                  <img src="https://i.imgur.com/YykMQMV.png" alt="Instagram" width="20" height="20">
+                </a>
+              </div>
             </div>
           </div>
         </body>
