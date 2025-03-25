@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useSafeAreaInsetsuseRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
   View, Text, StyleSheet, ImageBackground, TouchableOpacity, 
   FlatList, Image, Animated, StatusBar, ActivityIndicator, 
@@ -421,26 +422,28 @@ const DashScreen = () => {
               transform: [{ translateY: translateYAnim }],
             }}
           >
-            {/* Encabezado */}
             <Header greeting={greeting} userName={userName} userPoints={userPoints} userAvatar={userAvatar} />
             
-            {/* Cita motivacional */}
             <View style={styles.sectionContainer}>
               <Text style={styles.quoteText}>"{quote}"</Text>
             </View>
             
-            {/* Sección de tareas */}
             <TaskCard />
-            
-            {/* Sección de hábitos */}
             <HabitCard />
-            
-            {/* Sección de logros */}
             <AchievementCard />
           </Animated.View>
         </ScrollView>
         
-        <FloatingNavBar/>
+        <FloatingNavBar 
+          activeTab="Dash"
+          onTabPress={(screen) => {
+            navigation.navigate(screen);
+          }}
+          animValues={{
+            translateY: floatingBarAnim,
+            opacity: floatingBarOpacity
+          }}
+        />
       </ImageBackground>
     </View>
   );
@@ -468,8 +471,9 @@ const styles = StyleSheet.create({
     opacity: 0.1,
   },
   contentContainer: {
+    flex: 1,
     padding: 16,
-    paddingBottom: 80, // Espacio para la barra flotante
+    paddingBottom: 100, // Aumentar el padding bottom para dar espacio a la barra flotante
   },
   headerContainer: {
     flexDirection: 'row',

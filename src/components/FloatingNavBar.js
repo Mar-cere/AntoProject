@@ -88,7 +88,7 @@ const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
       {/* Botón Recordatorios */}
       <TouchableOpacity 
         style={[styles.button, activeTab === 'calendar' && styles.activeButton]} 
-        onPress={() => handleTabPress('Calendar', 'calendar')}
+        onPress={() => handleTabPress('Tasks', 'tasks')}
       >
         <View style={styles.iconContainer}>
           <Text style={[styles.iconText, activeTab === 'calendar' && styles.activeIconText]}>📋</Text>

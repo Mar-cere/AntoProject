@@ -13,6 +13,8 @@ import User from './models/UserSchema.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import taskRoutes from './routes/taskRoutes.js';
+import Task from './models/Task.js';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -29,6 +31,7 @@ const io = new Server(server, {
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/api/tasks', taskRoutes);
 
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI, {
@@ -180,14 +183,26 @@ app.post('/api/users/login', async (req, res) => {
 
 // Middleware de autenticación
 const authenticateToken = (req, res, next) => {
-  const token = req.header('Authorization');
-  if (!token) return res.status(403).json({ message: 'Acceso denegado' });
+  try {
+    const authHeader = req.header('Authorization');
+    if (!authHeader) {
+      return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
+    }
 
-  jwt.verify(token.replace('Bearer ', ''), process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ message: 'Token inválido' });
-    req.user = decoded;
-    next();
-  });
+    const token = authHeader.replace('Bearer ', '');
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+      if (err) {
+        if (err.name === 'TokenExpiredError') {
+          return res.status(401).json({ message: 'Token expirado' });
+        }
+        return res.status(403).json({ message: 'Token inválido' });
+      }
+      req.user = user;
+      next();
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error en la autenticación' });
+  }
 };
 
 // Endpoint para solicitar restablecimiento con código
@@ -798,3 +813,29 @@ io.on('connection', (socket) => {
 // Iniciar servidor
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => console.log(`🚀 Servidor corriendo en el puerto ${PORT}`));
+
+// Agregar middleware de manejo de errores global
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    message: err.message || 'Error interno del servidor',
+    error: process.env.NODE_ENV === 'development' ? err : {}
+  });
+});
+
+// Agregar ruta para obtener estadísticas generales
+app.get('/api/stats', authenticateToken, async (req, res) => {
+  try {
+    const [taskStats, todayTasks] = await Promise.all([
+      Task.getStats(req.user._id),
+      Task.getTodayTasks(req.user._id)
+    ]);
+
+    res.json({
+      stats: taskStats[0] || { total: 0, completed: 0, overdue: 0 },
+      todayTasks: todayTasks.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});

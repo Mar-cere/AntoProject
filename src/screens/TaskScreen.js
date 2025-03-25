@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/FontAwesome5';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
+import { API_URL, fetchWithToken } from '../config/api';
 
 
 const TaskScreen = ({ route }) => {
@@ -47,17 +48,20 @@ const TaskScreen = ({ route }) => {
     }
   }, [route.params?.openModal]);
 
-  // Cargar items (tareas y recordatorios)
+  // Cargar items desde la API
   const loadItems = useCallback(async () => {
     try {
-      const storedItems = await AsyncStorage.getItem('items');
-      if (storedItems) {
-        setItems(JSON.parse(storedItems));
-      }
-      setLoading(false);
+      setLoading(true);
+      const response = await fetchWithToken('/tasks');
+      if (!response.ok) throw new Error('Error al cargar tareas');
+      
+      const data = await response.json();
+      setItems(data);
     } catch (error) {
       console.error('Error al cargar items:', error);
       Alert.alert('Error', 'No se pudieron cargar los items');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -75,34 +79,41 @@ const TaskScreen = ({ route }) => {
     }
   };
 
-  // Agregar nuevo item
+  // Agregar nuevo item usando la API
   const handleAddItem = async () => {
     if (!title.trim()) {
       Alert.alert('Error', 'Por favor ingresa un título');
       return;
     }
 
-    const newItem = {
-      id: Date.now().toString(),
-      type: itemType,
-      title: title.trim(),
-      description: description.trim(),
-      dueDate: dueDate.toISOString(),
-      priority,
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const newItem = {
+        type: itemType,
+        title: title.trim(),
+        description: description.trim(),
+        dueDate: dueDate.toISOString(),
+        priority,
+      };
 
-    const newItems = [...items, newItem];
-    setItems(newItems);
-    await saveItems(newItems);
-    
-    setModalVisible(false);
-    resetForm();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const response = await fetchWithToken('/tasks', {
+        method: 'POST',
+        body: JSON.stringify(newItem),
+      });
+
+      if (!response.ok) throw new Error('Error al crear tarea');
+      
+      const createdTask = await response.json();
+      setItems(prevItems => [...prevItems, createdTask]);
+      setModalVisible(false);
+      resetForm();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('Error al crear item:', error);
+      Alert.alert('Error', 'No se pudo crear el item');
+    }
   };
 
-  // Eliminar item
+  // Eliminar item usando la API
   const handleDeleteItem = (id) => {
     Alert.alert(
       'Confirmar eliminación',
@@ -113,24 +124,67 @@ const TaskScreen = ({ route }) => {
           text: 'Eliminar',
           style: 'destructive',
           onPress: async () => {
-            const newItems = items.filter(item => item.id !== id);
-            setItems(newItems);
-            await saveItems(newItems);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            try {
+              const response = await fetchWithToken(`/tasks/${id}`, {
+                method: 'DELETE',
+              });
+
+              if (!response.ok) throw new Error('Error al eliminar tarea');
+
+              setItems(prevItems => prevItems.filter(item => item._id !== id));
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            } catch (error) {
+              console.error('Error al eliminar item:', error);
+              Alert.alert('Error', 'No se pudo eliminar el item');
+            }
           }
         }
       ]
     );
   };
 
-  // Marcar como completado
+  // Marcar como completado usando la API
   const toggleItemComplete = async (id) => {
-    const newItems = items.map(item => 
-      item.id === id ? { ...item, completed: !item.completed } : item
-    );
-    setItems(newItems);
-    await saveItems(newItems);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const response = await fetchWithToken(`/tasks/${id}/complete`, {
+        method: 'PATCH',
+      });
+
+      if (!response.ok) throw new Error('Error al actualizar tarea');
+      
+      const updatedTask = await response.json();
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item._id === id ? updatedTask : item
+        )
+      );
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (error) {
+      console.error('Error al actualizar item:', error);
+      Alert.alert('Error', 'No se pudo actualizar el estado del item');
+    }
+  };
+
+  // Actualizar item usando la API
+  const handleUpdateItem = async (id, updatedData) => {
+    try {
+      const response = await fetchWithToken(`/tasks/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatedData),
+      });
+
+      if (!response.ok) throw new Error('Error al actualizar tarea');
+      
+      const updatedTask = await response.json();
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item._id === id ? updatedTask : item
+        )
+      );
+    } catch (error) {
+      console.error('Error al actualizar item:', error);
+      Alert.alert('Error', 'No se pudo actualizar el item');
+    }
   };
 
   // Resetear formulario
@@ -169,7 +223,7 @@ const TaskScreen = ({ route }) => {
         <View style={styles.itemActions}>
           <TouchableOpacity
             style={styles.completeButton}
-            onPress={() => toggleItemComplete(item.id)}
+            onPress={() => toggleItemComplete(item._id)}
           >
             <Icon 
               name={item.completed ? 'check-circle' : 'circle'} 
@@ -179,7 +233,7 @@ const TaskScreen = ({ route }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.deleteButton}
-            onPress={() => handleDeleteItem(item.id)}
+            onPress={() => handleDeleteItem(item._id)}
           >
             <Icon name="trash-alt" size={20} color="#FF6B6B" />
           </TouchableOpacity>
@@ -419,7 +473,7 @@ const TaskScreen = ({ route }) => {
               <TouchableOpacity
                 style={[styles.detailActionButton, styles.completeButton]}
                 onPress={() => {
-                  toggleItemComplete(selectedItem?.id);
+                  toggleItemComplete(selectedItem?._id);
                   setDetailModalVisible(false);
                 }}
               >
@@ -437,7 +491,7 @@ const TaskScreen = ({ route }) => {
                 style={[styles.detailActionButton, styles.deleteButton]}
                 onPress={() => {
                   setDetailModalVisible(false);
-                  handleDeleteItem(selectedItem?.id);
+                  handleDeleteItem(selectedItem?._id);
                 }}
               >
                 <Icon name="trash-alt" size={20} color="#FFFFFF" />
@@ -490,7 +544,7 @@ const TaskScreen = ({ route }) => {
           filterType === 'all' ? true : item.type === filterType
         )}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item._id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
       />

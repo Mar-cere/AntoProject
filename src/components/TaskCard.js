@@ -4,6 +4,7 @@ import {
   import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from '@expo/vector-icons/Ionicons';
+import { API_URL, fetchWithToken } from '../config/api';
 
 // Componente de tarjeta de tareas
 const TaskCard = memo(() => {
@@ -14,16 +15,18 @@ const TaskCard = memo(() => {
     // Cargar tareas
     const loadTasks = useCallback(async () => {
       try {
-        const storedTasks = await AsyncStorage.getItem('tasks');
-        if (storedTasks) {
-          const parsedTasks = JSON.parse(storedTasks);
-          // Filtrar solo tareas pendientes y ordenar por prioridad
-          const activeTasks = parsedTasks
-            .filter(task => !task.completed)
-            .sort((a, b) => (a.priority || 3) - (b.priority || 3))
-            .slice(0, 3); // Mostrar solo las 3 más prioritarias
-          setTasks(activeTasks);
-        }
+        setLoading(true);
+        const response = await fetchWithToken('/tasks/pending');
+        if (!response.ok) throw new Error('Error al cargar tareas');
+        
+        const data = await response.json();
+        // Filtrar y ordenar las 3 tareas más prioritarias
+        const activeTasks = data
+          .filter(task => !task.completed)
+          .sort((a, b) => (a.priority || 3) - (b.priority || 3))
+          .slice(0, 3);
+        
+        setTasks(activeTasks);
       } catch (error) {
         console.error('Error al cargar tareas:', error);
       } finally {
@@ -36,7 +39,10 @@ const TaskCard = memo(() => {
     }, []);
   
     const handleTaskPress = useCallback((taskId) => {
-      navigation.navigate('TaskDetail', { taskId });
+      navigation.navigate('Tasks', { 
+        openModal: true,
+        taskId: taskId 
+      });
     }, [navigation]);
   
     const getPriorityColor = (priority) => {
