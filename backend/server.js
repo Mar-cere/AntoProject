@@ -549,18 +549,6 @@ app.post('/api/users/recover', async (req, res) => {
             <div class="footer">
               <p>© ${new Date().getFullYear()} AntoApp. Todos los derechos reservados.</p>
               <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
-              
-              <div class="social-links">
-                <a href="#" class="social-icon">
-                  <img src="https://i.imgur.com/5tBZFL0.png" alt="Twitter" width="20" height="20">
-                </a>
-                <a href="#" class="social-icon">
-                  <img src="https://i.imgur.com/UUHR41J.png" alt="Facebook" width="20" height="20">
-                </a>
-                <a href="#" class="social-icon">
-                  <img src="https://i.imgur.com/YykMQMV.png" alt="Instagram" width="20" height="20">
-                </a>
-              </div>
             </div>
           </div>
         </body>

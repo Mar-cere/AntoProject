@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useSafeAreaInsetsuseRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useSafeAreaInsetsuseRef, useCallback, memo } from 'react';
 import { 
   View, Text, StyleSheet, ImageBackground, TouchableOpacity, 
   FlatList, Image, Animated, StatusBar, ActivityIndicator, 
@@ -12,7 +12,8 @@ import ProgressRing from '../components/ProgressRing';
 import SkeletonLoader from '../components/SkeletonLoader';
 import motivationalQuotes from '../data/quotes';
 import FloatingNavBar from '../components/FloatingNavBar';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '@expo/vector-icons/Ionicons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -98,6 +99,284 @@ const ShineEffect = () => {
     />
   );
 };
+
+const Header = ({ greeting, userName, userPoints, userAvatar }) => (
+  <View style={styles.headerContainer}>
+    <View style={styles.headerLeft}>
+      <Text style={styles.greetingText}>{greeting}</Text>
+      <Text style={styles.nameText}>{userName}</Text>
+    </View>
+    <View style={styles.headerRight}>
+      <TouchableOpacity style={styles.pointsContainer}>
+        <Text style={styles.pointsIcon}>⭐</Text>
+        <Text style={styles.pointsText}>{userPoints}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+        <Image 
+          source={userAvatar ? { uri: userAvatar } : require('../images/avatar.png')} 
+          style={styles.userAvatar} 
+        />
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+// Componente de tarjeta de tareas
+const TaskCard = memo(() => {
+  const navigation = useNavigation();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Cargar tareas
+  const loadTasks = useCallback(async () => {
+    try {
+      const storedTasks = await AsyncStorage.getItem('tasks');
+      if (storedTasks) {
+        const parsedTasks = JSON.parse(storedTasks);
+        // Filtrar solo tareas pendientes y ordenar por prioridad
+        const activeTasks = parsedTasks
+          .filter(task => !task.completed)
+          .sort((a, b) => (a.priority || 3) - (b.priority || 3))
+          .slice(0, 3); // Mostrar solo las 3 más prioritarias
+        setTasks(activeTasks);
+      }
+    } catch (error) {
+      console.error('Error al cargar tareas:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  const handleTaskPress = useCallback((taskId) => {
+    navigation.navigate('TaskDetail', { taskId });
+  }, [navigation]);
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 1: return '#FF6B6B'; // Alta
+      case 2: return '#FFD93D'; // Media
+      case 3: return '#6BCB77'; // Baja
+      default: return '#95A5A6'; // Sin prioridad
+    }
+  };
+
+  return (
+    <View style={styles.taskCardContainer}>
+      <View style={styles.taskCardHeader}>
+        <View style={styles.taskTitleContainer}>
+          <Icon name="list-check" size={24} color="#1ADDDB" />
+          <Text style={styles.taskCardTitle}>Mis Tareas</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.viewAllButton}
+          onPress={() => navigation.navigate('Tasks')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.viewAllText}>Ver todas</Text>
+          <Icon name="chevron-right" size={16} color="#1ADDDB" />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color="#1ADDDB" style={styles.loader} />
+      ) : tasks.length > 0 ? (
+        <View style={styles.tasksContainer}>
+          {tasks.map((task) => (
+            <TouchableOpacity
+              key={task.id}
+              style={styles.taskItem}
+              onPress={() => handleTaskPress(task.id)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.taskItemContent}>
+                <View style={[
+                  styles.priorityIndicator,
+                  { backgroundColor: getPriorityColor(task.priority) }
+                ]} />
+                <View style={styles.taskItemMain}>
+                  <Text style={styles.taskItemTitle} numberOfLines={1}>
+                    {task.title}
+                  </Text>
+                  {task.dueDate && (
+                    <Text style={styles.taskItemDueDate}>
+                      {new Date(task.dueDate).toLocaleDateString()}
+                    </Text>
+                  )}
+                </View>
+                <Icon 
+                  name="chevron-right" 
+                  size={16} 
+                  color="#A3B8E8" 
+                  style={styles.taskItemArrow}
+                />
+              </View>
+              <View style={styles.taskProgress}>
+                <View style={[
+                  styles.progressBar,
+                  { width: `${(task.completedSteps / task.totalSteps) * 100}%` }
+                ]} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Icon name="tasks" size={40} color="#A3B8E8" />
+          <Text style={styles.emptyText}>No hay tareas pendientes</Text>
+          <TouchableOpacity 
+            style={styles.addTaskButton}
+            onPress={() => navigation.navigate('Tasks', { openModal: true })}
+            activeOpacity={0.7}
+          >
+            <Icon name="plus" size={16} color="#1ADDDB" />
+            <Text style={styles.addTaskText}>Nueva tarea</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+});
+
+const HabitCard = memo(() => {
+  const navigation = useNavigation();
+  const [habits, setHabits] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadHabits = useCallback(async () => {
+    try {
+      const storedHabits = await AsyncStorage.getItem('habits');
+      if (storedHabits) {
+        const parsedHabits = JSON.parse(storedHabits);
+        // Mostrar solo hábitos activos y ordenados por racha
+        const activeHabits = parsedHabits
+          .filter(habit => !habit.archived)
+          .sort((a, b) => b.streak - a.streak)
+          .slice(0, 3); // Mostrar solo los 3 mejores
+        setHabits(activeHabits);
+      }
+      setLoading(false);
+    } catch (error) {
+      console.error('Error al cargar hábitos:', error);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHabits();
+  }, []);
+
+  const getStreakColor = (streak) => {
+    if (streak >= 30) return '#FFD700';
+    if (streak >= 15) return '#C0C0C0';
+    if (streak >= 7) return '#CD7F32';
+    return '#1ADDDB';
+  };
+
+  return (
+    <View style={styles.habitCardContainer}>
+      <View style={styles.habitCardHeader}>
+        <View style={styles.habitTitleContainer}>
+          <MaterialCommunityIcons name="lightning-bolt" size={24} color="#1ADDDB" />
+          <Text style={styles.habitCardTitle}>Mis Hábitos</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.viewAllButton}
+          onPress={() => navigation.navigate('Habits')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.viewAllText}>Ver todos</Text>
+          <MaterialCommunityIcons name="chevron-right" size={16} color="#1ADDDB" />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color="#1ADDDB" style={styles.loader} />
+      ) : habits.length > 0 ? (
+        <View style={styles.habitsContainer}>
+          {habits.map((habit) => (
+            <TouchableOpacity
+              key={habit.id}
+              style={styles.habitItem}
+              onPress={() => navigation.navigate('Habits', { habitId: habit.id })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.habitItemContent}>
+                <View style={[
+                  styles.habitIcon,
+                  { backgroundColor: getStreakColor(habit.streak) }
+                ]}>
+                  <MaterialCommunityIcons 
+                    name={habit.icon} 
+                    size={20} 
+                    color="#FFFFFF" 
+                  />
+                </View>
+                <View style={styles.habitInfo}>
+                  <Text style={styles.habitItemTitle} numberOfLines={1}>
+                    {habit.title}
+                  </Text>
+                  <View style={styles.streakContainer}>
+                    <MaterialCommunityIcons 
+                      name="fire" 
+                      size={14} 
+                      color={getStreakColor(habit.streak)} 
+                    />
+                    <Text style={[
+                      styles.streakText,
+                      { color: getStreakColor(habit.streak) }
+                    ]}>
+                      {habit.streak} días
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.habitProgress}>
+                  <Text style={styles.progressText}>
+                    {habit.completedToday ? '¡Completado!' : 'Pendiente'}
+                  </Text>
+                  <View style={styles.progressBar}>
+                    <View 
+                      style={[
+                        styles.progressFill,
+                        { 
+                          width: `${(habit.completedDays / (habit.totalDays || 1)) * 100}%`,
+                          backgroundColor: getStreakColor(habit.streak)
+                        }
+                      ]} 
+                    />
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name="lightning-bolt" size={40} color="#A3B8E8" />
+          <Text style={styles.emptyText}>No hay hábitos activos</Text>
+          <TouchableOpacity 
+            style={styles.addHabitButton}
+            onPress={() => navigation.navigate('Habits', { openModal: true })}
+          >
+            <Text style={styles.addHabitText}>Crear hábito</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <TouchableOpacity 
+        style={styles.addButton}
+        onPress={() => navigation.navigate('Habits', { openModal: true })}
+        activeOpacity={0.7}
+      >
+        <MaterialCommunityIcons name="plus" size={16} color="#1ADDDB" />
+        <Text style={styles.addButtonText}>Nuevo hábito</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
 
 const DashScreen = () => {
   const navigation = useNavigation();
@@ -193,35 +472,38 @@ const DashScreen = () => {
       }
       setError(null);
       
-      // Simular carga de datos
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Cargar datos desde AsyncStorage
-      const storedUserData = await AsyncStorage.getItem('userData');
-      const storedUserName = await AsyncStorage.getItem('userName');
-      const storedUserAvatar = await AsyncStorage.getItem('userAvatar');
-      const storedUserPoints = await AsyncStorage.getItem('userPoints');
-      const storedAchievements = await AsyncStorage.getItem('userAchievements');
-      const storedTasks = await AsyncStorage.getItem('tasks');
-      const storedHabits = await AsyncStorage.getItem('habits');
-      
-      // Actualizar estados con los datos cargados
+      // Cargar datos del usuario de forma más eficiente
+      const [
+        storedUserData,
+        storedUserName,
+        storedUserAvatar,
+        storedUserPoints,
+        storedAchievements,
+        storedTasks,
+        storedHabits
+      ] = await Promise.all([
+        AsyncStorage.getItem('userData'),
+        AsyncStorage.getItem('userName'),
+        AsyncStorage.getItem('userAvatar'),
+        AsyncStorage.getItem('userPoints'),
+        AsyncStorage.getItem('userAchievements'),
+        AsyncStorage.getItem('tasks'),
+        AsyncStorage.getItem('habits')
+      ]);
+
+      // Procesar datos del usuario
       if (storedUserData) {
-        try {
-          const userData = JSON.parse(storedUserData);
-          setUserData(userData);
-          // Usar el nombre del usuario de userData si está disponible
-          if (userData.name) {
-            setUserName(userData.name);
-          } else if (userData.username) {
-            setUserName(userData.username);
-          }
-        } catch (e) {
-          console.error('Error al parsear userData:', e);
-        }
-      } else if (storedUserName) {
-        setUserName(storedUserName);
+        const userData = JSON.parse(storedUserData);
+        setUserData(userData);
+        setUserName(userData.name || userData.username || 'Usuario');
       }
+
+      // Establecer saludo personalizado según la hora
+      const currentHour = new Date().getHours();
+      const greeting = currentHour >= 6 && currentHour < 12 ? 'Buenos días' :
+                      currentHour >= 12 && currentHour < 18 ? 'Buenas tardes' :
+                      'Buenas noches';
+      setGreeting(greeting);
       
       if (storedUserAvatar) setUserAvatar(storedUserAvatar);
       if (storedUserPoints) setUserPoints(parseInt(storedUserPoints));
@@ -263,16 +545,6 @@ const DashScreen = () => {
         }]
       });
       
-      // Establecer saludo según hora del día
-      const currentHour = new Date().getHours();
-      if (currentHour >= 6 && currentHour < 12) {
-        setGreeting('Buenos días');
-      } else if (currentHour >= 12 && currentHour < 18) {
-        setGreeting('Buenas tardes');
-      } else {
-        setGreeting('Buenas noches');
-      }
-      
       // Establecer cita motivacional
       setQuote(motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)]);
       
@@ -290,8 +562,8 @@ const DashScreen = () => {
         }),
       ]).start();
       
-    } catch (err) {
-      console.error('Error al cargar datos:', err);
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
       setError('No se pudieron cargar los datos. Por favor, intenta de nuevo.');
     } finally {
       setLoading(false);
@@ -501,18 +773,17 @@ const DashScreen = () => {
       >
         <ParticleBackground />
         
-        <Animated.ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.contentContainer}
+        <ScrollView 
+          style={styles.contentContainer}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
               tintColor="#1ADDDB"
               colors={["#1ADDDB"]}
+              progressBackgroundColor="rgba(29, 43, 95, 0.8)"
             />
           }
-          showsVerticalScrollIndicator={false}
         >
           <Animated.View
             style={{
@@ -521,19 +792,7 @@ const DashScreen = () => {
             }}
           >
             {/* Encabezado */}
-            <View style={styles.headerContainer}>
-              <View style={styles.headerLeft}>
-                <Text style={styles.greetingText}>{greeting}</Text>
-                <Text style={styles.nameText}>{userName}</Text>
-              </View>
-              <View style={styles.headerRight}>
-                <View style={styles.pointsContainer}>
-                  <Text style={styles.pointsIcon}>⭐</Text>
-                  <Text style={styles.pointsText}>{userPoints}</Text>
-                </View>
-                  <Image source={require('../images/avatar.png')} style={styles.userAvatar} />
-              </View>
-            </View>
+            <Header greeting={greeting} userName={userName} userPoints={userPoints} userAvatar={userAvatar} />
             
             {/* Cita motivacional */}
             <View style={styles.sectionContainer}>
@@ -541,136 +800,10 @@ const DashScreen = () => {
             </View>
             
             {/* Sección de tareas */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Mis Tareas</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
-                  <Text style={styles.seeAllText}>Ver todas</Text>
-                </TouchableOpacity>
-              </View>
-              
-              {tasks.length > 0 ? (
-                <View style={styles.tasksGridContainer}>
-                  {tasks
-                    .sort((a, b) => (a.priority || 3) - (b.priority || 3))
-                    .slice(0, 3)
-                    .map((task) => (
-                      <TouchableOpacity
-                        key={task.id}
-                        style={[
-                          styles.taskCard,
-                          task.completed && styles.completedTaskCard
-                        ]}
-                        onPress={() => handleCompleteTask(task.id)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[
-                          styles.priorityIndicator, 
-                          { backgroundColor: 
-                            task.priority === 1 ? '#FF5252' : 
-                            task.priority === 2 ? '#FFC107' : '#8BC34A' 
-                          }
-                        ]} />
-                        
-                        <Text style={styles.taskTitle} numberOfLines={2}>
-                          {task.title}
-                        </Text>
-                        
-                        {task.dueDate && (
-                          <Text style={styles.taskDueDate}>
-                            {new Date(task.dueDate).toLocaleDateString()}
-                          </Text>
-                        )}
-                        
-                        <View style={styles.taskFooter}>
-                          {task.completed ? (
-                            <View style={styles.statusBadge}>
-                              <Text style={styles.statusBadgeText}>
-                                Completada • Prioridad {task.priority || 3}
-                              </Text>
-                            </View>
-                          ) : (
-                            <View style={[
-                              styles.statusBadge,
-                              { backgroundColor: 
-                                task.priority === 1 ? 'rgba(255, 82, 82, 0.7)' : 
-                                task.priority === 2 ? 'rgba(255, 193, 7, 0.7)' : 
-                                'rgba(26, 221, 219, 0.7)' 
-                              }
-                            ]}>
-                              <Text style={styles.statusBadgeText}>
-                                Pendiente • Prioridad {task.priority || 3}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  
-                  {tasks.length > 3 && (
-                    <TouchableOpacity 
-                      style={styles.viewAllButton}
-                      onPress={() => navigation.navigate('Tasks')}
-                    >
-                      <Text style={styles.viewAllButtonText}>
-                        +{tasks.length - 3} más
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ) : (
-                <View style={styles.emptyTasksContainer}>
-                  <Text style={styles.emptyTasksText}>No hay tareas pendientes</Text>
-                  <TouchableOpacity 
-                    style={styles.addTaskButton}
-                    onPress={() => navigation.navigate('AddTask')}
-                  >
-                    <Text style={styles.addTaskButtonText}>+ Añadir tarea</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
+            <TaskCard />
             
             {/* Sección de hábitos */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Mis Hábitos</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Habits')}>
-                  <Text style={styles.seeAllText}>Ver todos</Text>
-                </TouchableOpacity>
-              </View>
-              
-              {habits.length > 0 ? (
-                habits.map((habit) => (
-                  <View key={habit.id} style={styles.card}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <ProgressRing
-                        radius={25}
-                        strokeWidth={5}
-                        progress={habit.progress}
-                        color={habit.color}
-                      />
-                      <View style={{ marginLeft: 75, flex: 1 }}>
-                        <Text style={styles.cardText}>{habit.title}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.updateButton}
-                        onPress={() => {
-                          const newProgress = Math.min(habit.progress + 0.1, 1);
-                          handleUpdateHabit(habit.id, newProgress);
-                        }}
-                      >
-                        <Text style={styles.updateButtonText}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <View style={styles.card}>
-                  <Text style={styles.cardText}>No hay hábitos configurados</Text>
-                </View>
-              )}
-            </View>
+            <HabitCard />
             
             {/* Sección de logros */}
             <View style={styles.sectionContainer}>
@@ -754,7 +887,7 @@ const DashScreen = () => {
               ))}
             </View>
           </Animated.View>
-        </Animated.ScrollView>
+        </ScrollView>
         
         <FloatingNavBar/>
       </ImageBackground>
@@ -792,7 +925,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
-    marginTop: 44,
+    marginTop: StatusBar.currentHeight || 44,
+    paddingHorizontal: 16,
   },
   headerLeft: {
     flex: 1,
@@ -875,9 +1009,10 @@ const styles = StyleSheet.create({
   userAvatar: {
     width: 50,
     height: 50,
-    borderWidth: 1.4,
+    borderWidth: 2,
     borderRadius: 25,
     borderColor: '#1ADDDB',
+    backgroundColor: '#1D2B5F',
     shadowColor: "#1ADDDB",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
@@ -1047,19 +1182,18 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   viewAllButton: {
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    borderColor: 'rgba(26, 221, 219, 0.3)',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 5,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
   },
-  viewAllButtonText: {
+  viewAllText: {
     color: '#1ADDDB',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
   chartContainer: {
     marginVertical: 10,
@@ -1165,15 +1299,22 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   addTaskButton: {
-    backgroundColor: 'rgba(26, 221, 219, 0.2)',
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.2)',
+    borderStyle: 'dashed',
   },
-  addTaskButtonText: {
+  addTaskText: {
     color: '#1ADDDB',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
   pullToRefreshIndicator: {
     position: 'absolute',
@@ -1350,6 +1491,201 @@ const styles = StyleSheet.create({
     color: '#1ADDDB',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  taskCardContainer: {
+    backgroundColor: 'rgba(29, 43, 95, 0.8)',
+    borderRadius: 15,
+    padding: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.1)',
+  },
+  taskCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  taskTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  taskCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  tasksContainer: {
+    gap: 12,
+  },
+  taskItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+  },
+  taskItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  taskItemMain: {
+    flex: 1,
+  },
+  taskItemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  taskItemDueDate: {
+    fontSize: 12,
+    color: '#A3B8E8',
+  },
+  taskProgress: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#1ADDDB',
+    borderRadius: 2,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  emptyText: {
+    color: '#A3B8E8',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  loader: {
+    padding: 24,
+  },
+  habitCardContainer: {
+    backgroundColor: 'rgba(29, 43, 95, 0.8)',
+    borderRadius: 15,
+    padding: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.1)',
+  },
+  habitCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  habitTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  habitCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  habitsContainer: {
+    gap: 12,
+  },
+  habitItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  habitItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  habitIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  habitInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  habitItemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  streakContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  streakText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  habitProgress: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#A3B8E8',
+  },
+  progressBar: {
+    width: 60,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  emptyText: {
+    color: '#A3B8E8',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.2)',
+    borderStyle: 'dashed',
+  },
+  addButtonText: {
+    color: '#1ADDDB',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

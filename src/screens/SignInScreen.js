@@ -176,7 +176,7 @@ const SignInScreen = () => {
       // Navegar al Dashboard
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Dash' }], // O el nombre correcto de tu ruta
+        routes: [{ name: 'Dashboard' }],
       });
     } catch (error) {
       console.error('Error en SignInScreen:', error);
