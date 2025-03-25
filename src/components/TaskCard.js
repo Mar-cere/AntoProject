@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { 
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, } from 'react-native';
-  import { useNavigation } from '@react-navigation/native';
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from '@expo/vector-icons/Ionicons';
-import { API_URL, fetchWithToken } from '../config/api';
+import { Ionicons } from '@expo/vector-icons';
+
+const API_URL = 'https://antobackend.onrender.com';
 
 // Componente de tarjeta de tareas
 const TaskCard = memo(() => {
@@ -16,9 +17,20 @@ const TaskCard = memo(() => {
     const loadTasks = useCallback(async () => {
       try {
         setLoading(true);
-        const response = await fetchWithToken('/tasks/pending');
-        if (!response.ok) throw new Error('Error al cargar tareas');
+        const token = await AsyncStorage.getItem('userToken');
         
+        const response = await fetch(`${API_URL}/api/tasks/pending`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+  
+        if (!response.ok) {
+          throw new Error('Error al obtener las tareas');
+        }
+  
         const data = await response.json();
         // Filtrar y ordenar las 3 tareas más prioritarias
         const activeTasks = data
@@ -29,6 +41,7 @@ const TaskCard = memo(() => {
         setTasks(activeTasks);
       } catch (error) {
         console.error('Error al cargar tareas:', error);
+        Alert.alert('Error', 'No se pudieron cargar las tareas');
       } finally {
         setLoading(false);
       }
@@ -58,7 +71,7 @@ const TaskCard = memo(() => {
       <View style={styles.taskCardContainer}>
         <View style={styles.taskCardHeader}>
           <View style={styles.taskTitleContainer}>
-            <Icon name="list-check" size={24} color="#1ADDDB" />
+            <Ionicons name="list" size={24} color="#1ADDDB" />
             <Text style={styles.taskCardTitle}>Mis Tareas</Text>
           </View>
           <TouchableOpacity 
@@ -67,7 +80,7 @@ const TaskCard = memo(() => {
             activeOpacity={0.7}
           >
             <Text style={styles.viewAllText}>Ver todas</Text>
-            <Icon name="chevron-right" size={16} color="#1ADDDB" />
+            <Ionicons name="chevron-forward" size={16} color="#1ADDDB" />
           </TouchableOpacity>
         </View>
   
@@ -77,9 +90,9 @@ const TaskCard = memo(() => {
           <View style={styles.tasksContainer}>
             {tasks.map((task) => (
               <TouchableOpacity
-                key={task.id}
+                key={task._id}
                 style={styles.taskItem}
-                onPress={() => handleTaskPress(task.id)}
+                onPress={() => handleTaskPress(task._id)}
                 activeOpacity={0.7}
               >
                 <View style={styles.taskItemContent}>
@@ -97,32 +110,26 @@ const TaskCard = memo(() => {
                       </Text>
                     )}
                   </View>
-                  <Icon 
-                    name="chevron-right" 
+                  <Ionicons 
+                    name="chevron-forward" 
                     size={16} 
                     color="#A3B8E8" 
                     style={styles.taskItemArrow}
                   />
-                </View>
-                <View style={styles.taskProgress}>
-                  <View style={[
-                    styles.progressBar,
-                    { width: `${(task.completedSteps / task.totalSteps) * 100}%` }
-                  ]} />
                 </View>
               </TouchableOpacity>
             ))}
           </View>
         ) : (
           <View style={styles.emptyContainer}>
-            <Icon name="tasks" size={40} color="#A3B8E8" />
+            <Ionicons name="list-outline" size={40} color="#A3B8E8" />
             <Text style={styles.emptyText}>No hay tareas pendientes</Text>
             <TouchableOpacity 
               style={styles.addTaskButton}
               onPress={() => navigation.navigate('Tasks', { openModal: true })}
               activeOpacity={0.7}
             >
-              <Icon name="plus" size={16} color="#1ADDDB" />
+              <Ionicons name="add" size={16} color="#1ADDDB" />
               <Text style={styles.addTaskText}>Nueva tarea</Text>
             </TouchableOpacity>
           </View>

@@ -21,7 +21,6 @@ import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
 import { API_URL, fetchWithToken } from '../config/api';
 
-
 const TaskScreen = ({ route }) => {
   // Estados
   const [items, setItems] = useState([]);
