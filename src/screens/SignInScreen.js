@@ -9,6 +9,10 @@ import ParticleBackground from '../components/ParticleBackground';
 import userService, { ROUTES, handleApiError } from '../../backend/routes/userRoutes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
+const API_URL = 'https://antobackend.onrender.com';
+
+
 const SignInScreen = () => {
   const navigation = useNavigation();
   
@@ -153,36 +157,43 @@ const SignInScreen = () => {
   }, []);
 
   // Función para manejar el inicio de sesión
-  const handleSignIn = async () => {
-    if (!validateForm()) return;
-    
-    setIsSubmitting(true);
-    
+  const handleLogin = async () => {
     try {
-      console.log('Intentando iniciar sesión con:', {
-        email: formData.email,
-        password: formData.password ? '****' : 'undefined'
+      const response = await fetch(`${API_URL}/api/users/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        })
       });
+
+      const data = await response.json();
       
-      const response = await userService.login({
-        email: formData.email,
-        password: formData.password
-      });
-      
-      console.log('Respuesta de login:', response);
-      
-      // No es necesario guardar token o datos aquí si ya lo hace el userService
-      
-      // Navegar al Dashboard
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Dashboard' }],
-      });
+      if (response.ok) {
+        // Log para verificar el token recibido
+        console.log('Token recibido:', data.token);
+        
+        // Guardar el token
+        await AsyncStorage.setItem('userToken', data.token);
+        
+        // Verificar que se guardó correctamente
+        const savedToken = await AsyncStorage.getItem('userToken');
+        console.log('Token guardado:', savedToken);
+
+        // Navegar al Dashboard
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Dashboard' }],
+        });
+      } else {
+        Alert.alert('Error', data.message || 'Error al iniciar sesión');
+      }
     } catch (error) {
-      console.error('Error en SignInScreen:', error);
-      Alert.alert('Error', handleApiError ? handleApiError(error) : 'Error al iniciar sesión');
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error de login:', error);
+      Alert.alert('Error', 'Error al conectar con el servidor');
     }
   };
 
@@ -260,7 +271,7 @@ const SignInScreen = () => {
                   <View style={styles.buttonContainer}>
                     <TouchableOpacity
                       onPressIn={handlePressIn}
-                      onPressOut={isSubmitting ? null : handleSignIn}
+                      onPressOut={isSubmitting ? null : handleLogin}
                       disabled={isSubmitting}
                       style={[
                         styles.mainButton, 

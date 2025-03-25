@@ -3,38 +3,44 @@ import User from '../models/User.js';
 
 export const authenticateToken = async (req, res, next) => {
   try {
-    // Obtener el token del header
     const authHeader = req.header('Authorization');
+    console.log('Auth header recibido:', authHeader); // Para debug
+
     if (!authHeader) {
       return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
     }
 
-    // Verificar formato del token
     const token = authHeader.replace('Bearer ', '');
+    console.log('Token extraído:', token); // Para debug
+
     if (!token) {
       return res.status(401).json({ message: 'Token no válido' });
     }
 
-    // Verificar y decodificar el token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Buscar el usuario
-    const user = await User.findById(decoded.userId);
-    if (!user) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
-    }
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('Token decodificado:', decoded); // Para debug
 
-    // Agregar el usuario al request
-    req.user = user;
-    next();
+      const user = await User.findById(decoded.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'Usuario no encontrado' });
+      }
+
+      req.user = user;
+      req.token = token;
+      next();
+    } catch (error) {
+      console.error('Error al verificar token:', error);
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ message: 'Token inválido' });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ message: 'Token expirado' });
+      }
+      throw error;
+    }
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ message: 'Token inválido' });
-    }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ message: 'Token expirado' });
-    }
-    console.error('Error de autenticación:', error);
+    console.error('Error en middleware de autenticación:', error);
     res.status(500).json({ message: 'Error en la autenticación' });
   }
 };

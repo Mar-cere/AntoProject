@@ -19,33 +19,45 @@ const TaskCard = memo(() => {
         setLoading(true);
         const token = await AsyncStorage.getItem('userToken');
         
+        console.log('Intentando cargar tareas con token:', token);
+
         const response = await fetch(`${API_URL}/api/tasks/pending`, {
           method: 'GET',
           headers: {
+            'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}` // Asegurarnos de que el formato sea correcto
           }
         });
-  
+
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response body:', responseText);
+
         if (!response.ok) {
-          throw new Error('Error al obtener las tareas');
+          throw new Error(`Error del servidor: ${response.status} - ${responseText}`);
         }
-  
-        const data = await response.json();
-        // Filtrar y ordenar las 3 tareas más prioritarias
-        const activeTasks = data
-          .filter(task => !task.completed)
-          .sort((a, b) => (a.priority || 3) - (b.priority || 3))
-          .slice(0, 3);
-        
-        setTasks(activeTasks);
+
+        const data = JSON.parse(responseText);
+        setTasks(data);
       } catch (error) {
-        console.error('Error al cargar tareas:', error);
-        Alert.alert('Error', 'No se pudieron cargar las tareas');
+        console.error('Error completo:', error);
+        if (error.message.includes('401') || error.message.includes('403')) {
+          // Si es error de autenticación, redirigir al login
+          Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente');
+          // Limpiar el token
+          await AsyncStorage.removeItem('userToken');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'SignIn' }],
+          });
+        } else {
+          Alert.alert('Error', 'No se pudieron cargar las tareas');
+        }
       } finally {
         setLoading(false);
       }
-    }, []);
+    }, [navigation]);
   
     useEffect(() => {
       loadTasks();

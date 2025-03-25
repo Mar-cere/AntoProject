@@ -15,11 +15,12 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/FontAwesome5';
+import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
-import { API_URL, fetchWithToken } from '../config/api';
+
+const API_URL = 'https://antobackend.onrender.com';
 
 const TaskScreen = ({ route }) => {
   // Estados
@@ -51,9 +52,20 @@ const TaskScreen = ({ route }) => {
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetchWithToken('/tasks');
-      if (!response.ok) throw new Error('Error al cargar tareas');
+      const token = await AsyncStorage.getItem('userToken');
       
+      const response = await fetch(`${API_URL}/api/tasks`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al obtener las tareas');
+      }
+
       const data = await response.json();
       setItems(data);
     } catch (error) {
@@ -86,6 +98,7 @@ const TaskScreen = ({ route }) => {
     }
 
     try {
+      const token = await AsyncStorage.getItem('userToken');
       const newItem = {
         type: itemType,
         title: title.trim(),
@@ -94,18 +107,24 @@ const TaskScreen = ({ route }) => {
         priority,
       };
 
-      const response = await fetchWithToken('/tasks', {
+      const response = await fetch(`${API_URL}/api/tasks`, {
         method: 'POST',
-        body: JSON.stringify(newItem),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newItem)
       });
 
-      if (!response.ok) throw new Error('Error al crear tarea');
-      
+      if (!response.ok) {
+        throw new Error('Error al crear la tarea');
+      }
+
       const createdTask = await response.json();
       setItems(prevItems => [...prevItems, createdTask]);
       setModalVisible(false);
       resetForm();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error al crear item:', error);
       Alert.alert('Error', 'No se pudo crear el item');
@@ -124,8 +143,12 @@ const TaskScreen = ({ route }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await fetchWithToken(`/tasks/${id}`, {
+              const token = await AsyncStorage.getItem('userToken');
+              const response = await fetch(`${API_URL}/api/tasks/${id}`, {
                 method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
               });
 
               if (!response.ok) throw new Error('Error al eliminar tarea');
@@ -145,8 +168,12 @@ const TaskScreen = ({ route }) => {
   // Marcar como completado usando la API
   const toggleItemComplete = async (id) => {
     try {
-      const response = await fetchWithToken(`/tasks/${id}/complete`, {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/api/tasks/${id}/complete`, {
         method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (!response.ok) throw new Error('Error al actualizar tarea');
@@ -167,9 +194,14 @@ const TaskScreen = ({ route }) => {
   // Actualizar item usando la API
   const handleUpdateItem = async (id, updatedData) => {
     try {
-      const response = await fetchWithToken(`/tasks/${id}`, {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/api/tasks/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(updatedData),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedData)
       });
 
       if (!response.ok) throw new Error('Error al actualizar tarea');
@@ -210,7 +242,7 @@ const TaskScreen = ({ route }) => {
     >
       <View style={styles.itemHeader}>
         <View style={styles.itemTitleContainer}>
-          <Icon 
+          <Ionicons 
             name={item.type === 'task' ? 'tasks' : 'clock'} 
             size={16} 
             color="#1ADDDB" 
@@ -224,7 +256,7 @@ const TaskScreen = ({ route }) => {
             style={styles.completeButton}
             onPress={() => toggleItemComplete(item._id)}
           >
-            <Icon 
+            <Ionicons 
               name={item.completed ? 'check-circle' : 'circle'} 
               size={24} 
               color={item.completed ? '#4CAF50' : '#A3B8E8'} 
@@ -234,7 +266,7 @@ const TaskScreen = ({ route }) => {
             style={styles.deleteButton}
             onPress={() => handleDeleteItem(item._id)}
           >
-            <Icon name="trash-alt" size={20} color="#FF6B6B" />
+            <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
           </TouchableOpacity>
         </View>
       </View>
@@ -248,7 +280,7 @@ const TaskScreen = ({ route }) => {
         
         <View style={styles.itemFooter}>
           <View style={styles.itemMetadata}>
-            <Icon name="calendar-alt" size={12} color="#A3B8E8" />
+            <Ionicons name="calendar-outline" size={12} color="#A3B8E8" />
             <Text style={styles.itemDate}>
               {new Date(item.dueDate).toLocaleDateString()}
             </Text>
@@ -290,7 +322,7 @@ const TaskScreen = ({ route }) => {
                 resetForm();
               }}
             >
-              <Icon name="times" size={24} color="#A3B8E8" />
+              <Ionicons name="close" size={24} color="#A3B8E8" />
             </TouchableOpacity>
           </View>
 
@@ -302,7 +334,7 @@ const TaskScreen = ({ route }) => {
               ]}
               onPress={() => setItemType('task')}
             >
-              <Icon name="tasks" size={16} color={itemType === 'task' ? '#1ADDDB' : '#A3B8E8'} />
+              <Ionicons name="tasks" size={16} color={itemType === 'task' ? '#1ADDDB' : '#A3B8E8'} />
               <Text style={[
                 styles.typeButtonText,
                 itemType === 'task' && styles.typeButtonTextActive
@@ -315,7 +347,7 @@ const TaskScreen = ({ route }) => {
               ]}
               onPress={() => setItemType('reminder')}
             >
-              <Icon name="clock" size={16} color={itemType === 'reminder' ? '#1ADDDB' : '#A3B8E8'} />
+              <Ionicons name="clock" size={16} color={itemType === 'reminder' ? '#1ADDDB' : '#A3B8E8'} />
               <Text style={[
                 styles.typeButtonText,
                 itemType === 'reminder' && styles.typeButtonTextActive
@@ -345,7 +377,7 @@ const TaskScreen = ({ route }) => {
             style={styles.dateButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <Icon name="calendar-alt" size={16} color="#1ADDDB" />
+            <Ionicons name="calendar" size={16} color="#1ADDDB" />
             <Text style={styles.dateButtonText}>
               {dueDate.toLocaleDateString()}
             </Text>
@@ -412,7 +444,7 @@ const TaskScreen = ({ route }) => {
         <View style={styles.detailModalContent}>
           <View style={styles.modalHeader}>
             <View style={styles.modalTitleContainer}>
-              <Icon 
+              <Ionicons 
                 name={selectedItem?.type === 'task' ? 'tasks' : 'clock'} 
                 size={20} 
                 color="#1ADDDB" 
@@ -425,7 +457,7 @@ const TaskScreen = ({ route }) => {
               style={styles.closeButton}
               onPress={() => setDetailModalVisible(false)}
             >
-              <Icon name="times" size={24} color="#A3B8E8" />
+              <Ionicons name="close" size={24} color="#A3B8E8" />
             </TouchableOpacity>
           </View>
 
@@ -448,7 +480,7 @@ const TaskScreen = ({ route }) => {
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Fecha</Text>
                 <View style={styles.detailValueContainer}>
-                  <Icon name="calendar-alt" size={14} color="#1ADDDB" />
+                  <Ionicons name="calendar" size={14} color="#1ADDDB" />
                   <Text style={styles.detailValue}>
                     {new Date(selectedItem?.dueDate).toLocaleDateString()}
                   </Text>
@@ -476,7 +508,7 @@ const TaskScreen = ({ route }) => {
                   setDetailModalVisible(false);
                 }}
               >
-                <Icon 
+                <Ionicons 
                   name={selectedItem?.completed ? 'check-circle' : 'circle'} 
                   size={20} 
                   color="#FFFFFF" 
@@ -493,7 +525,7 @@ const TaskScreen = ({ route }) => {
                   handleDeleteItem(selectedItem?._id);
                 }}
               >
-                <Icon name="trash-alt" size={20} color="#FFFFFF" />
+                <Ionicons name="trash" size={20} color="#FFFFFF" />
                 <Text style={styles.detailActionText}>Eliminar</Text>
               </TouchableOpacity>
             </View>
@@ -555,7 +587,7 @@ const TaskScreen = ({ route }) => {
           setModalVisible(true);
         }}
       >
-        <Icon name="plus" size={24} color="#FFFFFF" />
+        <Ionicons name="add" size={24} color="#FFFFFF" />
       </TouchableOpacity>
       <FloatingNavBar/>
       {renderModal()}

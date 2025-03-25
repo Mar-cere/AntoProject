@@ -95,10 +95,17 @@ router.get('/stats', async (req, res) => {
 // Obtener tareas pendientes
 router.get('/pending', async (req, res) => {
   try {
-    const tasks = await Task.getPendingTasks(req.user._id);
+    console.log('Usuario autenticado:', req.user); // Para debug
+
+    const tasks = await Task.find({
+      userId: req.user._id,
+      completed: false
+    }).sort({ dueDate: 1 });
+
     res.json(tasks);
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener tareas pendientes', error: error.message });
+    console.error('Error al obtener tareas pendientes:', error);
+    res.status(500).json({ message: 'Error al obtener las tareas' });
   }
 });
 
