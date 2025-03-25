@@ -219,7 +219,7 @@ app.post('/api/users/recover', async (req, res) => {
     
     // Construir la ruta a la imagen
     // Ajusta esta ruta según donde hayas colocado la carpeta assets
-    const imagePath = path.join(__dirname, '../../assets/images/Anto.png');
+    const imagePath = path.join(__dirname, '/assets/images/Anto.png');
     
     // Leer la imagen y convertirla a base64
     let base64Image;
