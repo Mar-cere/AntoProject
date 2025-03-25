@@ -378,6 +378,131 @@ const HabitCard = memo(() => {
   );
 });
 
+const AchievementCard = memo(() => {
+  const navigation = useNavigation();
+  const [achievements, setAchievements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadAchievements = useCallback(async () => {
+    try {
+      const storedAchievements = await AsyncStorage.getItem('userAchievements');
+      if (storedAchievements) {
+        const parsedAchievements = JSON.parse(storedAchievements);
+        // Ordenar por más recientes y mostrar solo los 2 últimos desbloqueados
+        const recentAchievements = parsedAchievements
+          .filter(achievement => achievement.unlocked)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 2);
+        setAchievements(recentAchievements);
+      }
+      setLoading(false);
+    } catch (error) {
+      console.error('Error al cargar logros:', error);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAchievements();
+  }, []);
+
+  const getAchievementIcon = (type) => {
+    switch (type) {
+      case 'task': return 'checkbox-marked-circle';
+      case 'habit': return 'lightning-bolt';
+      case 'streak': return 'fire';
+      case 'points': return 'star';
+      default: return 'trophy';
+    }
+  };
+
+  return (
+    <View style={styles.achievementCardContainer}>
+      <View style={styles.achievementCardHeader}>
+        <View style={styles.achievementTitleContainer}>
+          <MaterialCommunityIcons name="trophy" size={24} color="#FFD700" />
+          <Text style={styles.achievementCardTitle}>Mis Logros</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.viewAllButton}
+          onPress={() => navigation.navigate('Achievements')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.viewAllText}>Ver todos</Text>
+          <MaterialCommunityIcons name="chevron-right" size={16} color="#1ADDDB" />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color="#1ADDDB" style={styles.loader} />
+      ) : achievements.length > 0 ? (
+        <View style={styles.achievementsContainer}>
+          {achievements.map((achievement) => (
+            <View key={achievement.id} style={styles.achievementItem}>
+              <View style={styles.achievementItemContent}>
+                <View style={[
+                  styles.achievementIconBadge,
+                  { backgroundColor: achievement.color || '#FFD700' }
+                ]}>
+                  <MaterialCommunityIcons 
+                    name={getAchievementIcon(achievement.type)}
+                    size={20} 
+                    color="#FFFFFF" 
+                  />
+                </View>
+                <View style={styles.achievementInfo}>
+                  <Text style={styles.achievementItemTitle}>
+                    {achievement.title}
+                  </Text>
+                  <Text style={styles.achievementItemDescription}>
+                    {achievement.description}
+                  </Text>
+                  {achievement.date && (
+                    <Text style={styles.achievementDate}>
+                      Desbloqueado el {new Date(achievement.date).toLocaleDateString()}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.achievementPoints}>
+                  <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
+                  <Text style={styles.pointsValue}>+{achievement.points}</Text>
+                </View>
+              </View>
+              {achievement.progress && (
+                <View style={styles.achievementProgressBar}>
+                  <View 
+                    style={[
+                      styles.achievementProgressFill,
+                      { width: `${achievement.progress}%` }
+                    ]} 
+                  />
+                </View>
+              )}
+            </View>
+          ))}
+          <TouchableOpacity 
+            style={styles.viewAllAchievementsButton}
+            onPress={() => navigation.navigate('Achievements')}
+          >
+            <Text style={styles.viewAllAchievementsText}>Ver todos los logros</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name="trophy-outline" size={40} color="#A3B8E8" />
+          <Text style={styles.emptyText}>No hay logros desbloqueados</Text>
+          <TouchableOpacity 
+            style={styles.viewAllAchievementsButton}
+            onPress={() => navigation.navigate('Achievements')}
+          >
+            <Text style={styles.viewAllAchievementsText}>Ver todos los logros</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+});
+
 const DashScreen = () => {
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -806,86 +931,7 @@ const DashScreen = () => {
             <HabitCard />
             
             {/* Sección de logros */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Logros</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Achievements')}>
-                  <Text style={styles.seeAllText}>Ver todos</Text>
-                </TouchableOpacity>
-              </View>
-              
-              {userAchievements.slice(0, 2).map((achievement) => (
-                <TouchableOpacity
-                  key={achievement.id}
-                  style={[
-                    styles.achievementCard,
-                    achievement.unlocked && styles.unlockedAchievementCard
-                  ]}
-                  onPress={() => handleAchievementPress(achievement)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.achievementIconContainer}>
-                    {achievement.unlocked ? (
-                      <Image
-                        source={achievement.icon || require('../images/medal.png')}
-                        style={styles.achievementIcon}
-                      />
-                    ) : (
-                      <View style={styles.lockedIconContainer}>
-                        <Image
-                          source={require('../images/lock.png')}
-                          style={styles.lockedIcon}
-                        />
-                      </View>
-                    )}
-                  </View>
-                  
-                  <View style={styles.achievementContent}>
-                    <Text style={styles.achievementTitle} numberOfLines={1}>
-                      {achievement.title}
-                    </Text>
-                    
-                    <Text style={styles.achievementDescription} numberOfLines={2}>
-                      {achievement.unlocked 
-                        ? achievement.description 
-                        : '¡Completa este desafío para desbloquear!'}
-                    </Text>
-                    
-                    {achievement.progress !== undefined && (
-                      <View style={styles.achievementProgressContainer}>
-                        <View style={styles.achievementProgressBar}>
-                          <View 
-                            style={[
-                              styles.achievementProgressFill,
-                              { width: `${Math.min(100, achievement.progress)}%` }
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.achievementProgressText}>
-                          {achievement.progress}%
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  
-                  {achievement.unlocked && achievement.date && (
-                    <View style={styles.achievementDateContainer}>
-                      <Text style={styles.achievementDateText}>
-                        {new Date(achievement.date).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {achievement.unlocked && achievement.reward && (
-                    <View style={styles.achievementRewardBadge}>
-                      <Text style={styles.achievementRewardText}>
-                        +{achievement.reward}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
+            <AchievementCard />
           </Animated.View>
         </ScrollView>
         
@@ -1231,23 +1277,85 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     marginTop: 10,
   },
-  taskCard: {
-    width: '100%',
+  taskCardContainer: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    borderRadius: 20,
+    borderRadius: 15,
     padding: 8,
-    marginBottom: 6,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    position: 'relative',
-  },
-  completedTaskCard: {
-    backgroundColor: 'rgba(39, 174, 96, 0.2)',
-    borderColor: '#27AE60',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
     borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.1)',
+  },
+  taskCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  taskTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  taskCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  tasksContainer: {
+    gap: 12,
+  },
+  taskItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  taskItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  taskIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  taskInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  taskItemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  taskDate: {
+    fontSize: 12,
+    color: '#A3B8E8',
+  },
+  taskItemArrow: {
+    marginLeft: 12,
+  },
+  taskProgress: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  progressBar: {
+    width: 60,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
   },
   priorityIndicator: {
     position: 'absolute',
@@ -1257,46 +1365,19 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
   },
-  taskTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 6,
-    paddingRight: 20,
-  },
-  taskDueDate: {
-    color: '#A3B8E8',
+  taskItemDueDate: {
     fontSize: 12,
-    marginBottom: 12,
+    color: '#A3B8E8',
   },
-  taskFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyContainer: {
     alignItems: 'center',
+    padding: 24,
+    gap: 12,
   },
-  statusBadge: {
-    backgroundColor: 'rgba(39, 174, 96, 0.7)',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  statusBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  emptyTasksContainer: {
-    backgroundColor: 'rgba(29, 43, 95, 0.5)',
-    borderRadius: 15,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTasksText: {
+  emptyText: {
     color: '#A3B8E8',
     fontSize: 16,
-    marginBottom: 10,
+    textAlign: 'center',
   },
   addTaskButton: {
     flexDirection: 'row',
@@ -1350,149 +1431,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     transform: [{ skewX: '-20deg' }],
   },
-  achievementCard: {
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 184, 232, 0.3)',
-  },
-  unlockedAchievementCard: {
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    borderColor: 'rgba(26, 221, 219, 0.5)',
-  },
-  achievementIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(26, 221, 219, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  achievementIcon: {
-    width: 30,
-    height: 30,
-    tintColor: '#1ADDDB',
-  },
-  lockedIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(163, 184, 232, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  lockedIcon: {
-    width: 20,
-    height: 20,
-    tintColor: '#A3B8E8',
-  },
-  achievementContent: {
-    flex: 1,
-  },
-  achievementTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  achievementDescription: {
-    color: '#A3B8E8',
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  achievementProgressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  achievementProgressBar: {
-    flex: 1,
-    height: 6,
-    backgroundColor: 'rgba(163, 184, 232, 0.2)',
-    borderRadius: 3,
-    marginRight: 8,
-    overflow: 'hidden',
-  },
-  achievementProgressFill: {
-    height: '100%',
-    backgroundColor: '#1ADDDB',
-    borderRadius: 3,
-  },
-  achievementProgressText: {
-    color: '#1ADDDB',
-    fontSize: 12,
-    fontWeight: 'bold',
-    width: 35,
-    textAlign: 'right',
-  },
-  achievementDateContainer: {
-    position: 'absolute',
-    bottom: 10,
-    right: 15,
-  },
-  achievementDateText: {
-    color: '#A3B8E8',
-    fontSize: 10,
-  },
-  achievementRewardBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 15,
-    backgroundColor: 'rgba(39, 174, 96, 0.7)',
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-  },
-  achievementRewardText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  emptyAchievementsContainer: {
-    backgroundColor: 'rgba(29, 43, 95, 0.5)',
-    borderRadius: 15,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyAchievementsIcon: {
-    width: 40,
-    height: 40,
-    tintColor: '#A3B8E8',
-    marginBottom: 10,
-    opacity: 0.7,
-  },
-  emptyAchievementsText: {
-    color: '#A3B8E8',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  viewAllAchievementsButton: {
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    borderColor: 'rgba(26, 221, 219, 0.3)',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 5,
-  },
-  viewAllAchievementsText: {
-    color: '#1ADDDB',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  taskCardContainer: {
+  achievementCardContainer: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
     borderRadius: 15,
     padding: 8,
@@ -1505,73 +1444,102 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
   },
-  taskCardHeader: {
+  achievementCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  taskTitleContainer: {
+  achievementTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  taskCardTitle: {
+  achievementCardTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  tasksContainer: {
+  achievementsContainer: {
     gap: 12,
   },
-  taskItem: {
+  achievementItem: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
     padding: 12,
-    gap: 8,
   },
-  taskItemContent: {
+  achievementItemContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  taskItemMain: {
-    flex: 1,
+  achievementIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  taskItemTitle: {
+  achievementInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  achievementItemTitle: {
     fontSize: 16,
     fontWeight: '500',
     color: '#FFFFFF',
-    marginBottom: 4,
   },
-  taskItemDueDate: {
+  achievementItemDescription: {
     fontSize: 12,
     color: '#A3B8E8',
   },
-  taskProgress: {
+  achievementDate: {
+    fontSize: 10,
+    color: '#A3B8E8',
+    marginTop: 2,
+  },
+  achievementPoints: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pointsValue: {
+    color: '#FFD700',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  achievementProgressBar: {
     height: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 2,
     overflow: 'hidden',
     marginTop: 8,
   },
-  progressBar: {
+  achievementProgressFill: {
     height: '100%',
-    backgroundColor: '#1ADDDB',
+    backgroundColor: '#FFD700',
     borderRadius: 2,
   },
-  emptyContainer: {
+  viewAllAchievementsButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 24,
-    gap: 12,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.2)',
   },
-  emptyText: {
-    color: '#A3B8E8',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  loader: {
-    padding: 24,
+  viewAllAchievementsText: {
+    color: '#1ADDDB',
+    fontSize: 14,
+    fontWeight: '500',
   },
   habitCardContainer: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
@@ -1659,16 +1627,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
   },
-  emptyContainer: {
-    alignItems: 'center',
-    padding: 24,
-    gap: 12,
-  },
-  emptyText: {
-    color: '#A3B8E8',
-    fontSize: 16,
-    textAlign: 'center',
-  },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1683,6 +1641,27 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   addButtonText: {
+    color: '#1ADDDB',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loader: {
+    padding: 24,
+  },
+  addHabitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.2)',
+    borderStyle: 'dashed',
+  },
+  addHabitText: {
     color: '#1ADDDB',
     fontSize: 14,
     fontWeight: '500',
