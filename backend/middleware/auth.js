@@ -1,0 +1,75 @@
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+
+export const authenticateToken = async (req, res, next) => {
+  try {
+    // Obtener el token del header
+    const authHeader = req.header('Authorization');
+    if (!authHeader) {
+      return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
+    }
+
+    // Verificar formato del token
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ message: 'Token no válido' });
+    }
+
+    // Verificar y decodificar el token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Buscar el usuario
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Agregar el usuario al request
+    req.user = user;
+    next();
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: 'Token inválido' });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Token expirado' });
+    }
+    console.error('Error de autenticación:', error);
+    res.status(500).json({ message: 'Error en la autenticación' });
+  }
+};
+
+// Middleware opcional para verificar roles
+export const authorizeRole = (roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para realizar esta acción' 
+      });
+    }
+    next();
+  };
+};
+
+// Middleware para verificar propiedad de un recurso
+export const verifyOwnership = (model) => {
+  return async (req, res, next) => {
+    try {
+      const resource = await model.findById(req.params.id);
+      if (!resource) {
+        return res.status(404).json({ message: 'Recurso no encontrado' });
+      }
+      
+      if (resource.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ 
+          message: 'No tienes permiso para acceder a este recurso' 
+        });
+      }
+      
+      req.resource = resource;
+      next();
+    } catch (error) {
+      res.status(500).json({ message: 'Error al verificar propiedad del recurso' });
+    }
+  };
+};
