@@ -18,6 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
+import FloatingNavBar from '../components/FloatingNavBar';
+
 
 const TaskScreen = ({ route }) => {
   // Estados
@@ -502,7 +504,7 @@ const TaskScreen = ({ route }) => {
       >
         <Icon name="plus" size={24} color="#FFFFFF" />
       </TouchableOpacity>
-
+      <FloatingNavBar/>
       {renderModal()}
       {renderDetailModal()}
     </View>

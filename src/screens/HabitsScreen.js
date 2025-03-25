@@ -16,6 +16,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import FloatingNavBar from '../components/FloatingNavBar';
+
 
 const HABIT_ICONS = [
   { name: 'run', label: 'Ejercicio' },
@@ -522,6 +524,7 @@ const HabitsScreen = ({ route, navigation }) => {
       >
         <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
       </TouchableOpacity>
+      <FloatingNavBar/>
 
       {renderModal()}
     </View>

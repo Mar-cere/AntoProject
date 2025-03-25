@@ -8,6 +8,9 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import ParticleBackground from '../components/ParticleBackground';
+import TaskCard from '../components/TaskCard';
+import HabitCard from '../components/HabitCard';
+import AchievementCard from '../components/AchievementCard';
 import ProgressRing from '../components/ProgressRing';
 import SkeletonLoader from '../components/SkeletonLoader';
 import motivationalQuotes from '../data/quotes';
@@ -100,405 +103,26 @@ const ShineEffect = () => {
   );
 };
 
-const Header = ({ greeting, userName, userPoints, userAvatar }) => (
-  <View style={styles.headerContainer}>
-    <View style={styles.headerLeft}>
-      <Text style={styles.greetingText}>{greeting}</Text>
-      <Text style={styles.nameText}>{userName}</Text>
-    </View>
-    <View style={styles.headerRight}>
-      <TouchableOpacity style={styles.pointsContainer}>
-        <Text style={styles.pointsIcon}>⭐</Text>
-        <Text style={styles.pointsText}>{userPoints}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-        <Image 
-          source={userAvatar ? { uri: userAvatar } : require('../images/avatar.png')} 
-          style={styles.userAvatar} 
-        />
-      </TouchableOpacity>
-    </View>
-  </View>
-);
-
-// Componente de tarjeta de tareas
-const TaskCard = memo(() => {
+const Header = memo(({ greeting, userName, userPoints, userAvatar }) => {
   const navigation = useNavigation();
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // Cargar tareas
-  const loadTasks = useCallback(async () => {
-    try {
-      const storedTasks = await AsyncStorage.getItem('tasks');
-      if (storedTasks) {
-        const parsedTasks = JSON.parse(storedTasks);
-        // Filtrar solo tareas pendientes y ordenar por prioridad
-        const activeTasks = parsedTasks
-          .filter(task => !task.completed)
-          .sort((a, b) => (a.priority || 3) - (b.priority || 3))
-          .slice(0, 3); // Mostrar solo las 3 más prioritarias
-        setTasks(activeTasks);
-      }
-    } catch (error) {
-      console.error('Error al cargar tareas:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadTasks();
-  }, []);
-
-  const handleTaskPress = useCallback((taskId) => {
-    navigation.navigate('TaskDetail', { taskId });
-  }, [navigation]);
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 1: return '#FF6B6B'; // Alta
-      case 2: return '#FFD93D'; // Media
-      case 3: return '#6BCB77'; // Baja
-      default: return '#95A5A6'; // Sin prioridad
-    }
-  };
-
+  
   return (
-    <View style={styles.taskCardContainer}>
-      <View style={styles.taskCardHeader}>
-        <View style={styles.taskTitleContainer}>
-          <Icon name="list-check" size={24} color="#1ADDDB" />
-          <Text style={styles.taskCardTitle}>Mis Tareas</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.viewAllButton}
-          onPress={() => navigation.navigate('Tasks')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.viewAllText}>Ver todas</Text>
-          <Icon name="chevron-right" size={16} color="#1ADDDB" />
-        </TouchableOpacity>
+    <View style={styles.header}>
+      <View style={styles.headerLeft}>
+        <Text style={styles.greeting}>{greeting}</Text>
+        <Text style={styles.userName}>{userName}</Text>
       </View>
-
-      {loading ? (
-        <ActivityIndicator color="#1ADDDB" style={styles.loader} />
-      ) : tasks.length > 0 ? (
-        <View style={styles.tasksContainer}>
-          {tasks.map((task) => (
-            <TouchableOpacity
-              key={task.id}
-              style={styles.taskItem}
-              onPress={() => handleTaskPress(task.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.taskItemContent}>
-                <View style={[
-                  styles.priorityIndicator,
-                  { backgroundColor: getPriorityColor(task.priority) }
-                ]} />
-                <View style={styles.taskItemMain}>
-                  <Text style={styles.taskItemTitle} numberOfLines={1}>
-                    {task.title}
-                  </Text>
-                  {task.dueDate && (
-                    <Text style={styles.taskItemDueDate}>
-                      {new Date(task.dueDate).toLocaleDateString()}
-                    </Text>
-                  )}
-                </View>
-                <Icon 
-                  name="chevron-right" 
-                  size={16} 
-                  color="#A3B8E8" 
-                  style={styles.taskItemArrow}
-                />
-              </View>
-              <View style={styles.taskProgress}>
-                <View style={[
-                  styles.progressBar,
-                  { width: `${(task.completedSteps / task.totalSteps) * 100}%` }
-                ]} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Icon name="tasks" size={40} color="#A3B8E8" />
-          <Text style={styles.emptyText}>No hay tareas pendientes</Text>
-          <TouchableOpacity 
-            style={styles.addTaskButton}
-            onPress={() => navigation.navigate('Tasks', { openModal: true })}
-            activeOpacity={0.7}
-          >
-            <Icon name="plus" size={16} color="#1ADDDB" />
-            <Text style={styles.addTaskText}>Nueva tarea</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-});
-
-const HabitCard = memo(() => {
-  const navigation = useNavigation();
-  const [habits, setHabits] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadHabits = useCallback(async () => {
-    try {
-      const storedHabits = await AsyncStorage.getItem('habits');
-      if (storedHabits) {
-        const parsedHabits = JSON.parse(storedHabits);
-        // Mostrar solo hábitos activos y ordenados por racha
-        const activeHabits = parsedHabits
-          .filter(habit => !habit.archived)
-          .sort((a, b) => b.streak - a.streak)
-          .slice(0, 3); // Mostrar solo los 3 mejores
-        setHabits(activeHabits);
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error al cargar hábitos:', error);
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadHabits();
-  }, []);
-
-  const getStreakColor = (streak) => {
-    if (streak >= 30) return '#FFD700';
-    if (streak >= 15) return '#C0C0C0';
-    if (streak >= 7) return '#CD7F32';
-    return '#1ADDDB';
-  };
-
-  return (
-    <View style={styles.habitCardContainer}>
-      <View style={styles.habitCardHeader}>
-        <View style={styles.habitTitleContainer}>
-          <MaterialCommunityIcons name="lightning-bolt" size={24} color="#1ADDDB" />
-          <Text style={styles.habitCardTitle}>Mis Hábitos</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.viewAllButton}
-          onPress={() => navigation.navigate('Habits')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.viewAllText}>Ver todos</Text>
-          <MaterialCommunityIcons name="chevron-right" size={16} color="#1ADDDB" />
-        </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <ActivityIndicator color="#1ADDDB" style={styles.loader} />
-      ) : habits.length > 0 ? (
-        <View style={styles.habitsContainer}>
-          {habits.map((habit) => (
-            <TouchableOpacity
-              key={habit.id}
-              style={styles.habitItem}
-              onPress={() => navigation.navigate('Habits', { habitId: habit.id })}
-              activeOpacity={0.7}
-            >
-              <View style={styles.habitItemContent}>
-                <View style={[
-                  styles.habitIcon,
-                  { backgroundColor: getStreakColor(habit.streak) }
-                ]}>
-                  <MaterialCommunityIcons 
-                    name={habit.icon} 
-                    size={20} 
-                    color="#FFFFFF" 
-                  />
-                </View>
-                <View style={styles.habitInfo}>
-                  <Text style={styles.habitItemTitle} numberOfLines={1}>
-                    {habit.title}
-                  </Text>
-                  <View style={styles.streakContainer}>
-                    <MaterialCommunityIcons 
-                      name="fire" 
-                      size={14} 
-                      color={getStreakColor(habit.streak)} 
-                    />
-                    <Text style={[
-                      styles.streakText,
-                      { color: getStreakColor(habit.streak) }
-                    ]}>
-                      {habit.streak} días
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.habitProgress}>
-                  <Text style={styles.progressText}>
-                    {habit.completedToday ? '¡Completado!' : 'Pendiente'}
-                  </Text>
-                  <View style={styles.progressBar}>
-                    <View 
-                      style={[
-                        styles.progressFill,
-                        { 
-                          width: `${(habit.completedDays / (habit.totalDays || 1)) * 100}%`,
-                          backgroundColor: getStreakColor(habit.streak)
-                        }
-                      ]} 
-                    />
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="lightning-bolt" size={40} color="#A3B8E8" />
-          <Text style={styles.emptyText}>No hay hábitos activos</Text>
-          <TouchableOpacity 
-            style={styles.addHabitButton}
-            onPress={() => navigation.navigate('Habits', { openModal: true })}
-          >
-            <Text style={styles.addHabitText}>Crear hábito</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       <TouchableOpacity 
-        style={styles.addButton}
-        onPress={() => navigation.navigate('Habits', { openModal: true })}
-        activeOpacity={0.7}
+        onPress={() => navigation.navigate('Profile')}
       >
-        <MaterialCommunityIcons name="plus" size={16} color="#1ADDDB" />
-        <Text style={styles.addButtonText}>Nuevo hábito</Text>
+        {userAvatar ? (
+          <Image source={{ uri: userAvatar }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <MaterialCommunityIcons name="account" size={24} color="#A3B8E8" />
+          </View>
+        )}
       </TouchableOpacity>
-    </View>
-  );
-});
-
-const AchievementCard = memo(() => {
-  const navigation = useNavigation();
-  const [achievements, setAchievements] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadAchievements = useCallback(async () => {
-    try {
-      const storedAchievements = await AsyncStorage.getItem('userAchievements');
-      if (storedAchievements) {
-        const parsedAchievements = JSON.parse(storedAchievements);
-        // Ordenar por más recientes y mostrar solo los 2 últimos desbloqueados
-        const recentAchievements = parsedAchievements
-          .filter(achievement => achievement.unlocked)
-          .sort((a, b) => new Date(b.date) - new Date(a.date))
-          .slice(0, 2);
-        setAchievements(recentAchievements);
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error al cargar logros:', error);
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAchievements();
-  }, []);
-
-  const getAchievementIcon = (type) => {
-    switch (type) {
-      case 'task': return 'checkbox-marked-circle';
-      case 'habit': return 'lightning-bolt';
-      case 'streak': return 'fire';
-      case 'points': return 'star';
-      default: return 'trophy';
-    }
-  };
-
-  return (
-    <View style={styles.achievementCardContainer}>
-      <View style={styles.achievementCardHeader}>
-        <View style={styles.achievementTitleContainer}>
-          <MaterialCommunityIcons name="trophy" size={24} color="#FFD700" />
-          <Text style={styles.achievementCardTitle}>Mis Logros</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.viewAllButton}
-          onPress={() => navigation.navigate('Achievements')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.viewAllText}>Ver todos</Text>
-          <MaterialCommunityIcons name="chevron-right" size={16} color="#1ADDDB" />
-        </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <ActivityIndicator color="#1ADDDB" style={styles.loader} />
-      ) : achievements.length > 0 ? (
-        <View style={styles.achievementsContainer}>
-          {achievements.map((achievement) => (
-            <View key={achievement.id} style={styles.achievementItem}>
-              <View style={styles.achievementItemContent}>
-                <View style={[
-                  styles.achievementIconBadge,
-                  { backgroundColor: achievement.color || '#FFD700' }
-                ]}>
-                  <MaterialCommunityIcons 
-                    name={getAchievementIcon(achievement.type)}
-                    size={20} 
-                    color="#FFFFFF" 
-                  />
-                </View>
-                <View style={styles.achievementInfo}>
-                  <Text style={styles.achievementItemTitle}>
-                    {achievement.title}
-                  </Text>
-                  <Text style={styles.achievementItemDescription}>
-                    {achievement.description}
-                  </Text>
-                  {achievement.date && (
-                    <Text style={styles.achievementDate}>
-                      Desbloqueado el {new Date(achievement.date).toLocaleDateString()}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.achievementPoints}>
-                  <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
-                  <Text style={styles.pointsValue}>+{achievement.points}</Text>
-                </View>
-              </View>
-              {achievement.progress && (
-                <View style={styles.achievementProgressBar}>
-                  <View 
-                    style={[
-                      styles.achievementProgressFill,
-                      { width: `${achievement.progress}%` }
-                    ]} 
-                  />
-                </View>
-              )}
-            </View>
-          ))}
-          <TouchableOpacity 
-            style={styles.viewAllAchievementsButton}
-            onPress={() => navigation.navigate('Achievements')}
-          >
-            <Text style={styles.viewAllAchievementsText}>Ver todos los logros</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="trophy-outline" size={40} color="#A3B8E8" />
-          <Text style={styles.emptyText}>No hay logros desbloqueados</Text>
-          <TouchableOpacity 
-            style={styles.viewAllAchievementsButton}
-            onPress={() => navigation.navigate('Achievements')}
-          >
-            <Text style={styles.viewAllAchievementsText}>Ver todos los logros</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 });
@@ -1277,75 +901,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     marginTop: 10,
   },
-  taskCardContainer: {
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    borderRadius: 15,
-    padding: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.1)',
-  },
-  taskCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  taskTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  taskCardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  tasksContainer: {
-    gap: 12,
-  },
-  taskItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 12,
-  },
-  taskItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  taskIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  taskInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  taskItemTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
-  },
-  taskDate: {
-    fontSize: 12,
-    color: '#A3B8E8',
-  },
-  taskItemArrow: {
-    marginLeft: 12,
-  },
-  taskProgress: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
   progressBar: {
     width: 60,
     height: 4,
@@ -1365,10 +920,7 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
   },
-  taskItemDueDate: {
-    fontSize: 12,
-    color: '#A3B8E8',
-  },
+  
   emptyContainer: {
     alignItems: 'center',
     padding: 24,
@@ -1378,24 +930,6 @@ const styles = StyleSheet.create({
     color: '#A3B8E8',
     fontSize: 16,
     textAlign: 'center',
-  },
-  addTaskButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    marginTop: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.2)',
-    borderStyle: 'dashed',
-  },
-  addTaskText: {
-    color: '#1ADDDB',
-    fontSize: 14,
-    fontWeight: '500',
   },
   pullToRefreshIndicator: {
     position: 'absolute',
@@ -1431,202 +965,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     transform: [{ skewX: '-20deg' }],
   },
-  achievementCardContainer: {
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    borderRadius: 15,
-    padding: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.1)',
-  },
-  achievementCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  achievementTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  achievementCardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  achievementsContainer: {
-    gap: 12,
-  },
-  achievementItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 12,
-  },
-  achievementItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  achievementIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  achievementInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  achievementItemTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
-  },
-  achievementItemDescription: {
-    fontSize: 12,
-    color: '#A3B8E8',
-  },
-  achievementDate: {
-    fontSize: 10,
-    color: '#A3B8E8',
-    marginTop: 2,
-  },
-  achievementPoints: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  pointsValue: {
-    color: '#FFD700',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  achievementProgressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginTop: 8,
-  },
-  achievementProgressFill: {
-    height: '100%',
-    backgroundColor: '#FFD700',
-    borderRadius: 2,
-  },
-  viewAllAchievementsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    marginTop: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.2)',
-  },
-  viewAllAchievementsText: {
-    color: '#1ADDDB',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  habitCardContainer: {
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    borderRadius: 15,
-    padding: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.1)',
-  },
-  habitCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  habitTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  habitCardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  habitsContainer: {
-    gap: 12,
-  },
-  habitItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 12,
-  },
-  habitItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  habitIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  habitInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  habitItemTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
-  },
-  streakContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  streakText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  habitProgress: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#A3B8E8',
-  },
-  progressBar: {
-    width: 60,
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1648,23 +986,36 @@ const styles = StyleSheet.create({
   loader: {
     padding: 24,
   },
-  addHabitButton: {
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    marginTop: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.2)',
-    borderStyle: 'dashed',
+    padding: 16,
+    paddingTop: 44,
   },
-  addHabitText: {
-    color: '#1ADDDB',
-    fontSize: 14,
-    fontWeight: '500',
+  greeting: {
+    fontSize: 16,
+    color: '#A3B8E8',
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1D2B5F',
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1D2B5F',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

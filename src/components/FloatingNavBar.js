@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, Animated, StyleSheet, Platform } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 // Hacemos que useSafeAreaInsets sea opcional para evitar errores si no está disponible
 const useSafeAreaInsets = () => ({ bottom: 0 });
 try {
@@ -19,14 +20,40 @@ try {
 const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
   const { translateY = new Animated.Value(0), opacity = new Animated.Value(1) } = animValues;
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   
   // Calcular el padding inferior basado en el safe area
   const bottomPadding = Math.max(insets.bottom, 10);
   
-  // Función segura para manejar la navegación
+  // Función actualizada para manejar la navegación
   const handleTabPress = (screen, tab) => {
     try {
-      if (onTabPress) onTabPress(screen, tab);
+      // Si onTabPress existe, úsalo
+      if (onTabPress) {
+        onTabPress(screen, tab);
+        return;
+      }
+
+      // Si no, usa navigation directamente
+      switch (screen) {
+        case 'Dash':
+          navigation.navigate('Dashboard');
+          break;
+        case 'Calendar':
+          navigation.navigate('Tasks');
+          break;
+        case 'Journal':
+          navigation.navigate('Journal');
+          break;
+        case 'Settings':
+          navigation.navigate('Profile');
+          break;
+        case 'Chat':
+          navigation.navigate('Chat');
+          break;
+        default:
+          navigation.navigate(screen);
+      }
     } catch (error) {
       console.error('Error al navegar:', error);
     }

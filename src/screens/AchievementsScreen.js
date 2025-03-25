@@ -14,6 +14,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ParticleBackground from '../components/ParticleBackground';
+import FloatingNavBar from '../components/FloatingNavBar';
+
 
 const ACHIEVEMENT_CATEGORIES = {
   TASKS: 'tasks',
@@ -264,6 +266,7 @@ const AchievementsScreen = ({ navigation }) => {
             ))
           )}
         </ScrollView>
+        <FloatingNavBar/>
       </ImageBackground>
     </View>
   );
