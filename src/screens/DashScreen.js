@@ -11,11 +11,8 @@ import ParticleBackground from '../components/ParticleBackground';
 import TaskCard from '../components/TaskCard';
 import HabitCard from '../components/HabitCard';
 import AchievementCard from '../components/AchievementCard';
-import ProgressRing from '../components/ProgressRing';
-import SkeletonLoader from '../components/SkeletonLoader';
 import motivationalQuotes from '../data/quotes';
 import FloatingNavBar from '../components/FloatingNavBar';
-import Icon from '@expo/vector-icons/Ionicons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
@@ -53,61 +50,11 @@ const ErrorMessage = ({ message, onRetry, onDismiss }) => (
   </View>
 );
 
-// Componente para mostrar logros y medallas
-const AchievementItem = ({ achievement, onPress }) => (
-  <TouchableOpacity 
-    style={[styles.achievementItem, !achievement.unlocked && styles.achievementLocked]}
-    onPress={() => onPress(achievement)}
-  >
-    <Text style={styles.achievementIcon}>{achievement.icon}</Text>
-    <View style={styles.achievementTextContainer}>
-      <Text style={styles.achievementTitle}>{achievement.title}</Text>
-      <Text style={styles.achievementDescription}>{achievement.description}</Text>
-    </View>
-    {achievement.unlocked ? (
-      <View style={styles.achievementPoints}>
-        <Text style={styles.achievementPointsText}>+{achievement.points}</Text>
-      </View>
-    ) : (
-      <View style={styles.achievementLock}>
-        <Text style={styles.achievementLockText}>🔒</Text>
-      </View>
-    )}
-  </TouchableOpacity>
-);
-
-// Componente de efecto de brillo
-const ShineEffect = () => {
-  const translateX = useRef(new Animated.Value(-100)).current;
-  
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(translateX, {
-        toValue: 250,
-        duration: 2000,
-        easing: Easing.ease,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-  
-  return (
-    <Animated.View
-      style={[
-        styles.shineEffect,
-        {
-          transform: [{ translateX }]
-        }
-      ]}
-    />
-  );
-};
-
 const Header = memo(({ greeting, userName, userPoints, userAvatar }) => {
   const navigation = useNavigation();
   
   return (
-    <View style={styles.header}>
+    <View style={styles.headerContainer}>
       <View style={styles.headerLeft}>
         <Text style={styles.greeting}>{greeting}</Text>
         <Text style={styles.userName}>{userName}</Text>
@@ -168,26 +115,10 @@ const DashScreen = () => {
     legend: ["Progreso de hábitos"]
   });
 
-  // Añadir un indicador visual para el pull-to-refresh
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const refreshIndicatorOpacity = scrollY.interpolate({
-    inputRange: [-50, -20, 0],
-    outputRange: [1, 0.5, 0],
-    extrapolate: 'clamp'
-  });
-
   // Animación para el botón central
-  const centerButtonScale = useRef(new Animated.Value(1)).current;
   const centerButtonRotate = useRef(new Animated.Value(0)).current;
 
-  // Interpolación para la rotación
-  const spin = centerButtonRotate.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '45deg']
-  });
-
   // Estado para controlar si el menú está abierto
-  const [menuOpen, setMenuOpen] = useState(false);
   const [navigationDestination, setNavigationDestination] = useState(null);
 
   // Manejar la navegación en un efecto separado
@@ -202,9 +133,6 @@ const DashScreen = () => {
       return () => clearTimeout(timer);
     }
   }, [navigationDestination, navigation]);
-
-  // Función optimizada para el botón central con useRef para el estado del menú
-  const menuOpenRef = useRef(false);
 
   const handleCenterButton = (navigateTo) => {
     Animated.parallel([
@@ -398,56 +326,9 @@ const DashScreen = () => {
     AsyncStorage.setItem('userAchievements', JSON.stringify(updatedAchievements));
   }, [tasks, userAchievements]);
   
-  // Manejar actualizar hábito
-  const handleUpdateHabit = useCallback((habitId, newProgress) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    setHabits(prevHabits => {
-      const updatedHabits = prevHabits.map(habit => 
-        habit.id === habitId ? { ...habit, progress: newProgress } : habit
-      );
-      
-      // Guardar en AsyncStorage
-      AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
-      
-      return updatedHabits;
-    });
-    
-    // Actualizar puntos si el hábito alcanza el 100%
-    const habit = habits.find(h => h.id === habitId);
-    if (habit && habit.progress < 1 && newProgress >= 1) {
-      const newPoints = userPoints + POINTS.MAINTAIN_HABIT;
-      setUserPoints(newPoints);
-      AsyncStorage.setItem('userPoints', newPoints.toString());
-      
-      // Verificar logros
-      checkAchievements(newPoints);
-    }
-  }, [habits, userPoints]);
-  
-  // Manejar presionar logro
-  const handleAchievementPress = useCallback((achievement) => {
-    if (achievement.unlocked) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        achievement.title,
-        `${achievement.description}\nPuntos: +${achievement.points}`,
-        [{ text: 'Cerrar', style: 'default' }]
-      );
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert(
-        'Logro bloqueado',
-        `${achievement.description}\nCompleta los requisitos para desbloquear este logro.`,
-        [{ text: 'Entendido', style: 'default' }]
-      );
-    }
-  }, []);
-  
   // Animación para la barra flotante
   const floatingBarAnim = useRef(new Animated.Value(100)).current;
   const floatingBarOpacity = useRef(new Animated.Value(0)).current;
-  const [activeTab, setActiveTab] = useState('home');
   
   useEffect(() => {
     // Animar la barra flotante después de que el contenido principal se haya cargado
@@ -605,10 +486,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  loadingAnimation: {
-    width: 200,
-    height: 200,
-  },
   errorContainer: {
     backgroundColor: 'rgba(255, 99, 71, 0.2)',
     borderRadius: 10,
@@ -637,361 +514,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     marginLeft: 10,
   },
-  greetingText: {
-    fontSize: 22,
-    color: '#A3B8E8',
-  },
-  nameText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  statsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  statsButtonIcon: {
-    fontSize: 20,
-  },
-  pointsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    marginRight: 15,
-  },
-  pointsIcon: {
-    fontSize: 16,
-    marginRight: 5,
-  },
-  pointsText: {
-    color: '#FFD700',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  userAvatar: {
-    width: 50,
-    height: 50,
-    borderWidth: 2,
-    borderRadius: 25,
-    borderColor: '#1ADDDB',
-    backgroundColor: '#1D2B5F',
-    shadowColor: "#1ADDDB",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
-  },
   sectionContainer: {
     backgroundColor: '#1D2B5F',
     marginBottom: 16,
     borderRadius: 15,
     padding: 8,
   },
-  sectionTitle: {
-    padding:6,
-    fontSize: 20,
-    color: '#A3B8E8',
-    marginBottom: 10,
-  },
   quoteText: {
     fontSize: 18,
     color: '#A3B8E8',
     textAlign: 'center',
-  },
-  card: {
-    flexDirection: 'row',
-    backgroundColor: '#1D2B5F',
-    borderRadius: 10,
-    padding: 28,
-    marginVertical: 10,
-    alignItems: 'center',
-    width: '100%',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  ringsContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 30,
-    position: 'relative',
-  },
-  ringsSection: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  legendsSection: {
-    flex: 1,
-    justifyContent: 'center',
-    marginLeft: 30,
-  },
-  textContainer: {
-    flex: 1,
-  },
-  moodContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 15,
-  },
-  moodItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  moodEmoji: {
-    fontSize: 24,
-  },
-  completedTask: {
-    backgroundColor: 'rgba(39, 174, 96, 0.3)',
-    borderColor: '#27AE60',
-    borderWidth: 1,
-  },
-  completedTaskText: {
-    textDecorationLine: 'line-through',
-    opacity: 0.7,
-  },
-  floatingBar: {
-    position: 'absolute',
-    bottom: 30,
-    left: 8,
-    right: 8,
-    height: 50,
-    backgroundColor: 'rgba(29, 43, 95, 0.9)',
-    borderRadius: 40,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
-    borderWidth: 2,
-    borderColor: 'rgba(26, 221, 219, 0.3)',
-  },
-  floatingBarButton: {
-    flex: 1,
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 10,
-  },
-  activeFloatingBarButton: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#1ADDDB',
-  },
-  activeFloatingChatButton: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#1ADDDB',
-  },
-  floatingBarIconContainer: {
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  floatingBarIcon: {
-    width: 24,
-    height: 24,
-    tintColor: '#A3B8E8',
-    marginBottom:4,
-  },
-  floatingChatIcon: {
-    width: 55,
-    height: 55,
-  },
-  activeFloatingBarIcon: {
-    tintColor: '#1ADDDB',
-  },
-  floatingBarText: {
-    fontSize: 11,
-    color: '#A3B8E8',
-    textAlign: 'center',
-  },
-  activeFloatingBarText: {
-    color: '#1ADDDB',
-    fontWeight: 'bold',
-  },
-  floatingBarCenterButtonContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  floatingBarCenterButton: {
-    width: 22,
-    height: 22,
-    borderRadius: 25,
-    backgroundColor: 'rgba(26, 221, 219, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: -20, // Para que sobresalga de la barra
-    borderWidth: 1,
-    borderColor: '#1ADDDB',
-    shadowColor: "#1ADDDB",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-  },
-  viewAllText: {
-    color: '#1ADDDB',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  chartContainer: {
-    marginVertical: 10,
-    alignItems: 'center',
-  },
-  chartTitle: {
-    color: '#A3B8E8',
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  chart: {
-    borderRadius: 10,
-    paddingRight: 20,
-  },
-  habitLegend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  habitColor: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 10,
-  },
-  cardText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-  },
-  habitProgress: {
-    color: '#A3B8E8',
-    fontSize: 14,
-  },
-  tasksGridContainer: {
-    flexDirection: 'column',
-    marginTop: 10,
-  },
-  progressBar: {
-    width: 60,
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  priorityIndicator: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  
-  emptyContainer: {
-    alignItems: 'center',
-    padding: 24,
-    gap: 12,
-  },
-  emptyText: {
-    color: '#A3B8E8',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  pullToRefreshIndicator: {
-    position: 'absolute',
-    top: 10,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-    paddingVertical: 10,
-  },
-  pullToRefreshText: {
-    color: '#1ADDDB',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  rippleEffect: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    top:-10,
-    borderRadius: 30,
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#1ADDDB',
-  },
-  shineEffect: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 60,
-    height: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    transform: [{ skewX: '-20deg' }],
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    marginTop: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.2)',
-    borderStyle: 'dashed',
-  },
-  addButtonText: {
-    color: '#1ADDDB',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  loader: {
-    padding: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 44,
   },
   greeting: {
     fontSize: 16,
