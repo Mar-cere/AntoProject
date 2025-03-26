@@ -112,15 +112,14 @@ const TaskScreen = ({ route }) => {
         return;
       }
 
-      // Simplificamos al máximo los datos enviados
       const newItem = {
         title: title.trim(),
         description: description.trim(),
         dueDate: dueDate.toISOString(),
-        priority: 'medium' // Valor fijo para prueba
+        priority: priority.toLowerCase(), // Aseguramos que sea lowercase
+        completed: false
       };
 
-      console.log('Token:', token);
       console.log('Enviando datos:', newItem);
 
       const response = await fetch(`${API_URL}/api/tasks`, {
@@ -132,8 +131,6 @@ const TaskScreen = ({ route }) => {
         body: JSON.stringify(newItem)
       });
 
-      console.log('Status:', response.status);
-
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error response:', errorData);
@@ -141,8 +138,6 @@ const TaskScreen = ({ route }) => {
       }
 
       const createdTask = await response.json();
-      console.log('Tarea creada:', createdTask);
-      
       setItems(prevItems => [...prevItems, createdTask]);
       setModalVisible(false);
       resetForm();

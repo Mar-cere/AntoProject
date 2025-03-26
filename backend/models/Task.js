@@ -1,11 +1,6 @@
 import mongoose from 'mongoose';
 
 const taskSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
   title: {
     type: String,
     required: true,
@@ -17,7 +12,8 @@ const taskSchema = new mongoose.Schema({
     default: ''
   },
   dueDate: {
-    type: Date
+    type: Date,
+    required: true
   },
   priority: {
     type: String,
@@ -28,44 +24,25 @@ const taskSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  completedAt: {
-    type: Date
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
-  reminder: {
-    active: {
-      type: Boolean,
-      default: false
-    },
-    date: {
-      type: Date
-    }
+  createdAt: {
+    type: Date,
+    default: Date.now
   },
-  category: {
-    type: String,
-    default: 'general'
-  },
-  tags: [{
-    type: String
-  }],
-  isRecurring: {
-    type: Boolean,
-    default: false
-  },
-  recurringPattern: {
-    frequency: {
-      type: String,
-      enum: ['diaria', 'semanal', 'mensual'],
-    },
-    interval: {
-      type: Number,
-      default: 1
-    },
-    endDate: {
-      type: Date
-    }
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
-}, {
-  timestamps: true
+});
+
+// Middleware para actualizar updatedAt antes de cada actualización
+taskSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
 });
 
 // Índices para mejorar el rendimiento de las consultas
@@ -164,6 +141,6 @@ taskSchema.statics.getTodayTasks = function(userId) {
   }).sort({ priority: -1 });
 };
 
-const Task = mongoose.model('Task', taskSchema);
+const Task = mongoose.models.Task || mongoose.model('Task', taskSchema);
 
 export default Task; 
