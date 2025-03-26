@@ -7,7 +7,6 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
-import crypto from 'crypto';
 import openaiService from './services/openaiService.js';
 import User from './models/UserSchema.js';
 import fs from 'fs';

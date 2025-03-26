@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import * as Crypto from 'expo-crypto';
+import bcrypt from 'bcrypt';
 
 /**
  * Esquema Mongoose para el modelo de Usuario
@@ -47,7 +47,6 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  salt: String,
   isVerified: {
     type: Boolean,
     default: false
@@ -90,16 +89,7 @@ UserSchema.pre('save', async function(next) {
   // Si la contraseña fue modificada, hashearla
   if (this.isModified('password') && this.password) {
     try {
-      // Generar un salt aleatorio
-      const salt = Math.random().toString(36).substring(2);
-      this.salt = salt;
-      
-      // Hashear la contraseña
-      const passwordHash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        this.password + salt
-      );
-      this.password = passwordHash;
+      this.password = await bcrypt.hash(this.password, 10);
     } catch (error) {
       return next(error);
     }
@@ -125,14 +115,10 @@ UserSchema.pre('save', async function(next) {
  */
 UserSchema.methods.verifyPassword = async function(password) {
   try {
-    if (!password || !this.password || !this.salt) {
+    if (!password || !this.password) {
       return false;
     }
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      password + this.salt
-    );
-    return hash === this.password;
+    return await bcrypt.compare(password, this.password);
   } catch (error) {
     console.error('Error al verificar contraseña:', error);
     throw new Error('Error al verificar contraseña');
@@ -196,5 +182,5 @@ UserSchema.methods.updateProfile = function(newData) {
 /**
  * Crea y exporta el modelo Mongoose
  */
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
 export default User; 
