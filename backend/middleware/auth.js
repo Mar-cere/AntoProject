@@ -21,13 +21,13 @@ export const authenticateToken = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       console.log('Token decodificado:', decoded); // Para debug
 
-      const user = await User.findById(decoded.userId);
+      const user = await User.findOne({ customId: decoded.userId });
       if (!user) {
         return res.status(404).json({ message: 'Usuario no encontrado' });
       }
 
       req.user = user;
-      req.token = token;
+      req.userId = decoded.userId;
       next();
     } catch (error) {
       console.error('Error al verificar token:', error);
