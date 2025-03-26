@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import User from '../models/UserSchema.js';
 
 export const authenticateToken = async (req, res, next) => {
   try {
@@ -21,7 +21,7 @@ export const authenticateToken = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       console.log('Token decodificado:', decoded); // Para debug
 
-      const user = await User.findOne({ customId: decoded.userId });
+      const user = await User.findOne({ id: decoded.userId });
       if (!user) {
         return res.status(404).json({ message: 'Usuario no encontrado' });
       }
