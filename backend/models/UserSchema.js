@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
-import crypto from 'crypto';
+import * as Crypto from 'expo-crypto';
 
 /**
  * Esquema Mongoose para el modelo de Usuario
@@ -12,10 +11,13 @@ const UserSchema = new mongoose.Schema({
     type: String,
     unique: true,
     default: function() {
+      // Usar Math.random y Date para generar IDs únicos
       const timestamp = new Date().getTime().toString(36);
       const randomStr = Math.random().toString(36).substring(2, 10);
-      const hash = Math.abs(this.email.hashCode()).toString(36).substring(0, 6);
-      return `user_${timestamp}_${randomStr}_${hash}`;
+      const emailHash = Math.abs(this.email.split('').reduce((acc, char) => {
+        return acc + char.charCodeAt(0);
+      }, 0)).toString(36).substring(0, 6);
+      return `user_${timestamp}_${randomStr}_${emailHash}`;
     }
   },
   
@@ -45,6 +47,7 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  salt: String,
   isVerified: {
     type: Boolean,
     default: false
@@ -87,7 +90,16 @@ UserSchema.pre('save', async function(next) {
   // Si la contraseña fue modificada, hashearla
   if (this.isModified('password') && this.password) {
     try {
-      this.password = await bcrypt.hash(this.password, 10);
+      // Generar un salt aleatorio
+      const salt = Math.random().toString(36).substring(2);
+      this.salt = salt;
+      
+      // Hashear la contraseña
+      const passwordHash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        this.password + salt
+      );
+      this.password = passwordHash;
     } catch (error) {
       return next(error);
     }
@@ -96,8 +108,8 @@ UserSchema.pre('save', async function(next) {
   // Generar usernameHash si no existe
   if (!this.usernameHash) {
     const baseString = this.username || this.email || `user_${Math.random()}`;
-    const salt = new Date().getTime().toString(36).substring(0, 4);
-    this.usernameHash = this.hashCode(baseString + salt);
+    const timestamp = new Date().getTime().toString(36).substring(0, 4);
+    this.usernameHash = this.generateHash(baseString + timestamp);
   }
   
   // Generar ID único si no existe
@@ -113,11 +125,14 @@ UserSchema.pre('save', async function(next) {
  */
 UserSchema.methods.verifyPassword = async function(password) {
   try {
-    // Asegurarse de que tanto password como this.password existan
-    if (!password || !this.password) {
+    if (!password || !this.password || !this.salt) {
       return false;
     }
-    return await bcrypt.compare(password, this.password);
+    const hash = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      password + this.salt
+    );
+    return hash === this.password;
   } catch (error) {
     console.error('Error al verificar contraseña:', error);
     throw new Error('Error al verificar contraseña');
@@ -125,14 +140,14 @@ UserSchema.methods.verifyPassword = async function(password) {
 };
 
 /**
- * Función de hash para IDs
+ * Función de hash simple
  */
-UserSchema.methods.hashCode = function(str) {
+UserSchema.methods.generateHash = function(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convertir a entero de 32 bits
+    hash = hash & hash;
   }
   return Math.abs(hash).toString(36).substring(0, 6);
 };
@@ -143,7 +158,7 @@ UserSchema.methods.hashCode = function(str) {
 UserSchema.methods.generateUniqueId = function() {
   const timestamp = new Date().getTime().toString(36);
   const randomStr = Math.random().toString(36).substring(2, 10);
-  const hash = this.hashCode(timestamp + randomStr);
+  const hash = this.generateHash(timestamp + randomStr);
   return `user_${timestamp}_${randomStr}_${hash}`;
 };
 

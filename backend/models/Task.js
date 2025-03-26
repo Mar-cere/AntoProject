@@ -21,8 +21,8 @@ const taskSchema = new mongoose.Schema({
   },
   priority: {
     type: String,
-    enum: ['baja', 'media', 'alta'],
-    default: 'media'
+    enum: ['low', 'medium', 'high'],
+    default: 'medium'
   },
   completed: {
     type: Boolean,

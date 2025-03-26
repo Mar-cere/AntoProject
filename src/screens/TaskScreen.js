@@ -22,6 +22,13 @@ import FloatingNavBar from '../components/FloatingNavBar';
 
 const API_URL = 'https://antobackend.onrender.com';
 
+// Modificar las constantes de prioridad
+const PRIORITY_VALUES = {
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low'
+};
+
 const TaskScreen = ({ route }) => {
   // Estados
   const [items, setItems] = useState([]);
@@ -30,7 +37,7 @@ const TaskScreen = ({ route }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState(new Date());
-  const [priority, setPriority] = useState(2); // 1: Alta, 2: Media, 3: Baja
+  const [priority, setPriority] = useState(PRIORITY_VALUES.MEDIUM); // 1: Alta, 2: Media, 3: Baja
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('all'); // 'all', 'tasks', 'reminders'
@@ -99,13 +106,22 @@ const TaskScreen = ({ route }) => {
 
     try {
       const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'No hay sesión activa');
+        navigation.navigate('SignIn');
+        return;
+      }
+
+      // Simplificamos al máximo los datos enviados
       const newItem = {
-        type: itemType,
         title: title.trim(),
         description: description.trim(),
         dueDate: dueDate.toISOString(),
-        priority,
+        priority: 'medium' // Valor fijo para prueba
       };
+
+      console.log('Token:', token);
+      console.log('Enviando datos:', newItem);
 
       const response = await fetch(`${API_URL}/api/tasks`, {
         method: 'POST',
@@ -116,18 +132,28 @@ const TaskScreen = ({ route }) => {
         body: JSON.stringify(newItem)
       });
 
+      console.log('Status:', response.status);
+
       if (!response.ok) {
-        throw new Error('Error al crear la tarea');
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        throw new Error(errorData.message || 'Error al crear la tarea');
       }
 
       const createdTask = await response.json();
+      console.log('Tarea creada:', createdTask);
+      
       setItems(prevItems => [...prevItems, createdTask]);
       setModalVisible(false);
       resetForm();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
     } catch (error) {
-      console.error('Error al crear item:', error);
-      Alert.alert('Error', 'No se pudo crear el item');
+      console.error('Error completo:', error);
+      Alert.alert(
+        'Error',
+        'No se pudo crear la tarea. Por favor, verifica tu conexión e inténtalo de nuevo.'
+      );
     }
   };
 
@@ -223,7 +249,7 @@ const TaskScreen = ({ route }) => {
     setTitle('');
     setDescription('');
     setDueDate(new Date());
-    setPriority(2);
+    setPriority(PRIORITY_VALUES.MEDIUM);
     setItemType('task');
   };
 
@@ -297,6 +323,13 @@ const TaskScreen = ({ route }) => {
       </View>
     </TouchableOpacity>
   );
+
+  // Actualizar el renderizado de los botones de prioridad
+  const priorityButtons = [
+    { value: PRIORITY_VALUES.HIGH, label: 'Alta' },
+    { value: PRIORITY_VALUES.MEDIUM, label: 'Media' },
+    { value: PRIORITY_VALUES.LOW, label: 'Baja' }
+  ];
 
   // Renderizar modal de nuevo item
   const renderModal = () => (
@@ -401,18 +434,18 @@ const TaskScreen = ({ route }) => {
           <View style={styles.prioritySelector}>
             <Text style={styles.priorityLabel}>Prioridad:</Text>
             <View style={styles.priorityButtons}>
-              {[1, 2, 3].map((p) => (
+              {priorityButtons.map((p) => (
                 <TouchableOpacity
-                  key={p}
+                  key={p.value}
                   style={[
                     styles.priorityButton,
-                    priority === p && styles.priorityButtonActive,
-                    { backgroundColor: getPriorityColor(p) }
+                    priority === p.value && styles.priorityButtonActive,
+                    { backgroundColor: getPriorityColor(p.value) }
                   ]}
-                  onPress={() => setPriority(p)}
+                  onPress={() => setPriority(p.value)}
                 >
                   <Text style={styles.priorityButtonText}>
-                    {getPriorityText(p)}
+                    {p.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -897,21 +930,22 @@ const styles = StyleSheet.create({
   },
 });
 
-// Funciones auxiliares
+// Actualizar la función getPriorityColor
 const getPriorityColor = (priority) => {
   switch (priority) {
-    case 1: return '#FF6B6B'; // Alta
-    case 2: return '#FFD93D'; // Media
-    case 3: return '#6BCB77'; // Baja
+    case PRIORITY_VALUES.HIGH: return '#FF6B6B'; // Alta
+    case PRIORITY_VALUES.MEDIUM: return '#FFD93D'; // Media
+    case PRIORITY_VALUES.LOW: return '#6BCB77'; // Baja
     default: return '#95A5A6';
   }
 };
 
+// Actualizar la función getPriorityText
 const getPriorityText = (priority) => {
   switch (priority) {
-    case 1: return 'Alta';
-    case 2: return 'Media';
-    case 3: return 'Baja';
+    case PRIORITY_VALUES.HIGH: return 'Alta';
+    case PRIORITY_VALUES.MEDIUM: return 'Media';
+    case PRIORITY_VALUES.LOW: return 'Baja';
     default: return 'Normal';
   }
 };

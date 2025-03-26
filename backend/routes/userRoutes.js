@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import User from '../models/User';
+import User from '../models/UserSchema';
 
 // URL base de la API
 const API_BASE_URL = 'https://antobackend.onrender.com';
