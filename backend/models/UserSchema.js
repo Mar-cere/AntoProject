@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
 
 /**
  * Esquema Mongoose para el modelo de Usuario
@@ -79,6 +78,16 @@ const UserSchema = new mongoose.Schema({
   }
 });
 
+// Método simple de hash para passwords
+const hashPassword = async (password) => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
+
 /**
  * Middleware pre-save para procesar datos antes de guardar
  */
@@ -87,9 +96,9 @@ UserSchema.pre('save', async function(next) {
   this.updatedAt = new Date();
   
   // Si la contraseña fue modificada, hashearla
-  if (this.isModified('password') && this.password) {
+  if (this.isModified('password')) {
     try {
-      this.password = await bcrypt.hash(this.password, 10);
+      this.password = await hashPassword(this.password);
     } catch (error) {
       return next(error);
     }
@@ -113,15 +122,12 @@ UserSchema.pre('save', async function(next) {
 /**
  * Método para verificar contraseña
  */
-UserSchema.methods.verifyPassword = async function(password) {
+UserSchema.methods.verifyPassword = async function(candidatePassword) {
   try {
-    if (!password || !this.password) {
-      return false;
-    }
-    return await bcrypt.compare(password, this.password);
+    const hashedPassword = await hashPassword(candidatePassword);
+    return this.password === hashedPassword;
   } catch (error) {
-    console.error('Error al verificar contraseña:', error);
-    throw new Error('Error al verificar contraseña');
+    throw new Error('Error al verificar la contraseña');
   }
 };
 
@@ -179,8 +185,13 @@ UserSchema.methods.updateProfile = function(newData) {
   return this;
 };
 
-/**
- * Crea y exporta el modelo Mongoose
- */
-const User = mongoose.models.User || mongoose.model('User', UserSchema);
+let User;
+try {
+  // Intenta obtener el modelo existente
+  User = mongoose.model('User');
+} catch (error) {
+  // Si no existe, crea un nuevo modelo
+  User = mongoose.model('User', UserSchema);
+}
+
 export default User; 

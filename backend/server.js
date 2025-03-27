@@ -5,7 +5,6 @@ import { Server } from 'socket.io';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
 import openaiService from './services/openaiService.js';
 import User from './models/UserSchema.js';
@@ -32,12 +31,11 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/tasks', taskRoutes);
 
-// Conexión a MongoDB
-mongoose.connect(process.env.MONGO_URI, {
+// Establecer la conexión antes de importar modelos
+await mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => console.log('✅ Conectado a MongoDB'))
-  .catch(err => console.error('❌ Error en conexión a MongoDB:', err));
+  useUnifiedTopology: true
+});
 
 // Modelo de mensajes
 const MessageSchema = new mongoose.Schema({
