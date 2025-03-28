@@ -13,6 +13,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import taskRoutes from './routes/taskRoutes.js';
 import Task from './models/Task.js';
+import habitRoutes from './routes/habitRoutes.js';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -30,6 +31,7 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 app.use('/api/tasks', taskRoutes);
+app.use('/api/habits', habitRoutes);
 
 // Establecer la conexión antes de importar modelos
 await mongoose.connect(process.env.MONGO_URI, {
