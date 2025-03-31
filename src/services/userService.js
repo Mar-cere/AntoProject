@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../models/User';
-import axios from 'axios';
+import { api, ENDPOINTS } from '../config/api';
 import { OPENAI_API_KEY } from './openai';
 
 // URL base de la API
@@ -30,7 +30,7 @@ export const ENDPOINTS = {
 };
 
 // Crear cliente axios con interceptores
-const apiClient = axios.create({
+const apiClient = api.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
@@ -38,7 +38,7 @@ const apiClient = axios.create({
   }
 });
 
-// Interceptor para añadir token a las peticiones
+// Interceptor para añadir token
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -66,13 +66,10 @@ export const userService = {
    */
   getCurrentUser: async () => {
     try {
-      const userData = await AsyncStorage.getItem('userData');
-      if (!userData) return null;
-      
-      return User.fromJSON(userData);
+      return await api.get(ENDPOINTS.ME);
     } catch (error) {
-      console.error('Error al obtener usuario actual:', error);
-      return null;
+      console.error('Error al obtener usuario:', error);
+      throw error;
     }
   },
   
@@ -298,6 +295,20 @@ export const userService = {
     } catch (error) {
       console.error('Error al obtener historial emocional:', error);
       return [];
+    }
+  },
+
+  login: async (credentials) => {
+    try {
+      const response = await api.post(ENDPOINTS.LOGIN, credentials);
+      if (response.token) {
+        await AsyncStorage.setItem('userToken', response.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.user));
+      }
+      return response;
+    } catch (error) {
+      console.error('Error en login:', error);
+      throw error;
     }
   }
 };
