@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import User from '../backend/models/User';
+import { User } from '../models/User';
 import axios from 'axios';
 import { OPENAI_API_KEY } from './openai';
 
