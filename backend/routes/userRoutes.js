@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import User from '../models/UserSchema';
+import express from 'express';
+import { authenticateToken } from '../middleware/auth.js';
+
+const router = express.Router();
 
 // URL base de la API
 const API_BASE_URL = 'https://antobackend.onrender.com';
@@ -211,4 +215,30 @@ export const handleApiError = (error) => {
   }
 };
 
-export default userService;
+// Obtener datos del usuario actual
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ id: req.user.userId });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Devolver solo los datos necesarios
+    res.json({
+      id: user.id,
+      username: user.username,
+      name: user.name || user.username,
+      email: user.email,
+      avatar: user.avatar,
+      points: user.points || 0,
+      preferences: user.preferences || {},
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({ message: 'Error al obtener datos del usuario' });
+  }
+});
+
+export default router;

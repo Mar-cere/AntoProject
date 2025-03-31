@@ -69,6 +69,8 @@ const SignInScreen = () => {
     Animated.parallel([
       Animated.spring(buttonScale, {
         toValue: 0.95,
+        friction: 8,
+        tension: 100,
         useNativeDriver: true,
       }),
       Animated.timing(buttonOpacity, {
@@ -157,8 +159,13 @@ const SignInScreen = () => {
   }, []);
 
   // Función para manejar el inicio de sesión
-  const handleLogin = async () => {
+  const handleLoginPress = async () => {
+    if (isSubmitting) return;
+    
     try {
+      setIsSubmitting(true);
+      handlePressIn();
+      
       const response = await fetch(`${API_URL}/api/users/login`, {
         method: 'POST',
         headers: {
@@ -173,27 +180,48 @@ const SignInScreen = () => {
       const data = await response.json();
       
       if (response.ok) {
-        // Log para verificar el token recibido
         console.log('Token recibido:', data.token);
-        
-        // Guardar el token
         await AsyncStorage.setItem('userToken', data.token);
-        
-        // Verificar que se guardó correctamente
         const savedToken = await AsyncStorage.getItem('userToken');
         console.log('Token guardado:', savedToken);
 
-        // Navegar al Dashboard
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Dashboard' }],
+        // Animar el botón de vuelta antes de navegar
+        Animated.parallel([
+          Animated.spring(buttonScale, {
+            toValue: 1,
+            useNativeDriver: true,
+          }),
+          Animated.timing(buttonOpacity, {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Dashboard' }],
+          });
         });
       } else {
-        Alert.alert('Error', data.message || 'Error al iniciar sesión');
+        throw new Error(data.message || 'Error al iniciar sesión');
       }
     } catch (error) {
       console.error('Error de login:', error);
-      Alert.alert('Error', 'Error al conectar con el servidor');
+      Alert.alert('Error', error.message || 'Error al conectar con el servidor');
+    } finally {
+      setIsSubmitting(false);
+      // Asegurar que el botón vuelve a su estado normal
+      Animated.parallel([
+        Animated.spring(buttonScale, {
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
   };
 
@@ -271,11 +299,14 @@ const SignInScreen = () => {
                   <View style={styles.buttonContainer}>
                     <TouchableOpacity
                       onPressIn={handlePressIn}
-                      onPressOut={isSubmitting ? null : handleLogin}
+                      onPress={handleLoginPress}
                       disabled={isSubmitting}
                       style={[
-                        styles.mainButton, 
-                        { transform: [{ scale: buttonScale }], opacity: buttonOpacity }
+                        styles.mainButton,
+                        {
+                          transform: [{ scale: buttonScale }],
+                          opacity: buttonOpacity
+                        }
                       ]}
                       activeOpacity={0.8}
                     >

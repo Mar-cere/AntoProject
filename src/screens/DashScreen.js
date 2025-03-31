@@ -18,6 +18,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
 
+const API_URL = 'https://antobackend.onrender.com';
+
 // Constantes
 const POINTS = {
   COMPLETE_TASK: 10,
@@ -60,17 +62,28 @@ const Header = memo(({ greeting, userName, userPoints, userAvatar }) => {
         <Text style={styles.greeting}>{greeting}</Text>
         <Text style={styles.userName}>{userName}</Text>
       </View>
-      <TouchableOpacity 
-        onPress={() => navigation.navigate('Profile')}
-      >
-        {userAvatar ? (
-          <Image source={{ uri: userAvatar }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <MaterialCommunityIcons name="account" size={24} color="#A3B8E8" />
-          </View>
-        )}
-      </TouchableOpacity>
+      <View style={styles.headerRight}>
+        <View style={styles.pointsContainer}>
+          <MaterialCommunityIcons name="star" size={20} color="#FFD700" />
+          <Text style={styles.pointsText}>{userPoints}</Text>
+        </View>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Profile')}
+          style={styles.avatarContainer}
+        >
+          {userAvatar ? (
+            <Image 
+              source={{ uri: userAvatar }} 
+              style={styles.avatar}
+              defaultSource={require('../images/avatar.png')}
+            />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <MaterialCommunityIcons name="account" size={24} color="#A3B8E8" />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 });
@@ -93,31 +106,6 @@ const DashScreen = () => {
   const [userAchievements, setUserAchievements] = useState(ACHIEVEMENTS);
   const [tasks, setTasks] = useState([]);
   const [habits, setHabits] = useState([]);
-  const [weeklyStats, setWeeklyStats] = useState({
-    labels: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
-    datasets: [
-      {
-        data: [0, 0, 0, 0, 0, 0, 0],
-        color: (opacity = 1) => `rgba(255, 99, 132, ${opacity})`,
-        strokeWidth: 2
-      }
-    ],
-    legend: ["Tareas completadas"]
-  });
-  const [habitStats, setHabitStats] = useState({
-    labels: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
-    datasets: [
-      {
-        data: [0, 0, 0, 0, 0, 0, 0],
-        color: (opacity = 1) => `rgba(54, 162, 235, ${opacity})`,
-        strokeWidth: 2
-      }
-    ],
-    legend: ["Progreso de hábitos"]
-  });
-
-  // Animación para el botón central
-  const centerButtonRotate = useRef(new Animated.Value(0)).current;
 
   // Estado para controlar si el menú está abierto
   const [navigationDestination, setNavigationDestination] = useState(null);
@@ -150,82 +138,94 @@ const DashScreen = () => {
       }
       setError(null);
       
-      // Cargar datos del usuario de forma más eficiente
-      const [
-        storedUserData,
-        storedUserName,
-        storedUserAvatar,
-        storedUserPoints,
-        storedAchievements,
-        storedTasks,
-        storedHabits
-      ] = await Promise.all([
-        AsyncStorage.getItem('userData'),
-        AsyncStorage.getItem('userName'),
-        AsyncStorage.getItem('userAvatar'),
-        AsyncStorage.getItem('userPoints'),
-        AsyncStorage.getItem('userAchievements'),
-        AsyncStorage.getItem('tasks'),
-        AsyncStorage.getItem('habits')
-      ]);
+      const token = await AsyncStorage.getItem('userToken');
+      console.log('Token actual:', token); // Para debug
 
-      // Procesar datos del usuario
-      if (storedUserData) {
-        const userData = JSON.parse(storedUserData);
-        setUserData(userData);
-        setUserName(userData.name || userData.username || 'Usuario');
+      if (!token) {
+        navigation.navigate('SignIn');
+        return;
       }
 
-      // Establecer saludo personalizado según la hora
+      // Primero intentamos obtener los datos del usuario
+      try {
+        const userResponse = await fetch(`${API_URL}/api/users/me`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('Status respuesta usuario:', userResponse.status);
+
+        if (!userResponse.ok) {
+          // Intentar leer el error como JSON
+          let errorMessage = 'Error al cargar datos del usuario';
+          try {
+            const errorData = await userResponse.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            console.error('Error parseando respuesta:', e);
+          }
+          throw new Error(errorMessage);
+        }
+
+        const userData = await userResponse.json();
+        console.log('Datos usuario:', userData);
+        
+        setUserName(userData.name || userData.username || 'Usuario');
+        setUserAvatar(userData.avatar);
+        setUserPoints(userData.points || 0);
+      } catch (userError) {
+        console.error('Error específico usuario:', userError);
+        // Si es un error 404, establecer valores por defecto
+        setUserName('Usuario');
+        setUserPoints(0);
+        // Continuamos con el resto de la carga
+      }
+
+      // Cargar el resto de los datos
+      try {
+        // Cargar tareas
+        const tasksResponse = await fetch(`${API_URL}/api/tasks`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json();
+          setTasks(tasksData);
+        }
+
+        // Cargar hábitos
+        const habitsResponse = await fetch(`${API_URL}/api/habits`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (habitsResponse.ok) {
+          const habitsData = await habitsResponse.json();
+          setHabits(habitsData);
+        }
+
+        // Cargar logros
+        const achievementsResponse = await fetch(`${API_URL}/api/achievements`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (achievementsResponse.ok) {
+          const achievementsData = await achievementsResponse.json();
+          setUserAchievements(achievementsData);
+        }
+      } catch (dataError) {
+        console.error('Error cargando datos adicionales:', dataError);
+      }
+
+      // Establecer saludo según la hora
       const currentHour = new Date().getHours();
       const greeting = currentHour >= 6 && currentHour < 12 ? 'Buenos días' :
                       currentHour >= 12 && currentHour < 18 ? 'Buenas tardes' :
                       'Buenas noches';
       setGreeting(greeting);
-      
-      if (storedUserAvatar) setUserAvatar(storedUserAvatar);
-      if (storedUserPoints) setUserPoints(parseInt(storedUserPoints));
-      if (storedAchievements) setUserAchievements(JSON.parse(storedAchievements));
-      if (storedTasks) setTasks(JSON.parse(storedTasks));
-      if (storedHabits) setHabits(JSON.parse(storedHabits));
-      
-      // Si no hay datos guardados, usar datos de ejemplo
-      if (!storedTasks) {
-        setTasks([
-          { id: '1', title: 'Terminar reporte', completed: false },
-          { id: '2', title: 'Comprar víveres', completed: false },
-          { id: '3', title: 'Hacer ejercicio', completed: false },
-        ]);
-      }
-      
-      if (!storedHabits) {
-        setHabits([
-          { id: '1', title: 'Leer 10 páginas', progress: 0.7, color: '#FF6384' },
-          { id: '2', title: 'Beber 2L de agua', progress: 0.5, color: '#36A2EB' },
-          { id: '3', title: 'Meditar 10 minutos', progress: 0.3, color: '#FFCE56' },
-        ]);
-      }
-      
-      // Generar datos aleatorios para las gráficas
-      setWeeklyStats({
-        ...weeklyStats,
-        datasets: [{
-          ...weeklyStats.datasets[0],
-          data: Array(7).fill().map(() => Math.floor(Math.random() * 5))
-        }]
-      });
-      
-      setHabitStats({
-        ...habitStats,
-        datasets: [{
-          ...habitStats.datasets[0],
-          data: Array(7).fill().map(() => Math.random().toFixed(1))
-        }]
-      });
-      
-      // Establecer cita motivacional
-      setQuote(motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)]);
-      
+
       // Animación de entrada
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -239,20 +239,41 @@ const DashScreen = () => {
           useNativeDriver: true,
         }),
       ]).start();
-      
+
     } catch (error) {
-      console.error('Error al cargar datos:', error);
+      console.error('Error completo:', error);
       setError('No se pudieron cargar los datos. Por favor, intenta de nuevo.');
+      
+      // Si hay un error de autenticación, redirigir al login
+      if (error.message.includes('401') || error.message.includes('403')) {
+        await AsyncStorage.removeItem('userToken');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'SignIn' }],
+        });
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [refreshing]);
+  }, [refreshing, navigation, fadeAnim, translateYAnim]);
   
   // Cargar datos al montar el componente
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData().finally(() => {
+      setIsInitialLoad(false);
+    });
+  }, [loadData]);
+
+  if (isInitialLoad) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#1ADDDB" />
+      </View>
+    );
+  }
   
   // Manejar pull-to-refresh
   const handleRefresh = useCallback(() => {
@@ -288,44 +309,50 @@ const DashScreen = () => {
   }, [tasks, userPoints]);
   
   // Verificar logros
-  const checkAchievements = useCallback((points) => {
-    const completedTasks = tasks.filter(task => task.completed).length;
-    
-    // Actualizar logros basados en el progreso
-    const updatedAchievements = userAchievements.map(achievement => {
-      if (achievement.unlocked) return achievement;
+  const checkAchievements = useCallback(async (points) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const completedTasks = tasks.filter(task => task.completed).length;
       
-      let shouldUnlock = false;
-      
-      // Verificar condiciones para desbloquear logros
-      if (achievement.id === '1' && completedTasks > 0) {
-        shouldUnlock = true;
-      } else if (achievement.id === '3' && completedTasks >= 10) {
-        shouldUnlock = true;
+      // Actualizar logros en el backend
+      const response = await fetch(`${API_URL}/api/achievements/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          completedTasks,
+          points,
+          habits: habits.length,
+          streaks: habits.filter(h => h.streak > 0).length
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al actualizar logros');
       }
-      
-      if (shouldUnlock && !achievement.unlocked) {
-        // Mostrar notificación
+
+      const { newAchievements, totalPoints } = await response.json();
+
+      // Mostrar notificaciones para nuevos logros
+      newAchievements.forEach(achievement => {
         Alert.alert(
           '¡Logro desbloqueado!',
           `Has desbloqueado: ${achievement.title}\n+${achievement.points} puntos`,
           [{ text: 'Genial', style: 'default' }]
         );
-        
-        // Actualizar puntos
-        const newPoints = points + achievement.points;
-        setUserPoints(newPoints);
-        AsyncStorage.setItem('userPoints', newPoints.toString());
-        
-        return { ...achievement, unlocked: true };
-      }
-      
-      return achievement;
-    });
-    
-    setUserAchievements(updatedAchievements);
-    AsyncStorage.setItem('userAchievements', JSON.stringify(updatedAchievements));
-  }, [tasks, userAchievements]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      });
+
+      // Actualizar estado
+      setUserPoints(totalPoints);
+      loadData(); // Recargar datos actualizados
+
+    } catch (error) {
+      console.error('Error al verificar logros:', error);
+    }
+  }, [tasks, habits, loadData]);
   
   // Animación para la barra flotante
   const floatingBarAnim = useRef(new Animated.Value(100)).current;
@@ -489,6 +516,7 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
   errorContainer: {
     backgroundColor: 'rgba(255, 99, 71, 0.2)',
@@ -524,10 +552,19 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 8,
   },
+  quoteContainer: {
+    backgroundColor: 'rgba(29, 43, 95, 0.8)',
+    borderRadius: 15,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1ADDDB',
+  },
   quoteText: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#A3B8E8',
-    textAlign: 'center',
+    fontStyle: 'italic',
+    lineHeight: 24,
   },
   greeting: {
     fontSize: 16,
@@ -538,6 +575,26 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  pointsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(29, 43, 95, 0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  pointsText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  avatarContainer: {
+    borderWidth: 2,
+    borderColor: '#1ADDDB',
+    borderRadius: 22,
+    overflow: 'hidden',
   },
   avatar: {
     width: 40,
@@ -550,6 +607,10 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: '#1D2B5F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
   },
