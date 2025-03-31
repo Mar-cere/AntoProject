@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 
 /**
  * Esquema Mongoose para el modelo de Usuario
@@ -35,8 +36,8 @@ const UserSchema = new mongoose.Schema({
   lastName: String,
   username: {
     type: String,
-    unique: true,
-    sparse: true
+    required: true,
+    unique: true
   },
   usernameHash: String,
   avatar: String,
@@ -75,6 +76,11 @@ const UserSchema = new mongoose.Schema({
       type: String,
       default: 'es'
     }
+  },
+  customId: {
+    type: String,
+    required: true,
+    unique: true
   }
 });
 
@@ -185,13 +191,7 @@ UserSchema.methods.updateProfile = function(newData) {
   return this;
 };
 
-let User;
-try {
-  // Intenta obtener el modelo existente
-  User = mongoose.model('User');
-} catch (error) {
-  // Si no existe, crea un nuevo modelo
-  User = mongoose.model('User', UserSchema);
-}
+// Evitar la redefinición del modelo
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
 export default User; 

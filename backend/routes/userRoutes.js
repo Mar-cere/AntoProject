@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import User from '../models/UserSchema';
+import User from '../models/UserSchema.js';
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -218,21 +218,19 @@ export const handleApiError = (error) => {
 // Obtener datos del usuario actual
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findOne({ id: req.user.userId });
+    console.log('Buscando usuario con ID:', req.user.userId);
+    const user = await User.findOne({ customId: req.user.userId });
     
     if (!user) {
+      console.log('Usuario no encontrado');
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
     // Devolver solo los datos necesarios
     res.json({
-      id: user.id,
+      id: user.customId,
       username: user.username,
-      name: user.name || user.username,
       email: user.email,
-      avatar: user.avatar,
-      points: user.points || 0,
-      preferences: user.preferences || {},
       createdAt: user.createdAt
     });
   } catch (error) {
