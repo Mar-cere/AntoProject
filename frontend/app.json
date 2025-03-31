@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "ProyectoAnto",
+    "slug": "ProyectoAnto",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/Anto.png",
+    "scheme": "yourapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.yourapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/Anto.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.yourcompany.yourapp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": {
+            "scheme": "yourapp"
+          }
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/Anto.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/Anto.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
