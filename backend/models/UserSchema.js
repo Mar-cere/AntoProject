@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
 
 /**
  * Esquema Mongoose para el modelo de Usuario
