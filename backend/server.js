@@ -36,10 +36,11 @@ app.use('/api/habits', habitRoutes);
 app.use('/api/users', userRoutes);
 
 // Establecer la conexión antes de importar modelos
-await mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
+const MONGODB_URI = process.env.MONGO_URI || 'tu_uri_de_mongodb';
+
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('Conectado a MongoDB'))
+  .catch(err => console.error('Error conectando a MongoDB:', err));
 
 // Modelo de mensajes
 const MessageSchema = new mongoose.Schema({
@@ -812,8 +813,10 @@ io.on('connection', (socket) => {
 });
 
 // Iniciar servidor
-const PORT = process.env.PORT || 5001;
-server.listen(PORT, () => console.log(`🚀 Servidor corriendo en el puerto ${PORT}`));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
+});
 
 // Agregar middleware de manejo de errores global
 app.use((err, req, res, next) => {
