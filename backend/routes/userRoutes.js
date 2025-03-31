@@ -215,7 +215,7 @@ export const handleApiError = (error) => {
   }
 };
 
-// Obtener datos del usuario actual
+// Ruta para obtener datos del usuario actual
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     console.log('Buscando usuario con ID:', req.user.userId);
@@ -226,7 +226,6 @@ router.get('/me', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
-    // Devolver solo los datos necesarios
     res.json({
       id: user.customId,
       username: user.username,
@@ -237,6 +236,16 @@ router.get('/me', authenticateToken, async (req, res) => {
     console.error('Error al obtener usuario:', error);
     res.status(500).json({ message: 'Error al obtener datos del usuario' });
   }
+});
+
+// Ruta para login
+router.post('/login', async (req, res) => {
+  // Implementar lógica de login
+});
+
+// Ruta para registro
+router.post('/register', async (req, res) => {
+  // Implementar lógica de registro
 });
 
 export default router;

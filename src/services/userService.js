@@ -4,7 +4,30 @@ import axios from 'axios';
 import { OPENAI_API_KEY } from './openai';
 
 // URL base de la API
-const API_BASE_URL = 'https://antobackend.onrender.com';
+export const API_BASE_URL = 'https://antobackend.onrender.com';
+
+// Rutas de navegación
+export const ROUTES = {
+  SIGN_IN: 'SignIn',
+  REGISTER: 'Register',
+  RECOVER_PASSWORD: 'RecoverPassword',
+  VERIFY_CODE: 'VerifyCode',
+  NEW_PASSWORD: 'NewPassword',
+  DASHBOARD: 'Dash',
+  CHAT: 'Chat',
+  PROFILE: 'Profile',
+  SETTINGS: 'Settings'
+};
+
+// Endpoints de la API
+export const ENDPOINTS = {
+  LOGIN: '/api/users/login',
+  REGISTER: '/api/users/register',
+  RECOVER: '/api/users/recover',
+  VERIFY_CODE: '/api/users/verify-code',
+  RESET_PASSWORD: '/api/users/reset-password',
+  ME: '/api/users/me'
+};
 
 // Crear cliente axios con interceptores
 const apiClient = axios.create({
@@ -36,7 +59,7 @@ apiClient.interceptors.request.use(
 /**
  * Servicio para gestionar usuarios
  */
-const userService = {
+export const userService = {
   /**
    * Obtiene el usuario actual desde el almacenamiento local
    * @returns {Promise<User|null>} Usuario actual o null
@@ -279,4 +302,6 @@ const userService = {
   }
 };
 
-export default userService; 
+export const handleApiError = (error) => {
+  // ... código existente del handleApiError ...
+}; 
