@@ -1,47 +1,25 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/UserSchema.js';
 
-export const authenticateToken = async (req, res, next) => {
+const auth = async (req, res, next) => {
   try {
-    const authHeader = req.header('Authorization');
-    console.log('Auth header recibido:', authHeader); // Para debug
-
-    if (!authHeader) {
-      return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    console.log('Token extraído:', token); // Para debug
-
+    const token = req.header('Authorization')?.replace('Bearer ', '');
     if (!token) {
-      return res.status(401).json({ message: 'Token no válido' });
+      return res.status(401).json({ message: 'No autorizado' });
     }
 
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log('Token decodificado:', decoded); // Para debug
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findOne({ id: decoded.userId });
 
-      const user = await User.findOne({ id: decoded.userId });
-      if (!user) {
-        return res.status(404).json({ message: 'Usuario no encontrado' });
-      }
-
-      req.user = user;
-      req.userId = decoded.userId;
-      next();
-    } catch (error) {
-      console.error('Error al verificar token:', error);
-      if (error.name === 'JsonWebTokenError') {
-        return res.status(401).json({ message: 'Token inválido' });
-      }
-      if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({ message: 'Token expirado' });
-      }
-      throw error;
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
+
+    req.user = user;
+    req.token = token;
+    next();
   } catch (error) {
-    console.error('Error en middleware de autenticación:', error);
-    res.status(500).json({ message: 'Error en la autenticación' });
+    res.status(401).json({ message: 'No autorizado' });
   }
 };
 

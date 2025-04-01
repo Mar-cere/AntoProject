@@ -89,48 +89,32 @@ const Header = memo(({ greeting, userName, userPoints, userAvatar }) => {
 });
 
 const DashScreen = () => {
+  // 1. Todos los useContext
   const navigation = useNavigation();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateYAnim = useRef(new Animated.Value(20)).current;
   
-  // Estados
+  // 2. Todos los useState en orden alfabético
+  const [error, setError] = useState(null);
   const [greeting, setGreeting] = useState('');
-  const [userName, setUserName] = useState('Usuario');
-  const [userAvatar, setUserAvatar] = useState(null);
+  const [habits, setHabits] = useState([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [navigationDestination, setNavigationDestination] = useState(null);
   const [quote, setQuote] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState(null);
-  const [error, setError] = useState(null);
-  const [userPoints, setUserPoints] = useState(0);
-  const [userAchievements, setUserAchievements] = useState(ACHIEVEMENTS);
   const [tasks, setTasks] = useState([]);
-  const [habits, setHabits] = useState([]);
+  const [userAchievements, setUserAchievements] = useState(ACHIEVEMENTS);
+  const [userData, setUserData] = useState(null);
+  const [userAvatar, setUserAvatar] = useState(null);
+  const [userName, setUserName] = useState('Usuario');
+  const [userPoints, setUserPoints] = useState(0);
 
-  // Estado para controlar si el menú está abierto
-  const [navigationDestination, setNavigationDestination] = useState(null);
+  // 3. Todos los useRef
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const floatingBarAnim = useRef(new Animated.Value(100)).current;
+  const floatingBarOpacity = useRef(new Animated.Value(0)).current;
+  const translateYAnim = useRef(new Animated.Value(20)).current;
 
-  // Manejar la navegación en un efecto separado
-  useEffect(() => {
-    if (navigationDestination) {
-      // Usar setTimeout para asegurar que la navegación ocurra después del renderizado
-      const timer = setTimeout(() => {
-        navigation.navigate(navigationDestination);
-        setNavigationDestination(null);
-      }, 0);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [navigationDestination, navigation]);
-
-  const handleCenterButton = (navigateTo) => {
-    Animated.parallel([
-    ]).start(() => {
-      if (navigateTo) navigation.navigate(navigateTo);
-    });
-  };
-
-  // Cargar datos
+  // 4. Todos los useCallback
   const loadData = useCallback(async () => {
     try {
       if (!refreshing) {
@@ -139,50 +123,35 @@ const DashScreen = () => {
       setError(null);
       
       const token = await AsyncStorage.getItem('userToken');
-      console.log('Token actual:', token); // Para debug
+      console.log('Token actual:', token);
 
       if (!token) {
         navigation.navigate('SignIn');
         return;
       }
 
+      // Decodificar el token para obtener la información del usuario
+      const tokenParts = token.split('.');
+      const payload = JSON.parse(atob(tokenParts[1]));
+      console.log('Token decodificado:', payload);
+
       // Primero intentamos obtener los datos del usuario
-      try {
-        const userResponse = await fetch(`${API_URL}/api/users/me`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        console.log('Status respuesta usuario:', userResponse.status);
-
-        if (!userResponse.ok) {
-          // Intentar leer el error como JSON
-          let errorMessage = 'Error al cargar datos del usuario';
-          try {
-            const errorData = await userResponse.json();
-            errorMessage = errorData.message || errorMessage;
-          } catch (e) {
-            console.error('Error parseando respuesta:', e);
-          }
-          throw new Error(errorMessage);
+      const userResponse = await fetch(`${API_URL}/api/users/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
+      });
 
-        const userData = await userResponse.json();
-        console.log('Datos usuario:', userData);
-        
-        setUserName(userData.name || userData.username || 'Usuario');
-        setUserAvatar(userData.avatar);
-        setUserPoints(userData.points || 0);
-      } catch (userError) {
-        console.error('Error específico usuario:', userError);
-        // Si es un error 404, establecer valores por defecto
-        setUserName('Usuario');
-        setUserPoints(0);
-        // Continuamos con el resto de la carga
+      if (!userResponse.ok) {
+        throw new Error('Error al cargar datos del usuario');
       }
+
+      const userData = await userResponse.json();
+      setUserName(userData.username || userData.name || 'Usuario');
+      setUserAvatar(userData.avatar);
+      setUserPoints(userData.points || 0);
 
       // Cargar el resto de los datos
       try {
@@ -244,7 +213,6 @@ const DashScreen = () => {
       console.error('Error completo:', error);
       setError('No se pudieron cargar los datos. Por favor, intenta de nuevo.');
       
-      // Si hay un error de autenticación, redirigir al login
       if (error.message.includes('401') || error.message.includes('403')) {
         await AsyncStorage.removeItem('userToken');
         navigation.reset({
@@ -257,58 +225,12 @@ const DashScreen = () => {
       setRefreshing(false);
     }
   }, [refreshing, navigation, fadeAnim, translateYAnim]);
-  
-  // Cargar datos al montar el componente
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  useEffect(() => {
-    loadData().finally(() => {
-      setIsInitialLoad(false);
-    });
-  }, [loadData]);
-
-  if (isInitialLoad) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#1ADDDB" />
-      </View>
-    );
-  }
-  
-  // Manejar pull-to-refresh
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadData();
   }, [loadData]);
-  
-  // Manejar completar tarea
-  const handleCompleteTask = useCallback((taskId) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    setTasks(prevTasks => {
-      const updatedTasks = prevTasks.map(task => 
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      );
-      
-      // Guardar en AsyncStorage
-      AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
-      
-      return updatedTasks;
-    });
-    
-    // Actualizar puntos si la tarea se completa
-    const task = tasks.find(t => t.id === taskId);
-    if (task && !task.completed) {
-      const newPoints = userPoints + POINTS.COMPLETE_TASK;
-      setUserPoints(newPoints);
-      AsyncStorage.setItem('userPoints', newPoints.toString());
-      
-      // Verificar logros
-      checkAchievements(newPoints);
-    }
-  }, [tasks, userPoints]);
-  
-  // Verificar logros
+
   const checkAchievements = useCallback(async (points) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -353,13 +275,57 @@ const DashScreen = () => {
       console.error('Error al verificar logros:', error);
     }
   }, [tasks, habits, loadData]);
-  
-  // Animación para la barra flotante
-  const floatingBarAnim = useRef(new Animated.Value(100)).current;
-  const floatingBarOpacity = useRef(new Animated.Value(0)).current;
-  
+
+  const handleCompleteTask = useCallback((taskId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    setTasks(prevTasks => {
+      const updatedTasks = prevTasks.map(task => 
+        task.id === taskId ? { ...task, completed: !task.completed } : task
+      );
+      
+      // Guardar en AsyncStorage
+      AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
+      
+      return updatedTasks;
+    });
+    
+    // Actualizar puntos si la tarea se completa
+    const task = tasks.find(t => t.id === taskId);
+    if (task && !task.completed) {
+      const newPoints = userPoints + POINTS.COMPLETE_TASK;
+      setUserPoints(newPoints);
+      AsyncStorage.setItem('userPoints', newPoints.toString());
+      
+      // Verificar logros
+      checkAchievements(newPoints);
+    }
+  }, [tasks, userPoints, checkAchievements]);
+
+  const handleCenterButton = useCallback((navigateTo) => {
+    Animated.parallel([]).start(() => {
+      if (navigateTo) navigation.navigate(navigateTo);
+    });
+  }, [navigation]);
+
+  // 5. Todos los useEffect
   useEffect(() => {
-    // Animar la barra flotante después de que el contenido principal se haya cargado
+    if (navigationDestination) {
+      const timer = setTimeout(() => {
+        navigation.navigate(navigationDestination);
+        setNavigationDestination(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [navigationDestination, navigation]);
+
+  useEffect(() => {
+    loadData().finally(() => {
+      setIsInitialLoad(false);
+    });
+  }, [loadData]);
+
+  useEffect(() => {
     setTimeout(() => {
       Animated.parallel([
         Animated.spring(floatingBarAnim, {
@@ -375,9 +341,17 @@ const DashScreen = () => {
         })
       ]).start();
     }, 800);
-  }, []);
+  }, [floatingBarAnim, floatingBarOpacity]);
 
-  // Renderizar pantalla de carga
+  // Renderizado condicional
+  if (isInitialLoad) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#1ADDDB" />
+      </View>
+    );
+  }
+
   if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -387,8 +361,7 @@ const DashScreen = () => {
       </View>
     );
   }
-  
-  // Renderizar pantalla de error
+
   if (error && !refreshing) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>

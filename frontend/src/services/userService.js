@@ -306,10 +306,14 @@ export const userService = {
 
   login: async (credentials) => {
     try {
+      console.log('Intentando login con:', credentials.email);
+      
       const response = await apiClient.post(ENDPOINTS.LOGIN, {
         email: credentials.email.toLowerCase().trim(),
         password: credentials.password
       });
+
+      console.log('Respuesta del servidor:', response.status);
 
       if (response.data.token) {
         await AsyncStorage.setItem('userToken', response.data.token);
@@ -320,7 +324,12 @@ export const userService = {
       
       return response.data;
     } catch (error) {
-      console.error('Error en login:', error);
+      console.error('Error detallado:', error.response || error);
+      
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('El servidor está tardando en responder. Por favor, intenta de nuevo.');
+      }
+      
       throw error;
     }
   }

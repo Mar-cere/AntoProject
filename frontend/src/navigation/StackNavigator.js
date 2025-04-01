@@ -15,7 +15,7 @@ import HabitsScreen from '../screens/HabitsScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import JournalScreen from '../screens/JournalScreen';
-import { ROUTES } from '../../constants/routes';
+import { ROUTES } from '../constants/routes';
 
 const Stack = createStackNavigator();
 
@@ -34,7 +34,7 @@ const StackNavigator = () => {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="SignIn" component={SignInScreen} />
-      <Stack.Screen name="Dashboard" component={DashScreen} />
+      <Stack.Screen name="Dash" component={DashScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="FaQ" component={FaQScreen} />
       <Stack.Screen name={ROUTES.RECOVER_PASSWORD} component={RecoverPasswordScreen} />

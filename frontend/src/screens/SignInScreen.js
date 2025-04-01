@@ -178,7 +178,10 @@ const SignInScreen = () => {
       }
     } catch (error) {
       console.error('Error en login:', error);
-      Alert.alert('Error', handleApiError(error));
+      Alert.alert(
+        'Error de conexión',
+        error.message || 'No se pudo conectar con el servidor. Por favor, intenta de nuevo.'
+      );
     } finally {
       setIsLoading(false);
     }
