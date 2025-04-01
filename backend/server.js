@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import openaiService from './services/openaiService.js';
-import User from './models/UserSchema.js';
+import User from './models/User.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
