@@ -11,7 +11,7 @@ import userRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import { setupSocketIO } from './config/socket.js';
-import { setupMailer } from './config/mailer.js';
+import mailer from './config/mailer.js';
 import helmet from 'helmet';
 
 // Configuración de variables de entorno
@@ -53,6 +53,10 @@ app.use('/api/chat', chatRoutes);
 const requiredEnvVars = [
   'MONGO_URI',
   'JWT_SECRET',
+  'PORT'
+];
+
+const optionalEnvVars = [
   'EMAIL_USER',
   'EMAIL_PASSWORD',
   'OPENAI_API_KEY',
@@ -67,18 +71,21 @@ requiredEnvVars.forEach(varName => {
   }
 });
 
-// Configuración de MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-}).then(() => {
-  console.log('✅ Conectado a MongoDB');
-}).catch(err => {
-  console.error('❌ Error conectando a MongoDB:', err);
-  process.exit(1);
+optionalEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    console.warn(`⚠️ Advertencia: ${varName} no está definida`);
+  }
 });
+
+// Configuración de MongoDB
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log('✅ Conectado a MongoDB');
+  })
+  .catch(err => {
+    console.error('❌ Error conectando a MongoDB:', err);
+    process.exit(1);
+  });
 
 // Eventos de MongoDB
 mongoose.connection.on('error', err => {
@@ -89,17 +96,17 @@ mongoose.connection.on('disconnected', () => {
   console.warn('Desconectado de MongoDB');
 });
 
-// Configurar Socket.IO y Mailer
+// Configurar Socket.IO
 const io = setupSocketIO(server);
-const transporter = setupMailer();
 
-// Verificar configuración del mailer
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('❌ Error en la configuración del servidor de correo:', error);
-  } else {
-    console.log('✅ Servidor de correo listo');
-  }
+// Healthcheck endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV
+  });
 });
 
 // Ruta no encontrada
@@ -128,32 +135,28 @@ const errorHandler = (err, req, res, next) => {
 
 app.use(errorHandler);
 
-// Healthcheck endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV
-  });
-});
-
 // Iniciar servidor
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor corriendo en el puerto ${PORT} en modo ${process.env.NODE_ENV}`);
+  console.log(`🚀 Servidor corriendo en el puerto ${PORT} en modo ${process.env.NODE_ENV || 'development'}`);
 });
 
 // Manejo de cierre graceful
-const gracefulShutdown = () => {
+const gracefulShutdown = async () => {
   console.log('🔄 Iniciando cierre graceful...');
-  server.close(() => {
+  
+  try {
+    await server.close();
     console.log('✅ Servidor HTTP cerrado');
-    mongoose.connection.close(false, () => {
-      console.log('✅ Conexión MongoDB cerrada');
-      process.exit(0);
-    });
-  });
+    
+    await mongoose.connection.close();
+    console.log('✅ Conexión MongoDB cerrada');
+    
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error durante el cierre:', error);
+    process.exit(1);
+  }
 };
 
 process.on('SIGTERM', gracefulShutdown);
