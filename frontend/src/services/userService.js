@@ -289,15 +289,32 @@ export const userService = {
     }
   },
 
+  register: async (userData) => {
+    try {
+      const response = await apiClient.post(ENDPOINTS.REGISTER, {
+        username: userData.username.toLowerCase().trim(),
+        email: userData.email.toLowerCase().trim(),
+        password: userData.password
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error en registro:', error);
+      throw error;
+    }
+  },
+
   login: async (credentials) => {
     try {
-      const response = await apiClient.post(ENDPOINTS.LOGIN, credentials);
+      const response = await apiClient.post(ENDPOINTS.LOGIN, {
+        email: credentials.email.toLowerCase().trim(),
+        password: credentials.password
+      });
 
       if (response.data.token) {
         await AsyncStorage.setItem('userToken', response.data.token);
         if (response.data.user) {
-          const user = new User(response.data.user);
-          await AsyncStorage.setItem('userData', JSON.stringify(user.toJSON()));
+          await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
         }
       }
       

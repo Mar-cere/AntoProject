@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { nanoid } from 'nanoid';
 
 /**
  * Esquema Mongoose para el modelo de Usuario
@@ -79,7 +80,8 @@ const UserSchema = new mongoose.Schema({
   customId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    default: () => `user_${nanoid()}`  // Genera un ID único automáticamente
   }
 });
 
