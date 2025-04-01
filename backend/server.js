@@ -3,6 +3,7 @@ import http from 'http';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import taskRoutes from './routes/taskRoutes.js';
 import habitRoutes from './routes/habitRoutes.js';
@@ -32,6 +33,7 @@ app.use(cors(corsOptions));
 app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(morgan(':method :url :status :response-time ms - :res[content-length] - :remote-addr'));
 
 // Rate limiting
 const limiter = rateLimit({
