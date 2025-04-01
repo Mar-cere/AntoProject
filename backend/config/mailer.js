@@ -3,15 +3,16 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Configuración del transportador de correo
-const createTransporter = () => {
-  return nodemailer.createTransport({
+export const setupMailer = () => {
+  const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_APP_PASSWORD // Usar contraseña de aplicación de Google
+      pass: process.env.EMAIL_APP_PASSWORD
     }
   });
+
+  return transporter;
 };
 
 // Plantillas de correo
@@ -77,7 +78,7 @@ export const mailer = {
   // Enviar código de verificación
   sendVerificationCode: async (email, code) => {
     try {
-      const transporter = createTransporter();
+      const transporter = setupMailer();
       const template = emailTemplates.verificationCode(code);
       
       await transporter.sendMail({
@@ -97,7 +98,7 @@ export const mailer = {
   // Enviar correo de restablecimiento de contraseña
   sendPasswordReset: async (email, token) => {
     try {
-      const transporter = createTransporter();
+      const transporter = setupMailer();
       const template = emailTemplates.resetPassword(token);
       
       await transporter.sendMail({
@@ -117,7 +118,7 @@ export const mailer = {
   // Enviar correo de bienvenida
   sendWelcomeEmail: async (email, username) => {
     try {
-      const transporter = createTransporter();
+      const transporter = setupMailer();
       const template = emailTemplates.welcomeEmail(username);
       
       await transporter.sendMail({
