@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import ParticleBackground from '../components/ParticleBackground';
 import { userService } from '../services/userService';
 import { ROUTES } from '../../constants/routes';
-import { handleApiError } from '../config/api';
+import { handleApiError, checkServerConnection } from '../config/api';
 
 const RegisterScreen = ({ navigation }) => {
   // Referencias para animaciones
@@ -48,6 +48,21 @@ const RegisterScreen = ({ navigation }) => {
         }),
       ]).start();
     }, 500);
+  }, []);
+
+  useEffect(() => {
+    const verifyConnection = async () => {
+      const isConnected = await checkServerConnection();
+      if (!isConnected) {
+        Alert.alert(
+          'Error de conexión',
+          'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.',
+          [{ text: 'OK' }]
+        );
+      }
+    };
+
+    verifyConnection();
   }, []);
 
   // Validación de email
@@ -179,40 +194,49 @@ const RegisterScreen = ({ navigation }) => {
 
   // Manejo del registro usando userService
   const handleRegister = async () => {
-    if (!validateForm()) {
-      // Si hay errores, mostrar alerta específica del primer error
-      const errorKeys = Object.keys(errors);
-      if (errorKeys.length > 0) {
-        Alert.alert('Error de validación', errors[errorKeys[0]]);
-      }
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
+      setIsLoading(true);
+      setErrors({});
+
+      // Validaciones básicas
+      if (!formData.email || !formData.password || !formData.username) {
+        setErrors({ general: 'Todos los campos son obligatorios' });
+        return;
+      }
+
+      console.log('Intentando registrar usuario...');
+      
       const response = await userService.register({
-        username: formData.username.trim(),
+        email: formData.email,
+        password: formData.password,
+        username: formData.username,
+        name: formData.username
+      });
+
+      console.log('Registro exitoso, intentando login...');
+
+      // Intentar login automático después del registro
+      const loginResponse = await userService.login({
         email: formData.email,
         password: formData.password
       });
 
-      if (response.success) {
-        Alert.alert(
-          'Registro Exitoso',
-          'Tu cuenta ha sido creada correctamente',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.navigate(ROUTES.SIGN_IN)
-            }
-          ]
-        );
+      if (loginResponse.token) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: ROUTES.DASHBOARD }],
+        });
       }
     } catch (error) {
-      console.error('Error en registro:', error);
-      Alert.alert('Error', handleApiError(error));
+      console.error('Error completo en registro:', error);
+      
+      const errorMessage = error.response?.data?.message 
+        || error.message 
+        || 'Error al registrar usuario';
+      
+      setErrors({ general: errorMessage });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 

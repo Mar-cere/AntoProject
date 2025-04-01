@@ -23,7 +23,7 @@ export const ROUTES = {
 // Crear cliente axios con interceptores
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -43,6 +43,21 @@ apiClient.interceptors.request.use(
     }
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Interceptor para manejar errores de red
+apiClient.interceptors.response.use(
+  response => response,
+  error => {
+    if (!error.response) {
+      console.error('Error de conexión:', {
+        message: error.message,
+        code: error.code,
+        config: error.config
+      });
+    }
     return Promise.reject(error);
   }
 );
@@ -291,15 +306,48 @@ export const userService = {
 
   register: async (userData) => {
     try {
-      const response = await apiClient.post(ENDPOINTS.REGISTER, {
-        username: userData.username.toLowerCase().trim(),
-        email: userData.email.toLowerCase().trim(),
-        password: userData.password
+      console.log('Iniciando registro con:', { 
+        email: userData.email,
+        username: userData.username 
       });
-      
+
+      const response = await apiClient.post('/api/users/register', {
+        email: userData.email.toLowerCase().trim(),
+        username: userData.username.trim(),
+        password: userData.password,
+        name: userData.name?.trim()
+      }, {
+        timeout: 30000, // Aumentar el timeout a 30 segundos
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Respuesta del servidor:', response.status);
       return response.data;
     } catch (error) {
-      console.error('Error en registro:', error);
+      console.error('Error detallado en registro:', {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        isAxiosError: error.isAxiosError,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL,
+          timeout: error.config?.timeout
+        }
+      });
+
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('El servidor está tardando en responder. Por favor, intenta de nuevo.');
+      }
+      
+      if (!error.response) {
+        throw new Error('No se pudo conectar con el servidor. Verifica tu conexión a internet.');
+      }
+
       throw error;
     }
   },

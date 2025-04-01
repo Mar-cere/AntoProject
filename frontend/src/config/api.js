@@ -95,3 +95,14 @@ export const api = {
   
   delete: (endpoint) => fetchWithToken(endpoint, { method: 'DELETE' }),
 };
+
+// Función para verificar la conexión con el servidor
+export const checkServerConnection = async () => {
+  try {
+    const response = await fetch(`${API_URL}/health`);
+    return response.ok;
+  } catch (error) {
+    console.error('Error verificando conexión:', error);
+    return false;
+  }
+};
