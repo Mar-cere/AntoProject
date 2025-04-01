@@ -9,8 +9,10 @@
  * @author AntoApp Team
  */
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const userSchema = new mongoose.Schema({
+  // Campos de identificación
   id: {
     type: String,
     required: true,
@@ -18,28 +20,45 @@ const userSchema = new mongoose.Schema({
   },
   username: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    unique: true
   },
   email: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    trim: true,
+    lowercase: true
   },
   password: {
     type: String,
     required: true
   },
-  name: String,
+
+  // Campos de perfil
+  name: {
+    type: String,
+    trim: true
+  },
+  avatar: {
+    type: String
+  },
   points: {
     type: Number,
     default: 0
   },
-  avatar: String,
+
+  // Campos de estado
   isVerified: {
     type: Boolean,
     default: false
   },
-  lastLogin: Date,
+  lastLogin: {
+    type: Date
+  },
+
+  // Preferencias de usuario
   preferences: {
     theme: {
       type: String,
@@ -58,15 +77,45 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Eliminar customId de todas las respuestas
+// Método para hashear contraseña
+userSchema.methods.hashPassword = function(password) {
+  return crypto
+    .createHash('sha256')
+    .update(password)
+    .digest('hex');
+};
+
+// Middleware para hashear la contraseña antes de guardar
+userSchema.pre('save', function(next) {
+  if (this.isModified('password')) {
+    this.password = this.hashPassword(this.password);
+  }
+  next();
+});
+
+// Método para verificar contraseña
+userSchema.methods.comparePassword = function(candidatePassword) {
+  const hash = this.hashPassword(candidatePassword);
+  return this.password === hash;
+};
+
+// Método para generar el ID único del usuario
+userSchema.pre('save', function(next) {
+  if (!this.id) {
+    const timestamp = Date.now().toString(36);
+    const randomStr = Math.random().toString(36).substring(2, 5);
+    this.id = `user_${timestamp}${randomStr}`;
+  }
+  next();
+});
+
+// Método para limpiar datos sensibles al convertir a JSON
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
-  delete user.customId; // Por si existe en documentos antiguos
   delete user.password;
   return user;
 };
 
-// Verificar si el modelo ya existe antes de definirlo
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
 
 export default User;

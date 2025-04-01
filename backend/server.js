@@ -15,18 +15,17 @@ import taskRoutes from './routes/taskRoutes.js';
 import Task from './models/Task.js';
 import habitRoutes from './routes/habitRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import { setupSocketIO } from './config/socket.js';
+import { setupMailer } from './config/mailer.js';
+import authRoutes from './routes/authRoutes.js';
+import morgan from 'morgan';
 
 // Configuración de variables de entorno
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  },
-});
+const io = setupSocketIO(server);
 
 // Middleware
 app.use(cors());
@@ -34,13 +33,49 @@ app.use(express.json());
 app.use('/api/tasks', taskRoutes);
 app.use('/api/habits', habitRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
+app.use(morgan('combined'));
 
 // Establecer la conexión antes de importar modelos
 const MONGODB_URI = process.env.MONGO_URI || 'tu_uri_de_mongodb';
 
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Conectado a MongoDB'))
-  .catch(err => console.error('Error conectando a MongoDB:', err));
+// Validación de variables de entorno requeridas
+const requiredEnvVars = [
+  'MONGO_URI',
+  'JWT_SECRET',
+  'EMAIL_USER',
+  'EMAIL_PASSWORD',
+  'OPENAI_API_KEY'
+];
+
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    console.error(`❌ Error: ${varName} no está definida`);
+    process.exit(1);
+  }
+});
+
+// Configuración de conexión MongoDB mejorada
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+}).then(() => {
+  console.log('✅ Conectado a MongoDB');
+}).catch(err => {
+  console.error('❌ Error conectando a MongoDB:', err);
+  process.exit(1);
+});
+
+// Manejo de eventos de conexión
+mongoose.connection.on('error', err => {
+  console.error('Error de MongoDB:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('Desconectado de MongoDB');
+});
 
 // Modelo de mensajes
 const MessageSchema = new mongoose.Schema({
@@ -650,15 +685,7 @@ app.post('/api/users/reset-password', async (req, res) => {
 });
 
 // Configuración del transporter de correo con más opciones
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  },
-  debug: true, // Activa logs para depuración
-  logger: true // Muestra logs detallados
-});
+const transporter = setupMailer();
 
 // Verificar la configuración al iniciar
 transporter.verify(function(error, success) {
@@ -818,14 +845,23 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
 });
 
-// Agregar middleware de manejo de errores global
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
+// Middleware personalizado para errores
+const errorHandler = (err, req, res, next) => {
+  console.error('Error:', {
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    path: req.path,
+    method: req.method
+  });
+
   res.status(err.status || 500).json({
+    success: false,
     message: err.message || 'Error interno del servidor',
     error: process.env.NODE_ENV === 'development' ? err : {}
   });
-});
+};
+
+app.use(errorHandler);
 
 // Agregar ruta para obtener estadísticas generales
 app.get('/api/stats', authenticateToken, async (req, res) => {
@@ -842,4 +878,13 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
   } catch (error) {
     next(error);
   }
+});
+
+// Healthcheck endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date(),
+    uptime: process.uptime()
+  });
 });
