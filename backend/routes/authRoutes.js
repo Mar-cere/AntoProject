@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { authenticateToken } from '../middleware/auth.js';
 import User from '../models/User.js';
-import { mailer } from '../config/mailer.js';
+import mailer from '../config/mailer.js';
 import crypto from 'crypto';
 
 const router = express.Router();
