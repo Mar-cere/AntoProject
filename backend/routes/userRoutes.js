@@ -92,49 +92,69 @@ router.post('/login', async (req, res) => {
     console.log('Recibida petición de login');
     const { email, password } = req.body;
 
-    // Buscar usuario
-    const user = await User.findOne({ email: email.toLowerCase() });
-    
-    if (!user) {
-      console.log('Usuario no encontrado:', email);
-      return res.status(401).json({ message: 'Credenciales incorrectas' });
+    // Validar campos requeridos
+    if (!email || !password) {
+      return res.status(400).json({
+        message: 'Email y contraseña son requeridos'
+      });
     }
 
-    // Verificar contraseña usando el método del modelo
-    const validPassword = user.comparePassword(password);
-    if (!validPassword) {
-      console.log('Contraseña inválida para:', email);
-      return res.status(401).json({ message: 'Credenciales incorrectas' });
+    // Buscar usuario
+    const user = await User.findOne({ email });
+    console.log('Usuario encontrado:', user ? 'Sí' : 'No');
+
+    if (!user) {
+      return res.status(401).json({
+        message: 'Credenciales incorrectas'
+      });
     }
+
+    // Verificar si la cuenta está verificada
+    if (!user.isVerified) {
+      return res.status(401).json({
+        message: 'Cuenta no verificada'
+      });
+    }
+
+    // Verificar contraseña
+    const isValidPassword = user.comparePassword(password);
+    console.log('Contraseña válida:', isValidPassword ? 'Sí' : 'No');
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        message: 'Credenciales incorrectas'
+      });
+    }
+
+    // Generar token
+    const token = jwt.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     // Actualizar último login
     user.lastLogin = new Date();
     await user.save();
 
-    // Generar token
-    const token = jwt.sign(
-      { userId: user.id, username: user.username },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    console.log('Login exitoso para:', email);
-    
+    // Enviar respuesta
     res.json({
       token,
       user: {
         id: user.id,
-        username: user.username,
         email: user.email,
-        name: user.name,
-        points: user.points || 0,
-        avatar: user.avatar,
+        username: user.username,
+        isVerified: user.isVerified,
+        lastLogin: user.lastLogin,
         preferences: user.preferences
       }
     });
+
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({ message: 'Error en el servidor' });
+    res.status(500).json({
+      message: 'Error al iniciar sesión'
+    });
   }
 });
 

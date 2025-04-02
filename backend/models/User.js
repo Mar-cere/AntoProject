@@ -63,6 +63,12 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Método para comparar contraseña
+userSchema.methods.comparePassword = function(candidatePassword) {
+  const hash = crypto.pbkdf2Sync(candidatePassword, this.salt, 1000, 64, 'sha512').toString('hex');
+  return this.password === hash;
+};
+
 // Middleware pre-save para asegurar que el id existe
 userSchema.pre('save', function(next) {
   if (!this.id) {
@@ -82,12 +88,6 @@ userSchema.methods.toJSON = function() {
   delete obj.resetPasswordToken;
   delete obj.resetPasswordExpires;
   return obj;
-};
-
-// Método para verificar contraseña
-userSchema.methods.verifyPassword = function(password) {
-  const hash = crypto.pbkdf2Sync(password, this.salt, 1000, 64, 'sha512').toString('hex');
-  return this.password === hash;
 };
 
 const User = mongoose.model('User', userSchema);
