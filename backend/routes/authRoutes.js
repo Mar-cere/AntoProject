@@ -48,8 +48,9 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Generar hash de contraseña
-    const { salt, hash } = hashPassword(password);
+    // Generar salt y hash de la contraseña
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
 
     // Crear nuevo usuario
     const user = new User({
@@ -57,18 +58,33 @@ router.post('/register', async (req, res) => {
       username,
       password: hash,
       salt,
-      verificationCode: generateVerificationCode(),
-      verificationCodeExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 minutos
+      isVerified: true // Usuario verificado por defecto
     });
 
     await user.save();
 
-    // Enviar correo de verificación
-    await mailer.sendVerificationCode(email, user.verificationCode);
+    // Generar token
+    const token = jwt.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
+    // Enviar correo de bienvenida (sin esperar a que termine)
+    mailer.sendWelcomeEmail(email, username).catch(error => {
+      console.warn('No se pudo enviar el correo de bienvenida:', error);
+    });
+
+    // Responder inmediatamente sin esperar el envío del correo
     res.status(201).json({
-      message: 'Usuario registrado exitosamente. Revisa tu correo para verificar la cuenta.',
-      userId: user.id
+      message: 'Usuario registrado exitosamente',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isVerified: true
+      }
     });
 
   } catch (error) {

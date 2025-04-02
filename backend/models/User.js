@@ -39,15 +39,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  isVerified: {
-    type: Boolean,
-    default: false
+  lastLogin: {
+    type: Date,
+    default: Date.now
   },
-  verificationCode: String,
-  verificationCodeExpires: Date,
-  resetPasswordToken: String,
-  resetPasswordExpires: Date,
-  lastLogin: Date,
   preferences: {
     theme: {
       type: String,
@@ -57,6 +52,20 @@ const userSchema = new mongoose.Schema({
     notifications: {
       type: Boolean,
       default: true
+    }
+  },
+  stats: {
+    tasksCompleted: {
+      type: Number,
+      default: 0
+    },
+    habitsStreak: {
+      type: Number,
+      default: 0
+    },
+    lastActive: {
+      type: Date,
+      default: Date.now
     }
   }
 }, {
@@ -83,10 +92,6 @@ userSchema.methods.toJSON = function() {
   delete obj.password;
   delete obj.salt;
   delete obj.__v;
-  delete obj.verificationCode;
-  delete obj.verificationCodeExpires;
-  delete obj.resetPasswordToken;
-  delete obj.resetPasswordExpires;
   return obj;
 };
 
