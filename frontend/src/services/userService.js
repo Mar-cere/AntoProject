@@ -316,6 +316,12 @@ export const userService = {
 
       const response = await apiClient.post(ENDPOINTS.REGISTER, userData);
       console.log('Respuesta del registro:', response);
+
+      // Guardar token si está presente
+      if (response.data && response.data.token) {
+        await AsyncStorage.setItem('userToken', response.data.token);
+      }
+
       return response;
     } catch (error) {
       console.error('Error detallado en registro:', {
@@ -330,6 +336,12 @@ export const userService = {
   login: async (credentials) => {
     try {
       const response = await apiClient.post(ENDPOINTS.LOGIN, credentials);
+      
+      // Guardar token si está presente
+      if (response.data && response.data.token) {
+        await AsyncStorage.setItem('userToken', response.data.token);
+      }
+      
       return response;
     } catch (error) {
       console.error('Error en login:', error);

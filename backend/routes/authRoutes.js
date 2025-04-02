@@ -57,8 +57,7 @@ router.post('/register', async (req, res) => {
       email,
       username,
       password: hash,
-      salt,
-      isVerified: true // Usuario verificado por defecto
+      salt
     });
 
     await user.save();
@@ -70,21 +69,11 @@ router.post('/register', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Enviar correo de bienvenida (sin esperar a que termine)
-    mailer.sendWelcomeEmail(email, username).catch(error => {
-      console.warn('No se pudo enviar el correo de bienvenida:', error);
-    });
-
-    // Responder inmediatamente sin esperar el envío del correo
+    // Responder inmediatamente
     res.status(201).json({
       message: 'Usuario registrado exitosamente',
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        isVerified: true
-      }
+      user: user.toJSON()
     });
 
   } catch (error) {
@@ -139,21 +128,7 @@ router.post('/login', async (req, res) => {
 
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(401).json({ 
-        message: 'Credenciales incorrectas' 
-      });
-    }
-
-    if (!user.isVerified) {
-      return res.status(401).json({ 
-        message: 'Cuenta no verificada' 
-      });
-    }
-
-    const isValidPassword = verifyPassword(password, user.password, user.salt);
-
-    if (!isValidPassword) {
+    if (!user || !user.comparePassword(password)) {
       return res.status(401).json({ 
         message: 'Credenciales incorrectas' 
       });
@@ -172,13 +147,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        isVerified: user.isVerified,
-        lastLogin: user.lastLogin
-      }
+      user: user.toJSON()
     });
 
   } catch (error) {
