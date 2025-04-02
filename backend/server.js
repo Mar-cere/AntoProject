@@ -21,14 +21,12 @@ const app = express();
 const server = http.createServer(app);
 
 // Configuración de CORS más permisiva
-const corsOptions = {
-  origin: '*', // Permite todas las conexiones en desarrollo
+app.use(cors({
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+  credentials: true
+}));
 
 // Middleware de seguridad con configuración más permisiva para desarrollo
 app.use(helmet({
@@ -37,8 +35,8 @@ app.use(helmet({
 }));
 
 // Middlewares básicos
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Logger solo en desarrollo
 if (process.env.NODE_ENV !== 'production') {
@@ -52,14 +50,9 @@ const limiter = rateLimit({
   message: 'Demasiadas peticiones desde esta IP, por favor intente de nuevo más tarde'
 });
 
-// Health check antes de rate limiting
-app.get(['/health', '/api/health'], (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV
-  });
+// Health check endpoint (antes de cualquier otra ruta)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Aplicar rate limiting solo a rutas específicas
@@ -100,41 +93,11 @@ optionalEnvVars.forEach(varName => {
   }
 });
 
-// Configuración de MongoDB con retry
-const connectMongoDB = async (retries = 5) => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    console.log('✅ Conectado a MongoDB');
-  } catch (err) {
-    if (retries > 0) {
-      console.log(`Reintentando conexión... (${retries} intentos restantes)`);
-      setTimeout(() => connectMongoDB(retries - 1), 5000);
-    } else {
-      console.error('❌ Error conectando a MongoDB:', err);
-      process.exit(1);
-    }
-  }
-};
-
-connectMongoDB();
-
-// Manejo de errores mejorado
+// Manejo de errores global
 app.use((err, req, res, next) => {
-  console.error('Error:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    path: req.path,
-    method: req.method,
-    body: process.env.NODE_ENV === 'development' ? req.body : undefined
-  });
-
+  console.error('Error:', err);
   res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Error interno del servidor',
-    error: process.env.NODE_ENV === 'development' ? err : {}
+    message: err.message || 'Error interno del servidor'
   });
 });
 

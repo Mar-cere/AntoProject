@@ -196,78 +196,36 @@ const RegisterScreen = ({ navigation }) => {
   // Manejo del registro usando userService
   const handleRegister = async () => {
     try {
-      if (!validateForm()) {
-        return;
-      }
+      if (!validateForm()) return;
 
       setIsSubmitting(true);
       setIsLoading(true);
-      setErrors({});
-
-      console.log('Intentando registrar usuario...');
 
       const userData = {
         email: formData.email.toLowerCase().trim(),
         username: formData.username.toLowerCase().trim(),
-        password: formData.password,
-        name: formData.username
+        password: formData.password
       };
 
-      console.log('Enviando datos de registro:', {
-        ...userData,
-        password: '***HIDDEN***'
-      });
-
-      // Usar api.post en lugar de userService
+      console.log('Intentando registro...');
+      
       const response = await api.post(ENDPOINTS.REGISTER, userData);
-      console.log('Respuesta del registro:', response);
-
+      
       if (response.token) {
         await AsyncStorage.setItem('userToken', response.token);
-        
-        // Navegar al dashboard
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
         });
       } else {
-        // Si no hay token, intentar login
-        console.log('Intentando login después del registro...');
-        const loginResponse = await api.post(ENDPOINTS.LOGIN, {
-          email: userData.email,
-          password: userData.password
-        });
-
-        if (loginResponse.token) {
-          await AsyncStorage.setItem('userToken', loginResponse.token);
-          navigation.reset({
-            index: 0,
-            routes: [{ name: ROUTES.DASHBOARD }],
-          });
-        } else {
-          throw new Error('No se pudo iniciar sesión después del registro');
-        }
+        throw new Error('No se recibió token de autenticación');
       }
+
     } catch (error) {
-      console.error('Error en registro:', error);
-      
-      let errorMessage = 'Error al registrar usuario';
-      
-      if (error.message.includes('Network Error') || error.message.includes('conectar')) {
-        errorMessage = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.';
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
       Alert.alert(
         'Error en el registro',
-        errorMessage,
-        [{ text: 'OK' }]
+        error.message
       );
-
-      setErrors({ general: errorMessage });
     } finally {
       setIsSubmitting(false);
       setIsLoading(false);
