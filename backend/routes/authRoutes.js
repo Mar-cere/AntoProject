@@ -251,4 +251,9 @@ router.post('/logout', authenticateToken, async (req, res) => {
   }
 });
 
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 export default router;

@@ -304,14 +304,29 @@ export const userService = {
     }
   },
 
+  // Modificar la verificación de conexión
+  checkServerConnection: async () => {
+    try {
+      console.log('Verificando conexión con:', `${API_BASE_URL}/api/health`);
+      const response = await apiClient.get('/api/health', {
+        timeout: 5000 // Reducimos el timeout para esta verificación
+      });
+      return response.status === 200;
+    } catch (error) {
+      console.error('Error verificando conexión:', error);
+      return false;
+    }
+  },
+
+  // Actualizar la función register
   register: async (userData) => {
     try {
       console.log('Iniciando registro con:', userData);
       
-      // Intentar primero verificar la conexión
-      const isConnected = await apiClient.get('/health').catch(() => false);
+      // Verificar conexión
+      const isConnected = await userService.checkServerConnection();
       if (!isConnected) {
-        throw new Error('No se puede conectar con el servidor');
+        throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
       }
 
       const response = await apiClient.post(ENDPOINTS.REGISTER, userData);
@@ -324,6 +339,10 @@ export const userService = {
 
       return response;
     } catch (error) {
+      if (!error.response) {
+        console.error('Error de conexión:', error);
+        throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
+      }
       console.error('Error detallado en registro:', {
         message: error.message,
         status: error.response?.status,
