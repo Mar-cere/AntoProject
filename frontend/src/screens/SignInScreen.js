@@ -6,13 +6,9 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import ParticleBackground from '../components/ParticleBackground';
-import { userService } from '../services/userService';
+import { api, ENDPOINTS } from '../config/api';
 import { ROUTES } from '../../constants/routes';
-import { handleApiError } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-
-const API_URL = 'https://antobackend.onrender.com';
 
 
 const SignInScreen = () => {
@@ -162,27 +158,45 @@ const SignInScreen = () => {
 
   // Función para manejar el inicio de sesión
   const handleLogin = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
     try {
+      setIsSubmitting(true);
       setIsLoading(true);
-      const response = await userService.login({
+
+      const loginData = {
         email: formData.email.toLowerCase().trim(),
         password: formData.password
-      });
+      };
+
+      console.log('Intentando login con:', loginData);
+
+      const response = await api.post(ENDPOINTS.LOGIN, loginData);
+      console.log('Respuesta del servidor:', response);
 
       if (response.token) {
         await AsyncStorage.setItem('userToken', response.token);
+        // Opcionalmente guardar el email para futuros logins
+        await AsyncStorage.setItem('savedEmail', loginData.email);
+        
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
         });
+      } else {
+        throw new Error('No se recibió token de autenticación');
       }
+
     } catch (error) {
-      console.error('Error en login:', error);
+      console.error('Error detallado:', error);
       Alert.alert(
-        'Error de conexión',
-        error.message || 'No se pudo conectar con el servidor. Por favor, intenta de nuevo.'
+        'Error de inicio de sesión',
+        error.message || 'No se pudo iniciar sesión. Por favor, verifica tus credenciales.'
       );
     } finally {
+      setIsSubmitting(false);
       setIsLoading(false);
     }
   };
@@ -262,12 +276,13 @@ const SignInScreen = () => {
                     <TouchableOpacity
                       onPressIn={handlePressIn}
                       onPress={handleLogin}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isLoading || !formData.email || !formData.password}
                       style={[
                         styles.mainButton,
                         {
                           transform: [{ scale: buttonScale }],
-                          opacity: buttonOpacity
+                          opacity: buttonOpacity,
+                          backgroundColor: (isSubmitting || isLoading) ? 'rgba(26, 221, 219, 0.5)' : 'rgba(26, 221, 219, 0.9)'
                         }
                       ]}
                       activeOpacity={0.8}

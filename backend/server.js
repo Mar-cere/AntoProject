@@ -22,10 +22,11 @@ const server = http.createServer(app);
 
 // Configuración de CORS
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:19006'],
+  origin: ['http://localhost:3000', 'http://localhost:19006', 'https://tuapp.render.com'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
