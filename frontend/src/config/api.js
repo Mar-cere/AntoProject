@@ -36,6 +36,18 @@ const apiClient = axios.create({
   }
 });
 
+// Agregar interceptor para logs detallados
+apiClient.interceptors.request.use(
+  config => {
+    console.log('Realizando petición a:', config.url);
+    return config;
+  },
+  error => {
+    console.error('Error en la petición:', error);
+    return Promise.reject(error);
+  }
+);
+
 // Interceptor para agregar el token a las peticiones
 apiClient.interceptors.request.use(
   async (config) => {

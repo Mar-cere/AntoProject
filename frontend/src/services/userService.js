@@ -306,78 +306,33 @@ export const userService = {
 
   register: async (userData) => {
     try {
-      console.log('Iniciando registro con:', { 
-        email: userData.email,
-        username: userData.username 
-      });
+      console.log('Iniciando registro con:', userData);
+      
+      // Intentar primero verificar la conexión
+      const isConnected = await apiClient.get('/health').catch(() => false);
+      if (!isConnected) {
+        throw new Error('No se puede conectar con el servidor');
+      }
 
-      const response = await apiClient.post('/api/users/register', {
-        email: userData.email.toLowerCase().trim(),
-        username: userData.username.trim(),
-        password: userData.password,
-        name: userData.name?.trim()
-      }, {
-        timeout: 30000, // Aumentar el timeout a 30 segundos
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('Respuesta del servidor:', response.status);
-      return response.data;
+      const response = await apiClient.post(ENDPOINTS.REGISTER, userData);
+      console.log('Respuesta del registro:', response);
+      return response;
     } catch (error) {
       console.error('Error detallado en registro:', {
         message: error.message,
-        code: error.code,
-        response: error.response?.data,
         status: error.response?.status,
-        isAxiosError: error.isAxiosError,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          baseURL: error.config?.baseURL,
-          timeout: error.config?.timeout
-        }
+        data: error.response?.data
       });
-
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('El servidor está tardando en responder. Por favor, intenta de nuevo.');
-      }
-      
-      if (!error.response) {
-        throw new Error('No se pudo conectar con el servidor. Verifica tu conexión a internet.');
-      }
-
       throw error;
     }
   },
 
   login: async (credentials) => {
     try {
-      console.log('Intentando login con:', credentials.email);
-      
-      const response = await apiClient.post(ENDPOINTS.LOGIN, {
-        email: credentials.email.toLowerCase().trim(),
-        password: credentials.password
-      });
-
-      console.log('Respuesta del servidor:', response.status);
-
-      if (response.data.token) {
-        await AsyncStorage.setItem('userToken', response.data.token);
-        if (response.data.user) {
-          await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-        }
-      }
-      
-      return response.data;
+      const response = await apiClient.post(ENDPOINTS.LOGIN, credentials);
+      return response;
     } catch (error) {
-      console.error('Error detallado:', error.response || error);
-      
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('El servidor está tardando en responder. Por favor, intenta de nuevo.');
-      }
-      
+      console.error('Error en login:', error);
       throw error;
     }
   }

@@ -8,6 +8,7 @@ import ParticleBackground from '../components/ParticleBackground';
 import { userService } from '../services/userService';
 import { ROUTES } from '../../constants/routes';
 import { handleApiError, checkServerConnection } from '../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const RegisterScreen = ({ navigation }) => {
   // Referencias para animaciones
@@ -195,47 +196,83 @@ const RegisterScreen = ({ navigation }) => {
   // Manejo del registro usando userService
   const handleRegister = async () => {
     try {
-      setIsLoading(true);
-      setErrors({});
-
-      // Validaciones básicas
-      if (!formData.email || !formData.password || !formData.username) {
-        setErrors({ general: 'Todos los campos son obligatorios' });
+      if (!validateForm()) {
         return;
       }
 
+      setIsSubmitting(true);
+      setIsLoading(true);
+      setErrors({});
+
       console.log('Intentando registrar usuario...');
-      
-      const response = await userService.register({
-        email: formData.email,
+
+      // Verificar conexión primero
+      const isConnected = await checkServerConnection();
+      if (!isConnected) {
+        throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
+      }
+
+      const userData = {
+        email: formData.email.toLowerCase().trim(),
+        username: formData.username.toLowerCase().trim(),
         password: formData.password,
-        username: formData.username,
-        name: formData.username
+        name: formData.username // Si necesitas el campo name
+      };
+
+      console.log('Enviando datos de registro:', {
+        ...userData,
+        password: '***HIDDEN***'
       });
 
-      console.log('Registro exitoso, intentando login...');
+      const response = await userService.register(userData);
+      console.log('Registro exitoso:', response);
 
-      // Intentar login automático después del registro
-      const loginResponse = await userService.login({
-        email: formData.email,
-        password: formData.password
-      });
-
-      if (loginResponse.token) {
+      // Si el registro es exitoso, intentar login automático
+      if (response.token) {
+        // Si el backend devuelve un token directamente, usarlo
+        await AsyncStorage.setItem('userToken', response.token);
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
         });
+      } else {
+        // Si no hay token, hacer login manual
+        console.log('Intentando login después del registro...');
+        const loginResponse = await userService.login({
+          email: userData.email,
+          password: userData.password
+        });
+
+        if (loginResponse.token) {
+          await AsyncStorage.setItem('userToken', loginResponse.token);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: ROUTES.DASHBOARD }],
+          });
+        }
       }
     } catch (error) {
       console.error('Error completo en registro:', error);
       
-      const errorMessage = error.response?.data?.message 
-        || error.message 
-        || 'Error al registrar usuario';
+      let errorMessage = 'Error al registrar usuario';
       
+      if (error.message.includes('Network Error') || error.message.includes('conectar')) {
+        errorMessage = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert(
+        'Error en el registro',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
+
       setErrors({ general: errorMessage });
     } finally {
+      setIsSubmitting(false);
       setIsLoading(false);
     }
   };
