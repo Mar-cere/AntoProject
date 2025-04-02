@@ -4,13 +4,15 @@ import axios from 'axios';
 export const API_URL = 'https://antobackend.onrender.com';
 
 export const ENDPOINTS = {
-  // Usuarios
-  LOGIN: '/api/users/login',
-  REGISTER: '/api/users/register',
-  RECOVER: '/api/users/recover',
-  VERIFY_CODE: '/api/users/verify-code',
-  RESET_PASSWORD: '/api/users/reset-password',
+  // Auth
+  LOGIN: '/api/auth/login',
+  REGISTER: '/api/auth/register',
+  HEALTH: '/api/health',
+  
+  // Users
   ME: '/api/users/me',
+  PROFILE: '/api/users/me',
+  UPDATE_PROFILE: '/api/users/me',
   
   // Tareas
   TASKS: '/api/tasks',
@@ -20,42 +22,33 @@ export const ENDPOINTS = {
   HABITS: '/api/habits',
   HABIT_BY_ID: (id) => `/api/habits/${id}`,
   HABIT_COMPLETE: (id) => `/api/habits/${id}/complete`,
-  
-  // Perfil
-  PROFILE: '/api/users/profile',
-  UPDATE_PROFILE: '/api/users/profile/update'
 };
 
-// Crear instancia de axios
+// Crear instancia de axios con configuración mejorada
 const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 10000, // Reducido a 10 segundos
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   }
 });
 
-// Agregar interceptor para logs detallados
-apiClient.interceptors.request.use(
-  config => {
-    console.log('Realizando petición a:', config.url);
-    return config;
-  },
-  error => {
-    console.error('Error en la petición:', error);
-    return Promise.reject(error);
-  }
-);
-
-// Interceptor para agregar el token a las peticiones
+// Interceptor de request mejorado
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      if (token && !config.url.includes('login') && !config.url.includes('register')) {
-        config.headers.Authorization = `Bearer ${token}`;
+      console.log('Realizando petición a:', config.url);
+      
+      // No añadir token para login, registro o health check
+      const publicRoutes = ['/api/auth/login', '/api/auth/register', '/api/health'];
+      if (!publicRoutes.includes(config.url)) {
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
       }
+      
       return config;
     } catch (error) {
       console.error('Error en interceptor de request:', error);
@@ -68,33 +61,52 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Interceptor para manejar respuestas y errores
+// Interceptor de respuesta mejorado
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    console.log('Respuesta exitosa:', {
+      url: response.config.url,
+      status: response.status,
+      data: response.data
+    });
+    return response.data;
+  },
   async (error) => {
-    console.log('Error en la petición:', {
+    console.error('Error en la petición:', {
       url: error.config?.url,
       method: error.config?.method,
       status: error.response?.status,
-      data: error.response?.data
+      data: error.response?.data,
+      message: error.message
     });
 
     if (error.response?.status === 401) {
-      // Token expirado o inválido
       await AsyncStorage.removeItem('userToken');
-      // Aquí podrías disparar una acción para redireccionar al login
+      // Aquí podrías emitir un evento para manejar la sesión expirada
     }
 
-    throw error;
+    throw handleApiError(error);
   }
 );
 
-// API helper functions
+// Función mejorada para verificar la conexión
+export const checkServerConnection = async () => {
+  try {
+    console.log('Verificando conexión con el servidor...');
+    const response = await apiClient.get(ENDPOINTS.HEALTH);
+    console.log('Servidor respondió:', response);
+    return true;
+  } catch (error) {
+    console.error('Error verificando conexión:', error);
+    throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
+  }
+};
+
+// API helper functions mejoradas
 export const api = {
   get: async (endpoint) => {
     try {
-      const response = await apiClient.get(endpoint);
-      return response;
+      return await apiClient.get(endpoint);
     } catch (error) {
       throw handleApiError(error);
     }
@@ -102,8 +114,7 @@ export const api = {
 
   post: async (endpoint, data) => {
     try {
-      const response = await apiClient.post(endpoint, data);
-      return response;
+      return await apiClient.post(endpoint, data);
     } catch (error) {
       throw handleApiError(error);
     }
@@ -111,8 +122,7 @@ export const api = {
 
   put: async (endpoint, data) => {
     try {
-      const response = await apiClient.put(endpoint, data);
-      return response;
+      return await apiClient.put(endpoint, data);
     } catch (error) {
       throw handleApiError(error);
     }
@@ -120,51 +130,43 @@ export const api = {
 
   delete: async (endpoint) => {
     try {
-      const response = await apiClient.delete(endpoint);
-      return response;
+      return await apiClient.delete(endpoint);
     } catch (error) {
       throw handleApiError(error);
     }
   }
 };
 
-// Función para manejar errores de API
+// Manejo de errores mejorado
 export const handleApiError = (error) => {
   if (axios.isAxiosError(error)) {
     if (!error.response) {
-      return new Error('Error de conexión. Verifica tu conexión a internet.');
+      return new Error('No se pudo conectar con el servidor. Verifica tu conexión a internet.');
     }
     
     const status = error.response.status;
-    const message = error.response.data?.message;
+    const message = error.response.data?.message || 'Error desconocido';
 
     switch (status) {
+      case 400:
+        return new Error(`Error en la solicitud: ${message}`);
       case 401:
-        return new Error(message || 'No autorizado. Por favor, inicia sesión nuevamente.');
+        return new Error('Sesión expirada o inválida. Por favor, inicia sesión nuevamente.');
       case 403:
-        return new Error(message || 'No tienes permiso para realizar esta acción.');
+        return new Error('No tienes permiso para realizar esta acción.');
       case 404:
-        return new Error(message || 'Recurso no encontrado.');
+        return new Error('Recurso no encontrado.');
       case 422:
-        return new Error(message || 'Datos inválidos.');
+        return new Error(`Datos inválidos: ${message}`);
+      case 429:
+        return new Error('Demasiadas peticiones. Por favor, espera un momento.');
       case 500:
-        return new Error(message || 'Error en el servidor. Por favor, intenta más tarde.');
+        return new Error('Error en el servidor. Por favor, intenta más tarde.');
       default:
-        return new Error(message || 'Ocurrió un error inesperado.');
+        return new Error(`Error: ${message}`);
     }
   }
   return error;
-};
-
-// Función para verificar la conexión con el servidor
-export const checkServerConnection = async () => {
-  try {
-    const response = await apiClient.get('/health');
-    return true;
-  } catch (error) {
-    console.error('Error verificando conexión:', error);
-    return false;
-  }
 };
 
 export default apiClient;

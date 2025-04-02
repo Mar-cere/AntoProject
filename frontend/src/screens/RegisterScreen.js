@@ -5,8 +5,8 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import ParticleBackground from '../components/ParticleBackground';
-import { userService } from '../services/userService';
-import { ROUTES } from '../../constants/routes';
+import { api, ENDPOINTS } from '../config/api';
+import { ROUTES } from '../constants/routes';
 import { handleApiError, checkServerConnection } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -206,17 +206,11 @@ const RegisterScreen = ({ navigation }) => {
 
       console.log('Intentando registrar usuario...');
 
-      // Verificar conexión primero
-      const isConnected = await checkServerConnection();
-      if (!isConnected) {
-        throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
-      }
-
       const userData = {
         email: formData.email.toLowerCase().trim(),
         username: formData.username.toLowerCase().trim(),
         password: formData.password,
-        name: formData.username // Si necesitas el campo name
+        name: formData.username
       };
 
       console.log('Enviando datos de registro:', {
@@ -224,21 +218,22 @@ const RegisterScreen = ({ navigation }) => {
         password: '***HIDDEN***'
       });
 
-      const response = await userService.register(userData);
-      console.log('Registro exitoso:', response);
+      // Usar api.post en lugar de userService
+      const response = await api.post(ENDPOINTS.REGISTER, userData);
+      console.log('Respuesta del registro:', response);
 
-      // Si el registro es exitoso, intentar login automático
       if (response.token) {
-        // Si el backend devuelve un token directamente, usarlo
         await AsyncStorage.setItem('userToken', response.token);
+        
+        // Navegar al dashboard
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
         });
       } else {
-        // Si no hay token, hacer login manual
+        // Si no hay token, intentar login
         console.log('Intentando login después del registro...');
-        const loginResponse = await userService.login({
+        const loginResponse = await api.post(ENDPOINTS.LOGIN, {
           email: userData.email,
           password: userData.password
         });
@@ -249,10 +244,12 @@ const RegisterScreen = ({ navigation }) => {
             index: 0,
             routes: [{ name: ROUTES.DASHBOARD }],
           });
+        } else {
+          throw new Error('No se pudo iniciar sesión después del registro');
         }
       }
     } catch (error) {
-      console.error('Error completo en registro:', error);
+      console.error('Error en registro:', error);
       
       let errorMessage = 'Error al registrar usuario';
       

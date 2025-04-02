@@ -171,14 +171,16 @@ const SignInScreen = () => {
         password: formData.password
       };
 
-      console.log('Intentando login con:', loginData);
+      console.log('Intentando login con:', {
+        ...loginData,
+        password: '***HIDDEN***'
+      });
 
       const response = await api.post(ENDPOINTS.LOGIN, loginData);
-      console.log('Respuesta del servidor:', response);
+      console.log('Respuesta del login:', response);
 
       if (response.token) {
         await AsyncStorage.setItem('userToken', response.token);
-        // Opcionalmente guardar el email para futuros logins
         await AsyncStorage.setItem('savedEmail', loginData.email);
         
         navigation.reset({
@@ -190,7 +192,7 @@ const SignInScreen = () => {
       }
 
     } catch (error) {
-      console.error('Error detallado:', error);
+      console.error('Error en login:', error);
       Alert.alert(
         'Error de inicio de sesión',
         error.message || 'No se pudo iniciar sesión. Por favor, verifica tus credenciales.'

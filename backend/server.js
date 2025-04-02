@@ -20,28 +20,50 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Configuración de CORS
+// Configuración de CORS más permisiva
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:19006', 'https://tuapp.render.com'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: '*', // Permite todas las conexiones en desarrollo
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
-// Middleware de seguridad
-app.use(helmet());
+// Middleware de seguridad con configuración más permisiva para desarrollo
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false
+}));
+
+// Middlewares básicos
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(morgan(':method :url :status :response-time ms - :res[content-length] - :remote-addr'));
 
-// Rate limiting
+// Logger solo en desarrollo
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
+
+// Rate limiting más permisivo
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 1000, // Aumentado a 1000 peticiones
+  message: 'Demasiadas peticiones desde esta IP, por favor intente de nuevo más tarde'
 });
-app.use('/api/', limiter);
+
+// Health check antes de rate limiting
+app.get(['/health', '/api/health'], (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV
+  });
+});
+
+// Aplicar rate limiting solo a rutas específicas
+app.use('/api/auth/', limiter);
 
 // Rutas
 app.use('/api/tasks', taskRoutes);
@@ -78,53 +100,35 @@ optionalEnvVars.forEach(varName => {
   }
 });
 
-// Configuración de MongoDB
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
+// Configuración de MongoDB con retry
+const connectMongoDB = async (retries = 5) => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
     console.log('✅ Conectado a MongoDB');
-  })
-  .catch(err => {
-    console.error('❌ Error conectando a MongoDB:', err);
-    process.exit(1);
-  });
+  } catch (err) {
+    if (retries > 0) {
+      console.log(`Reintentando conexión... (${retries} intentos restantes)`);
+      setTimeout(() => connectMongoDB(retries - 1), 5000);
+    } else {
+      console.error('❌ Error conectando a MongoDB:', err);
+      process.exit(1);
+    }
+  }
+};
 
-// Eventos de MongoDB
-mongoose.connection.on('error', err => {
-  console.error('Error de MongoDB:', err);
-});
+connectMongoDB();
 
-mongoose.connection.on('disconnected', () => {
-  console.warn('Desconectado de MongoDB');
-});
-
-// Configurar Socket.IO
-const io = setupSocketIO(server);
-
-// Healthcheck endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-// Ruta no encontrada
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Ruta no encontrada'
-  });
-});
-
-// Middleware de errores
-const errorHandler = (err, req, res, next) => {
+// Manejo de errores mejorado
+app.use((err, req, res, next) => {
   console.error('Error:', {
     message: err.message,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
     path: req.path,
-    method: req.method
+    method: req.method,
+    body: process.env.NODE_ENV === 'development' ? req.body : undefined
   });
 
   res.status(err.status || 500).json({
@@ -132,9 +136,16 @@ const errorHandler = (err, req, res, next) => {
     message: err.message || 'Error interno del servidor',
     error: process.env.NODE_ENV === 'development' ? err : {}
   });
-};
+});
 
-app.use(errorHandler);
+// Ruta no encontrada
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Ruta no encontrada',
+    path: req.originalUrl
+  });
+});
 
 // Iniciar servidor
 const PORT = process.env.PORT || 5001;
@@ -143,8 +154,8 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 // Manejo de cierre graceful
-const gracefulShutdown = async () => {
-  console.log('🔄 Iniciando cierre graceful...');
+const gracefulShutdown = async (signal) => {
+  console.log(`🔄 Iniciando cierre graceful por señal ${signal}...`);
   
   try {
     await server.close();
@@ -160,5 +171,5 @@ const gracefulShutdown = async () => {
   }
 };
 
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
