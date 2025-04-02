@@ -12,17 +12,17 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 
 const userSchema = new mongoose.Schema({
-  // Campos de identificación
   id: {
     type: String,
     required: true,
+    default: () => crypto.randomBytes(16).toString('hex'),
     unique: true
   },
   username: {
     type: String,
     required: true,
-    trim: true,
-    unique: true
+    unique: true,
+    trim: true
   },
   email: {
     type: String,
@@ -35,85 +35,59 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-
-  // Campos de perfil
-  name: {
+  salt: {
     type: String,
-    trim: true
+    required: true
   },
-  avatar: {
-    type: String
-  },
-  points: {
-    type: Number,
-    default: 0
-  },
-
-  // Campos de estado
   isVerified: {
     type: Boolean,
     default: false
   },
-  lastLogin: {
-    type: Date
-  },
-
-  // Preferencias de usuario
+  verificationCode: String,
+  verificationCodeExpires: Date,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+  lastLogin: Date,
   preferences: {
     theme: {
       type: String,
-      default: 'dark'
+      enum: ['light', 'dark'],
+      default: 'light'
     },
     notifications: {
       type: Boolean,
       default: true
-    },
-    language: {
-      type: String,
-      default: 'es'
     }
   }
 }, {
   timestamps: true
 });
 
-// Método para hashear contraseña
-userSchema.methods.hashPassword = function(password) {
-  return crypto
-    .createHash('sha256')
-    .update(password)
-    .digest('hex');
-};
-
-// Middleware para hashear la contraseña antes de guardar
-userSchema.pre('save', function(next) {
-  if (this.isModified('password')) {
-    this.password = this.hashPassword(this.password);
-  }
-  next();
-});
-
-// Método para verificar contraseña
-userSchema.methods.comparePassword = function(candidatePassword) {
-  const hash = this.hashPassword(candidatePassword);
-  return this.password === hash;
-};
-
-// Método para generar el ID único del usuario
+// Middleware pre-save para asegurar que el id existe
 userSchema.pre('save', function(next) {
   if (!this.id) {
-    const timestamp = Date.now().toString(36);
-    const randomStr = Math.random().toString(36).substring(2, 5);
-    this.id = `user_${timestamp}${randomStr}`;
+    this.id = crypto.randomBytes(16).toString('hex');
   }
   next();
 });
 
-// Método para limpiar datos sensibles al convertir a JSON
+// Método para sanitizar el usuario antes de enviarlo
 userSchema.methods.toJSON = function() {
-  const user = this.toObject();
-  delete user.password;
-  return user;
+  const obj = this.toObject();
+  delete obj.password;
+  delete obj.salt;
+  delete obj.__v;
+  delete obj.verificationCode;
+  delete obj.verificationCodeExpires;
+  delete obj.resetPasswordToken;
+  delete obj.resetPasswordExpires;
+  return obj;
+};
+
+// Método para verificar contraseña
+userSchema.methods.verifyPassword = function(password) {
+  const hash = crypto.pbkdf2Sync(password, this.salt, 1000, 64, 'sha512').toString('hex');
+  return this.password === hash;
 };
 
 const User = mongoose.model('User', userSchema);

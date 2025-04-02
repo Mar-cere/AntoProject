@@ -2,6 +2,8 @@ import express from 'express';
 import User from '../models/User.js';
 import { authenticateToken } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import mailer from '../utils/mailer.js';
 
 const router = express.Router();
 
@@ -27,41 +29,61 @@ router.get('/me', authenticateToken, async (req, res) => {
 
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
-    
+    const { email, password, username } = req.body;
+
+    // Validar campos requeridos
+    if (!email || !password || !username) {
+      return res.status(400).json({ 
+        message: 'Todos los campos son requeridos' 
+      });
+    }
+
     // Verificar si el usuario ya existe
-    const existingUser = await User.findOne({
-      $or: [
-        { email: email.toLowerCase() },
-        { username: username.toLowerCase() }
-      ]
+    const existingUser = await User.findOne({ 
+      $or: [{ email }, { username }] 
     });
 
     if (existingUser) {
       return res.status(400).json({ 
-        message: 'El email o nombre de usuario ya está registrado' 
+        message: 'El email o nombre de usuario ya está en uso' 
       });
     }
-    
+
+    // Generar salt y hash de la contraseña
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+
+    // Crear nuevo usuario
     const user = new User({
+      email,
       username,
-      email: email.toLowerCase(),
-      password
+      password: hash,
+      salt,
+      verificationCode: Math.floor(100000 + Math.random() * 900000).toString(),
+      verificationCodeExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 minutos
     });
 
     await user.save();
 
+    // Enviar correo de verificación si está configurado el mailer
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+      try {
+        await mailer.sendVerificationCode(email, user.verificationCode);
+      } catch (emailError) {
+        console.warn('No se pudo enviar el correo de verificación:', emailError);
+      }
+    }
+
     res.status(201).json({
       message: 'Usuario registrado exitosamente',
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email
-      }
+      user: user.toJSON()
     });
+
   } catch (error) {
     console.error('Error en registro:', error);
-    res.status(500).json({ message: 'Error al registrar usuario' });
+    res.status(500).json({ 
+      message: 'Error al registrar usuario' 
+    });
   }
 });
 
