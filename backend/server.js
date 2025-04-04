@@ -68,6 +68,12 @@ app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
 
+// Añade esto después de la configuración de express
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
+});
+
 // Validación de variables de entorno
 const requiredEnvVars = [
   'MONGO_URI',
@@ -96,22 +102,33 @@ optionalEnvVars.forEach(varName => {
   }
 });
 
-// Configuración mejorada de MongoDB
-const connectDB = async () => {
+// Configuración de MongoDB
+const connectDB = async (retries = 5) => {
   try {
+    console.log('📡 Intentando conectar a MongoDB...');
+    
     const mongoOptions = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000, // Timeout de 30 segundos
-      socketTimeoutMS: 45000, // Timeout de 45 segundos
-      family: 4 // Forzar IPv4
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      family: 4,
+      maxPoolSize: 10
     };
 
     await mongoose.connect(process.env.MONGO_URI, mongoOptions);
-    console.log('✅ Conectado a MongoDB');
+    console.log('✅ Conectado a MongoDB exitosamente');
+    return true;
   } catch (error) {
     console.error('❌ Error conectando a MongoDB:', error);
-    process.exit(1);
+    
+    if (retries > 0) {
+      console.log(`🔄 Reintentando conexión... (${retries} intentos restantes)`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      return connectDB(retries - 1);
+    }
+    
+    return false;
   }
 };
 
@@ -143,18 +160,19 @@ app.use('*', (req, res) => {
   });
 });
 
-// Iniciar servidor solo después de conectar a MongoDB
+// Iniciar servidor
 const startServer = async () => {
-  try {
-    await connectDB();
-    
-    app.listen(process.env.PORT || 5001, '0.0.0.0', () => {
-      console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT || 5001}`);
-    });
-  } catch (error) {
-    console.error('Error iniciando servidor:', error);
+  const isConnected = await connectDB();
+  
+  if (!isConnected) {
+    console.error('❌ No se pudo conectar a MongoDB después de varios intentos');
     process.exit(1);
   }
+
+  app.listen(process.env.PORT || 5001, '0.0.0.0', () => {
+    console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT || 5001}`);
+    console.log(`🌍 Ambiente: ${process.env.NODE_ENV}`);
+  });
 };
 
 startServer();

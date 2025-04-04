@@ -37,24 +37,34 @@ const axiosConfig = {
 // Función para verificar la conexión
 export const checkServerConnection = async () => {
   try {
-    console.log('Verificando conexión con:', `${API_URL}/health`);
+    console.log('Verificando conexión con el servidor...');
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(`${API_URL}/health`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json'
-      }
+      },
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`Error de servidor: ${response.status}`);
     }
 
     const data = await response.json();
     console.log('Health check respuesta:', data);
+    
     return true;
   } catch (error) {
-    console.error('Health check error:', error);
+    console.error('Error en health check:', {
+      message: error.message,
+      name: error.name
+    });
     return false;
   }
 };
@@ -62,29 +72,44 @@ export const checkServerConnection = async () => {
 // API helper functions
 export const api = {
   post: async (endpoint, data) => {
+    console.log(`Iniciando petición POST a ${endpoint}`);
+    
     try {
-      console.log(`Iniciando petición POST a ${API_URL}${endpoint}`);
-      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       const responseData = await response.json();
-      
+      console.log(`Respuesta recibida de ${endpoint}:`, responseData);
+
       if (!response.ok) {
-        throw new Error(responseData.message || 'Error en la petición');
+        throw new Error(responseData.message || `Error ${response.status}`);
       }
 
-      console.log(`Respuesta exitosa de ${endpoint}:`, responseData);
       return responseData;
     } catch (error) {
-      console.error(`Error en petición a ${endpoint}:`, error);
-      throw new Error(error.message || 'Error de conexión');
+      console.error(`Error en petición a ${endpoint}:`, {
+        message: error.message,
+        name: error.name,
+        type: error.type
+      });
+
+      if (error.name === 'AbortError') {
+        throw new Error('La petición tardó demasiado tiempo. Por favor, intenta de nuevo.');
+      }
+
+      throw error;
     }
   },
 

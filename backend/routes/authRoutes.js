@@ -14,42 +14,46 @@ router.get('/health', (req, res) => {
 // Registro de usuario
 router.post('/register', async (req, res) => {
   try {
+    console.log('📝 Iniciando registro de usuario...');
     const { email, password, username } = req.body;
 
-    console.log('Recibida petición de registro:', {
+    // Log de datos recibidos
+    console.log('📬 Datos recibidos:', {
       email,
       username,
-      password: '***HIDDEN***'
+      hasPassword: !!password
     });
 
     // Validar campos requeridos
     if (!email || !password || !username) {
-      console.log('Campos faltantes:', { email: !!email, password: !!password, username: !!username });
+      console.log('❌ Campos faltantes');
       return res.status(400).json({ 
         message: 'Todos los campos son requeridos' 
       });
     }
 
-    // Verificar si el usuario ya existe
-    const existingUser = await User.findOne({ 
+    // Verificar si el usuario ya existe con timeout
+    console.log('🔍 Verificando usuario existente...');
+    const existingUserPromise = User.findOne({ 
       $or: [{ email }, { username }] 
-    });
+    }).maxTimeMS(5000); // 5 segundos máximo para la búsqueda
+
+    const existingUser = await existingUserPromise;
 
     if (existingUser) {
-      console.log('Usuario existente encontrado:', {
-        existingEmail: existingUser.email === email,
-        existingUsername: existingUser.username === username
-      });
+      console.log('⚠️ Usuario ya existe');
       return res.status(400).json({ 
         message: 'El email o nombre de usuario ya está en uso' 
       });
     }
 
-    // Generar salt y hash de la contraseña
+    // Generar salt y hash
+    console.log('🔐 Generando hash de contraseña...');
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
 
     // Crear nuevo usuario
+    console.log('👤 Creando nuevo usuario...');
     const user = new User({
       email,
       username,
@@ -66,26 +70,26 @@ router.post('/register', async (req, res) => {
       }
     });
 
-    console.log('Intentando guardar usuario:', {
-      email: user.email,
-      username: user.username
+    // Guardar usuario con timeout
+    console.log('💾 Guardando usuario en la base de datos...');
+    const savePromise = user.save();
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout al guardar usuario')), 10000);
     });
 
-    await user.save();
+    await Promise.race([savePromise, timeoutPromise]);
 
     // Generar token
+    console.log('🎟️ Generando token...');
     const token = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    console.log('Usuario registrado exitosamente:', {
-      id: user.id,
-      email: user.email
-    });
+    console.log('✅ Usuario registrado exitosamente');
 
-    // Responder con éxito
+    // Responder
     res.status(201).json({
       message: 'Usuario registrado exitosamente',
       token,
@@ -93,13 +97,21 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error detallado en registro:', {
+    console.error('❌ Error en registro:', {
+      name: error.name,
       message: error.message,
-      stack: error.stack,
-      name: error.name
+      code: error.code,
+      stack: error.stack
     });
 
     // Manejar errores específicos
+    if (error.name === 'MongooseError' || error.name === 'MongoError') {
+      return res.status(500).json({
+        message: 'Error de conexión con la base de datos',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         message: 'Error de validación',

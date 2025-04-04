@@ -201,8 +201,16 @@ const RegisterScreen = ({ navigation }) => {
       setIsSubmitting(true);
       setIsLoading(true);
 
-      // Verificar conexión primero
+      console.log('Iniciando proceso de registro...');
+
+      // Verificar conexión primero con timeout
+      const connectionTimeout = setTimeout(() => {
+        throw new Error('Tiempo de espera agotado al verificar la conexión');
+      }, 10000);
+
       const isConnected = await checkServerConnection();
+      clearTimeout(connectionTimeout);
+
       if (!isConnected) {
         throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
       }
@@ -213,12 +221,22 @@ const RegisterScreen = ({ navigation }) => {
         password: formData.password
       };
 
-      console.log('Intentando registro con:', {
+      console.log('Enviando datos de registro:', {
         ...userData,
         password: '***HIDDEN***'
       });
 
-      const response = await api.post(ENDPOINTS.REGISTER, userData);
+      // Timeout para la petición de registro
+      const registerPromise = api.post(ENDPOINTS.REGISTER, userData);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Tiempo de espera agotado al intentar registrar'));
+        }, 30000);
+      });
+
+      const response = await Promise.race([registerPromise, timeoutPromise]);
+
+      console.log('Respuesta del registro:', response);
 
       if (response.token) {
         await AsyncStorage.setItem('userToken', response.token);
@@ -231,11 +249,25 @@ const RegisterScreen = ({ navigation }) => {
       }
 
     } catch (error) {
-      console.error('Error en registro:', error);
+      console.error('Error detallado en registro:', {
+        message: error.message,
+        name: error.name,
+        code: error.code
+      });
       
+      let errorMessage = 'Ocurrió un error durante el registro';
+      
+      if (error.message.includes('tiempo de espera')) {
+        errorMessage = 'El servidor está tardando en responder. Por favor, intenta de nuevo.';
+      } else if (error.message.includes('Network Error')) {
+        errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
+      } else {
+        errorMessage = error.message;
+      }
+
       Alert.alert(
         'Error en el registro',
-        error.message || 'Ocurrió un error durante el registro'
+        errorMessage
       );
     } finally {
       setIsSubmitting(false);
