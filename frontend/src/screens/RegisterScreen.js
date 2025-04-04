@@ -9,6 +9,7 @@ import { api, ENDPOINTS } from '../config/api';
 import { ROUTES } from '../constants/routes';
 import { handleApiError, checkServerConnection } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { checkServerStatus } from '../utils/networkUtils';
 
 const RegisterScreen = ({ navigation }) => {
   // Referencias para animaciones
@@ -201,6 +202,12 @@ const RegisterScreen = ({ navigation }) => {
       setIsSubmitting(true);
       setIsLoading(true);
 
+      // Verificar conexión con el servidor
+      const isServerAvailable = await checkServerStatus();
+      if (!isServerAvailable) {
+        throw new Error('El servidor no está disponible en este momento. Por favor, inténtalo más tarde.');
+      }
+
       console.log('Iniciando registro...');
 
       const userData = {
@@ -214,15 +221,34 @@ const RegisterScreen = ({ navigation }) => {
         password: '***HIDDEN***'
       });
 
-      // Usar fetch directamente como en curl
-      const response = await fetch('https://antobackend.onrender.com/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(userData)
-      });
+      // Implementar reintentos para el registro
+      let response;
+      let retries = 3;
+      
+      while (retries > 0) {
+        try {
+          response = await fetch('https://antobackend.onrender.com/api/auth/register', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify(userData),
+            timeout: 15000 // 15 segundos
+          });
+          
+          break; // Si llegamos aquí, la petición fue exitosa
+        } catch (error) {
+          retries--;
+          if (retries === 0) throw error;
+          console.log(`Error en intento de registro. Quedan ${retries} intentos.`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos entre intentos
+        }
+      }
+
+      if (!response) {
+        throw new Error('No se pudo completar el registro después de varios intentos');
+      }
 
       const data = await response.json();
       console.log('Respuesta del servidor:', data);
@@ -243,9 +269,15 @@ const RegisterScreen = ({ navigation }) => {
 
     } catch (error) {
       console.error('Error en registro:', error);
+      let errorMessage = 'Ocurrió un error durante el registro';
+      
+      if (error.message.includes('Network request failed')) {
+        errorMessage = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet y que el servidor esté disponible.';
+      }
+      
       Alert.alert(
         'Error en el registro',
-        error.message || 'Ocurrió un error durante el registro'
+        errorMessage
       );
     } finally {
       setIsSubmitting(false);

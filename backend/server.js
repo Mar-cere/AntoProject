@@ -19,12 +19,17 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Configuración de CORS más permisiva
-app.use(cors({
-  origin: '*',
+// Configuración CORS más permisiva para desarrollo
+const corsOptions = {
+  origin: '*', // Permite todas las conexiones en desarrollo
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
 
 // Middleware de seguridad con configuración más permisiva para desarrollo
 app.use(helmet({
