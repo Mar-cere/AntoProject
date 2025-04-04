@@ -49,8 +49,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Aplicar rate limiting solo a rutas específicas
-app.use('/api/auth/', limiter);
 
 // Rutas
 app.use('/api/tasks', taskRoutes);
