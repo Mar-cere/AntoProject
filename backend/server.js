@@ -4,7 +4,6 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 import taskRoutes from './routes/taskRoutes.js';
 import habitRoutes from './routes/habitRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -41,14 +40,6 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
-
-// Rate limiting más permisivo
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 1000, // Aumentado a 1000 peticiones
-  message: 'Demasiadas peticiones desde esta IP, por favor intente de nuevo más tarde'
-});
-
 // Health check endpoint (antes de cualquier otra ruta)
 app.get('/health', (req, res) => {
   res.json({ 

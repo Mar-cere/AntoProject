@@ -201,19 +201,7 @@ const RegisterScreen = ({ navigation }) => {
       setIsSubmitting(true);
       setIsLoading(true);
 
-      console.log('Iniciando proceso de registro...');
-
-      // Verificar conexión primero con timeout
-      const connectionTimeout = setTimeout(() => {
-        throw new Error('Tiempo de espera agotado al verificar la conexión');
-      }, 10000);
-
-      const isConnected = await checkServerConnection();
-      clearTimeout(connectionTimeout);
-
-      if (!isConnected) {
-        throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
-      }
+      console.log('Iniciando registro...');
 
       const userData = {
         email: formData.email.toLowerCase().trim(),
@@ -221,25 +209,30 @@ const RegisterScreen = ({ navigation }) => {
         password: formData.password
       };
 
-      console.log('Enviando datos de registro:', {
+      console.log('Enviando datos:', {
         ...userData,
         password: '***HIDDEN***'
       });
 
-      // Timeout para la petición de registro
-      const registerPromise = api.post(ENDPOINTS.REGISTER, userData);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('Tiempo de espera agotado al intentar registrar'));
-        }, 30000);
+      // Usar fetch directamente como en curl
+      const response = await fetch('https://antobackend.onrender.com/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(userData)
       });
 
-      const response = await Promise.race([registerPromise, timeoutPromise]);
+      const data = await response.json();
+      console.log('Respuesta del servidor:', data);
 
-      console.log('Respuesta del registro:', response);
+      if (!response.ok) {
+        throw new Error(data.message || 'Error en el registro');
+      }
 
-      if (response.token) {
-        await AsyncStorage.setItem('userToken', response.token);
+      if (data.token) {
+        await AsyncStorage.setItem('userToken', data.token);
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
@@ -249,25 +242,10 @@ const RegisterScreen = ({ navigation }) => {
       }
 
     } catch (error) {
-      console.error('Error detallado en registro:', {
-        message: error.message,
-        name: error.name,
-        code: error.code
-      });
-      
-      let errorMessage = 'Ocurrió un error durante el registro';
-      
-      if (error.message.includes('tiempo de espera')) {
-        errorMessage = 'El servidor está tardando en responder. Por favor, intenta de nuevo.';
-      } else if (error.message.includes('Network Error')) {
-        errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
-      } else {
-        errorMessage = error.message;
-      }
-
+      console.error('Error en registro:', error);
       Alert.alert(
         'Error en el registro',
-        errorMessage
+        error.message || 'Ocurrió un error durante el registro'
       );
     } finally {
       setIsSubmitting(false);
