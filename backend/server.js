@@ -24,8 +24,7 @@ const server = http.createServer(app);
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Middleware de seguridad con configuración más permisiva para desarrollo
@@ -52,7 +51,11 @@ const limiter = rateLimit({
 
 // Health check endpoint (antes de cualquier otra ruta)
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
 });
 
 // Aplicar rate limiting solo a rutas específicas
@@ -93,11 +96,41 @@ optionalEnvVars.forEach(varName => {
   }
 });
 
+// Configuración mejorada de MongoDB
+const connectDB = async () => {
+  try {
+    const mongoOptions = {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 30000, // Timeout de 30 segundos
+      socketTimeoutMS: 45000, // Timeout de 45 segundos
+      family: 4 // Forzar IPv4
+    };
+
+    await mongoose.connect(process.env.MONGO_URI, mongoOptions);
+    console.log('✅ Conectado a MongoDB');
+  } catch (error) {
+    console.error('❌ Error conectando a MongoDB:', error);
+    process.exit(1);
+  }
+};
+
+// Manejo de errores de MongoDB
+mongoose.connection.on('error', (err) => {
+  console.error('Error de MongoDB:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB desconectado - intentando reconectar...');
+  connectDB();
+});
+
 // Manejo de errores global
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
-    message: err.message || 'Error interno del servidor'
+    message: err.message || 'Error interno del servidor',
+    error: process.env.NODE_ENV === 'development' ? err : {}
   });
 });
 
@@ -110,29 +143,31 @@ app.use('*', (req, res) => {
   });
 });
 
-// Iniciar servidor
-const PORT = process.env.PORT || 5001;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor corriendo en el puerto ${PORT} en modo ${process.env.NODE_ENV || 'development'}`);
-});
-
-// Manejo de cierre graceful
-const gracefulShutdown = async (signal) => {
-  console.log(`🔄 Iniciando cierre graceful por señal ${signal}...`);
-  
+// Iniciar servidor solo después de conectar a MongoDB
+const startServer = async () => {
   try {
-    await server.close();
-    console.log('✅ Servidor HTTP cerrado');
+    await connectDB();
     
-    await mongoose.connection.close();
-    console.log('✅ Conexión MongoDB cerrada');
-    
-    process.exit(0);
+    app.listen(process.env.PORT || 5001, '0.0.0.0', () => {
+      console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT || 5001}`);
+    });
   } catch (error) {
-    console.error('❌ Error durante el cierre:', error);
+    console.error('Error iniciando servidor:', error);
     process.exit(1);
   }
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+startServer();
+
+// Manejo de cierre graceful
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM recibido. Cerrando servidor...');
+  await mongoose.connection.close();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT recibido. Cerrando servidor...');
+  await mongoose.connection.close();
+  process.exit(0);
+});

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-// Asegúrate de que esta URL sea correcta
+// Asegúrate de que esta URL sea exactamente la misma que tu servidor
 export const API_URL = 'https://antobackend.onrender.com';
 
 export const ENDPOINTS = {
@@ -25,30 +25,33 @@ export const ENDPOINTS = {
   HABIT_COMPLETE: (id) => `/api/habits/${id}/complete`,
 };
 
-// Configuración de axios mejorada
-const apiClient = axios.create({
-  baseURL: API_URL,
-  timeout: 30000,
+// Configuración base de axios
+const axiosConfig = {
+  timeout: 60000, // 60 segundos
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   }
-});
+};
 
 // Función para verificar la conexión
 export const checkServerConnection = async () => {
   try {
-    const response = await axios({
-      method: 'get',
-      url: `${API_URL}/health`,
-      timeout: 5000,
+    console.log('Verificando conexión con:', `${API_URL}/health`);
+    
+    const response = await fetch(`${API_URL}/health`, {
+      method: 'GET',
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+        'Accept': 'application/json'
       }
     });
-    
-    console.log('Health check response:', response.data);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Health check respuesta:', data);
     return true;
   } catch (error) {
     console.error('Health check error:', error);
@@ -56,58 +59,56 @@ export const checkServerConnection = async () => {
   }
 };
 
-// Interceptor de request simplificado
-apiClient.interceptors.request.use(
-  async (config) => {
-    console.log(`Realizando petición ${config.method.toUpperCase()} a:`, config.url);
-    return config;
-  },
-  (error) => {
-    console.error('Request error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// API helper functions simplificadas
+// API helper functions
 export const api = {
   post: async (endpoint, data) => {
     try {
-      console.log(`Enviando petición a ${endpoint}:`, {
-        ...data,
-        password: data.password ? '***HIDDEN***' : undefined
-      });
+      console.log(`Iniciando petición POST a ${API_URL}${endpoint}`);
       
-      const response = await axios({
-        method: 'post',
-        url: `${API_URL}${endpoint}`,
-        data,
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        timeout: 30000
+        body: JSON.stringify(data)
       });
+
+      const responseData = await response.json();
       
-      console.log(`Respuesta de ${endpoint}:`, response.data);
-      return response.data;
+      if (!response.ok) {
+        throw new Error(responseData.message || 'Error en la petición');
+      }
+
+      console.log(`Respuesta exitosa de ${endpoint}:`, responseData);
+      return responseData;
     } catch (error) {
-      console.error(`Error en ${endpoint}:`, {
-        message: error.message,
-        response: error.response?.data
+      console.error(`Error en petición a ${endpoint}:`, error);
+      throw new Error(error.message || 'Error de conexión');
+    }
+  },
+
+  get: async (endpoint) => {
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
       });
-      throw handleApiError(error);
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Error en la petición');
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`Error en GET ${endpoint}:`, error);
+      throw new Error(error.message || 'Error de conexión');
     }
   }
 };
 
-// Manejo de errores simplificado
-export const handleApiError = (error) => {
-  if (!error.response) {
-    return new Error('No se pudo conectar con el servidor. Verifica tu conexión a internet.');
-  }
-  
-  const message = error.response.data?.message || error.message;
-  return new Error(message);
-};
-
-export default apiClient;
+export default api;

@@ -201,16 +201,25 @@ const RegisterScreen = ({ navigation }) => {
       setIsSubmitting(true);
       setIsLoading(true);
 
+      // Verificar conexión primero
+      const isConnected = await checkServerConnection();
+      if (!isConnected) {
+        throw new Error('No se puede conectar con el servidor. Por favor, verifica tu conexión.');
+      }
+
       const userData = {
         email: formData.email.toLowerCase().trim(),
         username: formData.username.toLowerCase().trim(),
         password: formData.password
       };
 
-      console.log('Intentando registro...');
-      
+      console.log('Intentando registro con:', {
+        ...userData,
+        password: '***HIDDEN***'
+      });
+
       const response = await api.post(ENDPOINTS.REGISTER, userData);
-      
+
       if (response.token) {
         await AsyncStorage.setItem('userToken', response.token);
         navigation.reset({
@@ -222,9 +231,11 @@ const RegisterScreen = ({ navigation }) => {
       }
 
     } catch (error) {
+      console.error('Error en registro:', error);
+      
       Alert.alert(
         'Error en el registro',
-        error.message
+        error.message || 'Ocurrió un error durante el registro'
       );
     } finally {
       setIsSubmitting(false);
