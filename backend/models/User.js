@@ -20,20 +20,23 @@ const userSchema = new mongoose.Schema({
   },
   username: {
     type: String,
-    required: true,
+    required: [true, 'El nombre de usuario es requerido'],
     unique: true,
-    trim: true
+    trim: true,
+    minlength: [3, 'El nombre de usuario debe tener al menos 3 caracteres'],
+    maxlength: [20, 'El nombre de usuario debe tener máximo 20 caracteres']
   },
   email: {
     type: String,
-    required: true,
+    required: [true, 'El correo electrónico es requerido'],
     unique: true,
     trim: true,
-    lowercase: true
+    lowercase: true,
+    match: [/^\S+@\S+\.\S+$/, 'Por favor ingresa un correo válido']
   },
   password: {
     type: String,
-    required: true
+    required: [true, 'La contraseña es requerida']
   },
   salt: {
     type: String,

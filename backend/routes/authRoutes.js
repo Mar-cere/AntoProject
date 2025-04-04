@@ -16,8 +16,15 @@ router.post('/register', async (req, res) => {
   try {
     const { email, password, username } = req.body;
 
+    console.log('Recibida petición de registro:', {
+      email,
+      username,
+      password: '***HIDDEN***'
+    });
+
     // Validar campos requeridos
     if (!email || !password || !username) {
+      console.log('Campos faltantes:', { email: !!email, password: !!password, username: !!username });
       return res.status(400).json({ 
         message: 'Todos los campos son requeridos' 
       });
@@ -29,6 +36,10 @@ router.post('/register', async (req, res) => {
     });
 
     if (existingUser) {
+      console.log('Usuario existente encontrado:', {
+        existingEmail: existingUser.email === email,
+        existingUsername: existingUser.username === username
+      });
       return res.status(400).json({ 
         message: 'El email o nombre de usuario ya está en uso' 
       });
@@ -43,7 +54,21 @@ router.post('/register', async (req, res) => {
       email,
       username,
       password: hash,
-      salt
+      salt,
+      preferences: {
+        theme: 'light',
+        notifications: true
+      },
+      stats: {
+        tasksCompleted: 0,
+        habitsStreak: 0,
+        lastActive: new Date()
+      }
+    });
+
+    console.log('Intentando guardar usuario:', {
+      email: user.email,
+      username: user.username
     });
 
     await user.save();
@@ -55,7 +80,12 @@ router.post('/register', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Responder inmediatamente
+    console.log('Usuario registrado exitosamente:', {
+      id: user.id,
+      email: user.email
+    });
+
+    // Responder con éxito
     res.status(201).json({
       message: 'Usuario registrado exitosamente',
       token,
@@ -63,9 +93,29 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en registro:', error);
+    console.error('Error detallado en registro:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+
+    // Manejar errores específicos
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        message: 'Error de validación',
+        errors: Object.values(error.errors).map(err => err.message)
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        message: 'El email o nombre de usuario ya está en uso'
+      });
+    }
+
     res.status(500).json({ 
-      message: 'Error al registrar usuario' 
+      message: 'Error al registrar usuario',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
