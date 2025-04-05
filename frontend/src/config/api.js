@@ -1,8 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkServerStatus } from '../utils/networkUtils';
+import { Platform } from 'react-native';
+
+// Detectar si estamos en simulador
+const isSimulator = Platform.OS === 'ios' && Platform.isPad === undefined && !Platform.isTVOS;
 
 // Asegúrate de que esta URL sea exactamente la misma que tu servidor
-export const API_URL = 'https://antobackend.onrender.com';
+export const API_URL = isSimulator 
+  ? 'http://localhost:5001'  // URL local para simulador
+  : 'https://antobackend.onrender.com'; // URL de producción para dispositivos reales
+
+console.log('Usando API_URL:', API_URL);
 
 export const ENDPOINTS = {
   // Auth
@@ -60,14 +68,9 @@ const makeRequest = (url, options) => {
 export const api = {
   post: async (endpoint, data) => {
     try {
-      const isServerAvailable = await checkServerStatus();
-      if (!isServerAvailable) {
-        throw new Error('El servidor no está disponible en este momento');
-      }
-
       console.log(`Iniciando petición a ${endpoint}`);
       
-      const response = await makeRequest(`${API_URL}${endpoint}`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,8 +79,14 @@ export const api = {
         body: JSON.stringify(data)
       });
 
-      console.log(`Respuesta de ${endpoint}:`, response);
-      return response;
+      const responseData = await response.json();
+      console.log(`Respuesta de ${endpoint}:`, responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.message || 'Error en la petición');
+      }
+
+      return responseData;
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
       throw error;
@@ -86,14 +95,20 @@ export const api = {
 
   get: async (endpoint) => {
     try {
-      const response = await makeRequest(`${API_URL}${endpoint}`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json'
         }
       });
 
-      return response;
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Error en la petición');
+      }
+
+      return data;
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
       throw error;

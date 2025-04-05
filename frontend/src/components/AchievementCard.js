@@ -134,8 +134,8 @@ const AchievementCard = memo(() => {
     achievementCardContainer: {
         backgroundColor: 'rgba(29, 43, 95, 0.8)',
         borderRadius: 15,
-        padding: 8,
-        marginBottom: 16,
+        padding: 4,
+        marginBottom: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
@@ -148,7 +148,7 @@ const AchievementCard = memo(() => {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 14,
       },
       achievementTitleContainer: {
         flexDirection: 'row',

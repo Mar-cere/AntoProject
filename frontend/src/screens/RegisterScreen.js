@@ -203,12 +203,20 @@ const RegisterScreen = ({ navigation }) => {
       setIsLoading(true);
 
       // Verificar conexión con el servidor
-      const isServerAvailable = await checkServerStatus();
+      const isServerAvailable = await checkServerStatus(3);
       if (!isServerAvailable) {
-        throw new Error('El servidor no está disponible en este momento. Por favor, inténtalo más tarde.');
+        Alert.alert(
+          'Error de conexión',
+          'No se pudo establecer conexión con el servidor. Por favor:\n\n' +
+          '1. Verifica tu conexión a internet\n' +
+          '2. Espera unos minutos y vuelve a intentar\n' +
+          '3. Si el problema persiste, contacta al soporte',
+          [{ text: 'Entendido' }]
+        );
+        return;
       }
 
-      console.log('Iniciando registro...');
+      console.log('Servidor disponible, iniciando registro...');
 
       const userData = {
         email: formData.email.toLowerCase().trim(),
@@ -221,34 +229,16 @@ const RegisterScreen = ({ navigation }) => {
         password: '***HIDDEN***'
       });
 
-      // Implementar reintentos para el registro
-      let response;
-      let retries = 3;
-      
-      while (retries > 0) {
-        try {
-          response = await fetch('https://antobackend.onrender.com/api/auth/register', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(userData),
-            timeout: 15000 // 15 segundos
-          });
-          
-          break; // Si llegamos aquí, la petición fue exitosa
-        } catch (error) {
-          retries--;
-          if (retries === 0) throw error;
-          console.log(`Error en intento de registro. Quedan ${retries} intentos.`);
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos entre intentos
-        }
-      }
-
-      if (!response) {
-        throw new Error('No se pudo completar el registro después de varios intentos');
-      }
+      const response = await fetch('https://antobackend.onrender.com/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(userData)
+      });
 
       const data = await response.json();
       console.log('Respuesta del servidor:', data);
@@ -268,16 +258,22 @@ const RegisterScreen = ({ navigation }) => {
       }
 
     } catch (error) {
-      console.error('Error en registro:', error);
+      console.error('Error detallado:', error);
       let errorMessage = 'Ocurrió un error durante el registro';
       
       if (error.message.includes('Network request failed')) {
-        errorMessage = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet y que el servidor esté disponible.';
+        errorMessage = 'Error de conexión. Por favor:\n\n' +
+          '1. Verifica tu conexión a internet\n' +
+          '2. Intenta nuevamente en unos momentos\n' +
+          '3. Si el problema persiste, contacta al soporte';
+      } else if (error.message.includes('already exists')) {
+        errorMessage = 'El email o nombre de usuario ya está registrado';
       }
       
       Alert.alert(
         'Error en el registro',
-        errorMessage
+        errorMessage,
+        [{ text: 'Entendido' }]
       );
     } finally {
       setIsSubmitting(false);

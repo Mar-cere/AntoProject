@@ -15,10 +15,13 @@ import AchievementCard from '../components/AchievementCard';
 import motivationalQuotes from '../data/quotes';
 import FloatingNavBar from '../components/FloatingNavBar';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Header from '../components/Header';
+import QuoteSection from '../components/QuoteSection';
+import { usePoints } from '../components/Points';
+import { API_URL } from '../config/api';
+import DashboardScroll from '../components/DashboardScroll';
 
 const screenWidth = Dimensions.get('window').width;
-
-const API_URL = 'https://antobackend.onrender.com';
 
 // Constantes
 const POINTS = {
@@ -53,346 +56,95 @@ const ErrorMessage = ({ message, onRetry, onDismiss }) => (
   </View>
 );
 
-const Header = memo(({ greeting, userName, userPoints, userAvatar }) => {
-  const navigation = useNavigation();
-  
-  return (
-    <View style={styles.headerContainer}>
-      <View style={styles.headerLeft}>
-        <Text style={styles.greeting}>{greeting}</Text>
-        <Text style={styles.userName}>{userName}</Text>
-      </View>
-      <View style={styles.headerRight}>
-        <View style={styles.pointsContainer}>
-          <MaterialCommunityIcons name="star" size={20} color="#FFD700" />
-          <Text style={styles.pointsText}>{userPoints}</Text>
-        </View>
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Profile')}
-          style={styles.avatarContainer}
-        >
-          {userAvatar ? (
-            <Image 
-              source={{ uri: userAvatar }} 
-              style={styles.avatar}
-              defaultSource={require('../images/avatar.png')}
-            />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <MaterialCommunityIcons name="account" size={24} color="#A3B8E8" />
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-});
-
 const DashScreen = () => {
-  // 1. Todos los useContext
   const navigation = useNavigation();
+  const { points, addPoints } = usePoints(0);
   
-  // 2. Todos los useState en orden alfabético
-  const [error, setError] = useState(null);
-  const [greeting, setGreeting] = useState('');
-  const [habits, setHabits] = useState([]);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [navigationDestination, setNavigationDestination] = useState(null);
-  const [quote, setQuote] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const [tasks, setTasks] = useState([]);
-  const [userAchievements, setUserAchievements] = useState(ACHIEVEMENTS);
-  const [userData, setUserData] = useState(null);
-  const [userAvatar, setUserAvatar] = useState(null);
-  const [userName, setUserName] = useState('Usuario');
-  const [userPoints, setUserPoints] = useState(0);
+  const [state, setState] = useState({
+    loading: true,
+    error: null,
+    refreshing: false,
+    userData: null,
+    tasks: [],
+    habits: [],
+    achievements: [],
+    greeting: ''
+  });
 
-  // 3. Todos los useRef
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const floatingBarAnim = useRef(new Animated.Value(100)).current;
-  const floatingBarOpacity = useRef(new Animated.Value(0)).current;
-  const translateYAnim = useRef(new Animated.Value(20)).current;
-
-  // 4. Todos los useCallback
   const loadData = useCallback(async () => {
     try {
-      if (!refreshing) {
-        setLoading(true);
-      }
-      setError(null);
-      
       const token = await AsyncStorage.getItem('userToken');
-      console.log('Token actual:', token);
-
       if (!token) {
         navigation.navigate('SignIn');
         return;
       }
 
-      // Decodificar el token para obtener la información del usuario
-      const tokenParts = token.split('.');
-      const payload = JSON.parse(atob(tokenParts[1]));
-      console.log('Token decodificado:', payload);
-
-      // Primero intentamos obtener los datos del usuario
-      const userResponse = await fetch(`${API_URL}/api/users/me`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!userResponse.ok) {
-        throw new Error('Error al cargar datos del usuario');
-      }
-
-      const userData = await userResponse.json();
-      setUserName(userData.username || userData.name || 'Usuario');
-      setUserAvatar(userData.avatar);
-      setUserPoints(userData.points || 0);
-
-      // Cargar el resto de los datos
-      try {
-        // Cargar tareas
-        const tasksResponse = await fetch(`${API_URL}/api/tasks`, {
+      const [userData, tasks, habits, achievements] = await Promise.all([
+        fetch(`${API_URL}/api/users/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (tasksResponse.ok) {
-          const tasksData = await tasksResponse.json();
-          setTasks(tasksData);
-        }
-
-        // Cargar hábitos
-        const habitsResponse = await fetch(`${API_URL}/api/habits`, {
+        }).then(res => res.json()),
+        fetch(`${API_URL}/api/tasks`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (habitsResponse.ok) {
-          const habitsData = await habitsResponse.json();
-          setHabits(habitsData);
-        }
-
-        // Cargar logros
-        const achievementsResponse = await fetch(`${API_URL}/api/achievements`, {
+        }).then(res => res.json()),
+        fetch(`${API_URL}/api/habits`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (achievementsResponse.ok) {
-          const achievementsData = await achievementsResponse.json();
-          setUserAchievements(achievementsData);
-        }
-      } catch (dataError) {
-        console.error('Error cargando datos adicionales:', dataError);
-      }
+        }).then(res => res.json()),
+        fetch(`${API_URL}/api/achievements`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => res.json())
+      ]);
 
-      // Establecer saludo según la hora
       const currentHour = new Date().getHours();
-      const greeting = currentHour >= 6 && currentHour < 12 ? 'Buenos días' :
-                      currentHour >= 12 && currentHour < 18 ? 'Buenas tardes' :
+      const greeting = currentHour < 12 ? 'Buenos días' :
+                      currentHour < 18 ? 'Buenas tardes' :
                       'Buenas noches';
-      setGreeting(greeting);
 
-      // Animación de entrada
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateYAnim, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        refreshing: false,
+        userData,
+        tasks,
+        habits,
+        achievements,
+        greeting
+      }));
 
     } catch (error) {
-      console.error('Error completo:', error);
-      setError('No se pudieron cargar los datos. Por favor, intenta de nuevo.');
-      
-      if (error.message.includes('401') || error.message.includes('403')) {
+      console.error('Error:', error);
+      if (error.message.includes('401')) {
         await AsyncStorage.removeItem('userToken');
         navigation.reset({
           index: 0,
           routes: [{ name: 'SignIn' }],
         });
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setState(prev => ({
+        ...prev,
+        error: 'No se pudieron cargar los datos',
+        loading: false,
+        refreshing: false
+      }));
     }
-  }, [refreshing, navigation, fadeAnim, translateYAnim]);
+  }, [navigation]);
 
-  const handleRefresh = useCallback(() => {
-    setRefreshing(true);
+  useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const checkAchievements = useCallback(async (points) => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const completedTasks = tasks.filter(task => task.completed).length;
-      
-      // Actualizar logros en el backend
-      const response = await fetch(`${API_URL}/api/achievements/check`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          completedTasks,
-          points,
-          habits: habits.length,
-          streaks: habits.filter(h => h.streak > 0).length
-        })
-      });
+  const handleScroll = useCallback((event) => {
+    // Aquí puedes manejar el evento de scroll
+    const offsetY = event.nativeEvent.contentOffset.y;
+    // Hacer algo con offsetY si es necesario
+  }, []);
 
-      if (!response.ok) {
-        throw new Error('Error al actualizar logros');
-      }
-
-      const { newAchievements, totalPoints } = await response.json();
-
-      // Mostrar notificaciones para nuevos logros
-      newAchievements.forEach(achievement => {
-        Alert.alert(
-          '¡Logro desbloqueado!',
-          `Has desbloqueado: ${achievement.title}\n+${achievement.points} puntos`,
-          [{ text: 'Genial', style: 'default' }]
-        );
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      });
-
-      // Actualizar estado
-      setUserPoints(totalPoints);
-      loadData(); // Recargar datos actualizados
-
-    } catch (error) {
-      console.error('Error al verificar logros:', error);
-    }
-  }, [tasks, habits, loadData]);
-
-  const handleCompleteTask = useCallback((taskId) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    setTasks(prevTasks => {
-      const updatedTasks = prevTasks.map(task => 
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      );
-      
-      // Guardar en AsyncStorage
-      AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
-      
-      return updatedTasks;
-    });
-    
-    // Actualizar puntos si la tarea se completa
-    const task = tasks.find(t => t.id === taskId);
-    if (task && !task.completed) {
-      const newPoints = userPoints + POINTS.COMPLETE_TASK;
-      setUserPoints(newPoints);
-      AsyncStorage.setItem('userPoints', newPoints.toString());
-      
-      // Verificar logros
-      checkAchievements(newPoints);
-    }
-  }, [tasks, userPoints, checkAchievements]);
-
-  const handleCenterButton = useCallback((navigateTo) => {
-    Animated.parallel([]).start(() => {
-      if (navigateTo) navigation.navigate(navigateTo);
-    });
-  }, [navigation]);
-
-  // 5. Todos los useEffect
-  useEffect(() => {
-    if (navigationDestination) {
-      const timer = setTimeout(() => {
-        navigation.navigate(navigationDestination);
-        setNavigationDestination(null);
-      }, 0);
-      return () => clearTimeout(timer);
-    }
-  }, [navigationDestination, navigation]);
-
-  useEffect(() => {
-    loadData().finally(() => {
-      setIsInitialLoad(false);
-    });
-  }, [loadData]);
-
-  useEffect(() => {
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.spring(floatingBarAnim, {
-          toValue: 0,
-          friction: 6,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatingBarOpacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        })
-      ]).start();
-    }, 800);
-  }, [floatingBarAnim, floatingBarOpacity]);
-
-  // Renderizado condicional
-  if (isInitialLoad) {
+  if (state.loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color="#1ADDDB" />
       </View>
     );
   }
-
-  if (loading && !refreshing) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <StatusBar barStyle="light-content" backgroundColor="#030A24" />
-        <ActivityIndicator size="large" color="#1ADDDB" />
-        <Text style={styles.loadingText}>Cargando tu dashboard...</Text>
-      </View>
-    );
-  }
-
-  if (error && !refreshing) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <StatusBar barStyle="light-content" backgroundColor="#030A24" />
-        <ErrorMessage 
-          message={error}
-          onRetry={loadData}
-          onDismiss={() => setError(null)}
-        />
-      </View>
-    );
-  }
-  
-  const handleLogout = async () => {
-    try {
-      // Limpiar datos de autenticación
-      await AsyncStorage.removeItem('userData');
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('userName');
-      await AsyncStorage.removeItem('userAvatar');
-      
-      // Navegar a la pantalla de inicio de sesión
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'SignIn' }], // Ajusta esto al nombre exacto de tu ruta
-      });
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-      Alert.alert('Error', 'No se pudo cerrar sesión. Intenta de nuevo.');
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -404,45 +156,48 @@ const DashScreen = () => {
       >
         <ParticleBackground />
         
-        <ScrollView 
-          style={styles.contentContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor="#1ADDDB"
-              colors={["#1ADDDB"]}
-              progressBackgroundColor="rgba(29, 43, 95, 0.8)"
-            />
-          }
+        {/* Header fijo */}
+        <View style={styles.headerFixed}>
+          <Header 
+            greeting={state.greeting}
+            userName={state.userData?.username}
+            userPoints={points}
+            userAvatar={state.userData?.avatar}
+          />
+        </View>
+
+        {/* Contenido scrolleable */}
+        <DashboardScroll 
+          refreshing={state.refreshing}
+          onRefresh={() => {
+            setState(prev => ({ ...prev, refreshing: true }));
+            loadData();
+          }}
         >
-          <Animated.View
-            style={{
-              opacity: fadeAnim,
-              transform: [{ translateY: translateYAnim }],
+          <QuoteSection />
+          
+          <TaskCard 
+            tasks={state.tasks}
+            onComplete={async (taskId) => {
+              const newPoints = await addPoints(10, 'complete_task');
             }}
-          >
-            <Header greeting={greeting} userName={userName} userPoints={userPoints} userAvatar={userAvatar} />
-            
-            <View style={styles.sectionContainer}>
-              <Text style={styles.quoteText}>"{quote}"</Text>
-            </View>
-            
-            <TaskCard />
-            <HabitCard />
-            <AchievementCard />
-          </Animated.View>
-        </ScrollView>
+          />
+          
+          <HabitCard 
+            habits={state.habits}
+            onUpdate={async (habitId) => {
+              const newPoints = await addPoints(20, 'maintain_habit');
+            }}
+          />
+          
+          <AchievementCard 
+            achievements={state.achievements}
+          />
+        </DashboardScroll>
         
         <FloatingNavBar 
           activeTab="Dash"
-          onTabPress={(screen) => {
-            navigation.navigate(screen);
-          }}
-          animValues={{
-            translateY: floatingBarAnim,
-            opacity: floatingBarOpacity
-          }}
+          onTabPress={(screen) => navigation.navigate(screen)}
         />
       </ImageBackground>
     </View>
@@ -586,6 +341,13 @@ const styles = StyleSheet.create({
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerFixed: {
+    backgroundColor: '#030A24',
+    paddingTop: StatusBar.currentHeight || 44, // Espacio para la barra de estado
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(163, 184, 232, 0.1)', // Línea sutil de separación
+    zIndex: 2, // Asegura que el header esté por encima del scroll
   },
 });
 

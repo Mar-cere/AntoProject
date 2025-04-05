@@ -1,42 +1,44 @@
-const checkServerStatus = (retries = 3) => {
-  return new Promise((resolve, reject) => {
-    const API_URL = 'https://antobackend.onrender.com';
-    let currentTry = 0;
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    const tryConnection = () => {
-      console.log(`Intento ${currentTry + 1} de ${retries} para verificar el servidor...`);
+const checkServerStatus = async (maxRetries = 3) => {
+  const API_URL = 'https://antobackend.onrender.com';
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      console.log(`Intento ${attempt + 1} de ${maxRetries} para verificar el servidor...`);
       
-      const xhr = new XMLHttpRequest();
-      xhr.timeout = 10000; // 10 segundos
-
-      xhr.onload = function() {
-        if (xhr.status === 200) {
-          console.log('Estado del servidor:', xhr.responseText);
-          resolve(true);
-        } else {
-          handleError();
-        }
-      };
-
-      xhr.onerror = handleError;
-      xhr.ontimeout = handleError;
-
-      function handleError() {
-        console.log(`Intento ${currentTry + 1} falló`);
-        currentTry++;
-        if (currentTry < retries) {
-          setTimeout(tryConnection, 2000);
-        } else {
-          resolve(false);
-        }
+      // Tiempo de espera exponencial: 2^attempt segundos (2, 4, 8 segundos)
+      if (attempt > 0) {
+        const backoffTime = Math.min(1000 * Math.pow(2, attempt), 8000);
+        console.log(`Esperando ${backoffTime/1000} segundos antes del siguiente intento...`);
+        await wait(backoffTime);
       }
 
-      xhr.open('GET', `${API_URL}/health`);
-      xhr.send();
-    };
+      const response = await fetch(`${API_URL}/health`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+      });
 
-    tryConnection();
-  });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Servidor respondió exitosamente:', data);
+        return true;
+      }
+    } catch (error) {
+      console.log(`Intento ${attempt + 1} falló:`, error.message);
+      
+      // Si es el último intento, informamos del fallo
+      if (attempt === maxRetries - 1) {
+        console.error('No se pudo establecer conexión con el servidor después de', maxRetries, 'intentos');
+        return false;
+      }
+    }
+  }
+  return false;
 };
 
 export { checkServerStatus }; 
