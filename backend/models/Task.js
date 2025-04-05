@@ -24,6 +24,27 @@ const taskSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Nuevo campo para distinguir entre tareas y recordatorios
+  itemType: {
+    type: String,
+    enum: ['task', 'reminder'],
+    default: 'task'
+  },
+  // Campos específicos para recordatorios
+  isReminder: {
+    type: Boolean,
+    default: false
+  },
+  // Campo para notificaciones (lo usaremos más adelante)
+  notification: {
+    enabled: {
+      type: Boolean,
+      default: false
+    },
+    time: {
+      type: Date
+    }
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -42,33 +63,48 @@ const taskSchema = new mongoose.Schema({
 // Middleware para actualizar updatedAt antes de cada actualización
 taskSchema.pre('save', function(next) {
   this.updatedAt = new Date();
+  // Actualizar isReminder basado en itemType
+  this.isReminder = this.itemType === 'reminder';
   next();
 });
 
-// Índices para mejorar el rendimiento de las consultas
+// Índices actualizados
 taskSchema.index({ userId: 1, dueDate: 1 });
 taskSchema.index({ userId: 1, completed: 1 });
+taskSchema.index({ userId: 1, itemType: 1 }); // Nuevo índice para filtrar por tipo
 
 // Método para marcar una tarea como completada
 taskSchema.methods.markAsCompleted = function() {
-  this.completed = true;
-  this.completedAt = new Date();
-  return this.save();
+  if (this.itemType === 'task') {
+    this.completed = true;
+    this.completedAt = new Date();
+    return this.save();
+  }
+  throw new Error('Los recordatorios no pueden marcarse como completados');
 };
 
-// Método para verificar si una tarea está vencida
+// Método para verificar si una tarea/recordatorio está vencido
 taskSchema.methods.isOverdue = function() {
-  if (!this.dueDate || this.completed) return false;
+  if (!this.dueDate || (this.itemType === 'task' && this.completed)) return false;
   return new Date() > this.dueDate;
 };
 
-// Método estático para obtener tareas pendientes
-taskSchema.statics.getPendingTasks = function(userId) {
-  return this.find({
+// Método estático para obtener tareas pendientes (incluyendo recordatorios)
+taskSchema.statics.getPendingItems = function(userId, type = null) {
+  const query = {
     userId,
-    completed: false,
     dueDate: { $gte: new Date() }
-  }).sort({ dueDate: 1 });
+  };
+  
+  if (type) {
+    query.itemType = type;
+  }
+  
+  if (type === 'task') {
+    query.completed = false;
+  }
+
+  return this.find(query).sort({ dueDate: 1 });
 };
 
 // Método estático para obtener estadísticas
@@ -77,14 +113,26 @@ taskSchema.statics.getStats = async function(userId) {
     { $match: { userId: mongoose.Types.ObjectId(userId) } },
     {
       $group: {
-        _id: null,
+        _id: '$itemType',
         total: { $sum: 1 },
-        completed: { $sum: { $cond: ['$completed', 1, 0] } },
+        completed: { 
+          $sum: { 
+            $cond: [
+              { $and: [
+                { $eq: ['$itemType', 'task'] },
+                '$completed'
+              ]}, 
+              1, 
+              0
+            ] 
+          }
+        },
         overdue: {
           $sum: {
             $cond: [
               {
                 $and: [
+                  { $eq: ['$itemType', 'task'] },
                   { $not: '$completed' },
                   { $lt: ['$dueDate', new Date()] }
                 ]
@@ -99,7 +147,7 @@ taskSchema.statics.getStats = async function(userId) {
   ]);
 };
 
-// Agregar validación para la fecha de vencimiento
+// Validación de fecha de vencimiento
 taskSchema.path('dueDate').validate(function(value) {
   if (value && value < new Date()) {
     throw new Error('La fecha de vencimiento no puede ser anterior a la fecha actual');
@@ -107,38 +155,27 @@ taskSchema.path('dueDate').validate(function(value) {
   return true;
 });
 
-// Agregar un método para obtener tareas por categoría
-taskSchema.statics.getTasksByCategory = function(userId, category) {
-  return this.find({
-    userId,
-    category,
-    completed: false
-  }).sort({ dueDate: 1 });
-};
+// Método para obtener items por tipo y fecha
+taskSchema.statics.getItemsByDate = function(userId, date, type = null) {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setDate(endOfDay.getDate() + 1);
 
-// Agregar un método para obtener tareas por prioridad
-taskSchema.statics.getTasksByPriority = function(userId, priority) {
-  return this.find({
-    userId,
-    priority,
-    completed: false
-  }).sort({ dueDate: 1 });
-};
-
-// Agregar un método para obtener tareas para hoy
-taskSchema.statics.getTodayTasks = function(userId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  return this.find({
+  const query = {
     userId,
     dueDate: {
-      $gte: today,
-      $lt: tomorrow
+      $gte: startOfDay,
+      $lt: endOfDay
     }
-  }).sort({ priority: -1 });
+  };
+
+  if (type) {
+    query.itemType = type;
+  }
+
+  return this.find(query).sort({ dueDate: 1 });
 };
 
 const Task = mongoose.models.Task || mongoose.model('Task', taskSchema);

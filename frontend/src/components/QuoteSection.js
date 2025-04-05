@@ -77,8 +77,8 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 4,
     marginBottom: 10,
-    borderLeftWidth: 2,
-    borderLeftColor: '#1ADDDB',
+    borderWidth: 1,
+    borderColor: '#1ADDDB',
   },
   quoteContainer: {
     flexDirection: 'row',

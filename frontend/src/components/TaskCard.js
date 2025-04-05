@@ -10,23 +10,23 @@ const API_URL = 'https://antobackend.onrender.com';
 // Componente de tarjeta de tareas
 const TaskCard = memo(() => {
     const navigation = useNavigation();
-    const [tasks, setTasks] = useState([]);
+    const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
   
     // Cargar tareas
-    const loadTasks = useCallback(async () => {
+    const loadItems = useCallback(async () => {
       try {
         setLoading(true);
         const token = await AsyncStorage.getItem('userToken');
         
-        console.log('Intentando cargar tareas con token:', token);
+        console.log('Intentando cargar items pendientes con token:', token);
 
         const response = await fetch(`${API_URL}/api/tasks/pending`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` // Asegurarnos de que el formato sea correcto
+            'Authorization': `Bearer ${token}`
           }
         });
 
@@ -39,7 +39,14 @@ const TaskCard = memo(() => {
         }
 
         const data = JSON.parse(responseText);
-        setTasks(data);
+        // Ordenar por fecha y tipo (recordatorios primero)
+        const sortedItems = data.sort((a, b) => {
+          if (a.itemType !== b.itemType) {
+            return a.itemType === 'reminder' ? -1 : 1;
+          }
+          return new Date(a.dueDate) - new Date(b.dueDate);
+        });
+        setItems(sortedItems);
       } catch (error) {
         console.error('Error completo:', error);
         if (error.message.includes('401') || error.message.includes('403')) {
@@ -52,7 +59,7 @@ const TaskCard = memo(() => {
             routes: [{ name: 'SignIn' }],
           });
         } else {
-          Alert.alert('Error', 'No se pudieron cargar las tareas');
+          Alert.alert('Error', 'No se pudieron cargar los items');
         }
       } finally {
         setLoading(false);
@@ -60,23 +67,37 @@ const TaskCard = memo(() => {
     }, [navigation]);
   
     useEffect(() => {
-      loadTasks();
+      loadItems();
     }, []);
   
-    const handleTaskPress = useCallback((taskId) => {
+    const handleItemPress = useCallback((item) => {
       navigation.navigate('Tasks', { 
-        openModal: true,
-        taskId: taskId 
+        screen: 'TaskDetails',
+        params: {
+          taskId: item._id,
+          task: item,
+          mode: 'view',
+          itemType: item.itemType
+        }
       });
     }, [navigation]);
   
     const getPriorityColor = (priority) => {
+      if (!priority) return '#FF6B6B'; // Color para recordatorios
       switch (priority) {
-        case 1: return '#FF6B6B'; // Alta
-        case 2: return '#FFD93D'; // Media
-        case 3: return '#6BCB77'; // Baja
-        default: return '#95A5A6'; // Sin prioridad
+        case 'high': return '#FF6B6B';
+        case 'medium': return '#FFD93D';
+        case 'low': return '#6BCB77';
+        default: return '#95A5A6';
       }
+    };
+
+    const getItemIcon = (itemType) => {
+      return itemType === 'reminder' ? 'alarm-outline' : 'checkbox-outline';
+    };
+
+    const getItemColor = (itemType) => {
+      return itemType === 'reminder' ? '#FF6B6B' : '#1ADDDB';
     };
   
     return (
@@ -84,41 +105,53 @@ const TaskCard = memo(() => {
         <View style={styles.taskCardHeader}>
           <View style={styles.taskTitleContainer}>
             <Ionicons name="list" size={24} color="#1ADDDB" />
-            <Text style={styles.taskCardTitle}>Mis Tareas</Text>
+            <Text style={styles.taskCardTitle}>Mis Pendientes</Text>
           </View>
           <TouchableOpacity 
             style={styles.viewAllButton}
-            onPress={() => navigation.navigate('Tasks')}
+            onPress={() => navigation.navigate('Tasks', { mode: 'list' })}
             activeOpacity={0.7}
           >
-            <Text style={styles.viewAllText}>Ver todas</Text>
+            <Text style={styles.viewAllText}>Ver todos</Text>
             <Ionicons name="chevron-forward" size={16} color="#1ADDDB" />
           </TouchableOpacity>
         </View>
   
         {loading ? (
           <ActivityIndicator color="#1ADDDB" style={styles.loader} />
-        ) : tasks.length > 0 ? (
+        ) : items.length > 0 ? (
           <View style={styles.tasksContainer}>
-            {tasks.map((task) => (
+            {items.map((item) => (
               <TouchableOpacity
-                key={task._id}
-                style={styles.taskItem}
-                onPress={() => handleTaskPress(task._id)}
+                key={item._id}
+                style={[
+                  styles.taskItem,
+                  item.itemType === 'reminder' && styles.reminderItem
+                ]}
+                onPress={() => handleItemPress(item)}
                 activeOpacity={0.7}
               >
                 <View style={styles.taskItemContent}>
                   <View style={[
                     styles.priorityIndicator,
-                    { backgroundColor: getPriorityColor(task.priority) }
+                    { backgroundColor: getPriorityColor(item.priority) }
                   ]} />
+                  <Ionicons 
+                    name={getItemIcon(item.itemType)}
+                    size={20}
+                    color={getItemColor(item.itemType)}
+                    style={styles.itemIcon}
+                  />
                   <View style={styles.taskItemMain}>
                     <Text style={styles.taskItemTitle} numberOfLines={1}>
-                      {task.title}
+                      {item.title}
                     </Text>
-                    {task.dueDate && (
-                      <Text style={styles.taskItemDueDate}>
-                        {new Date(task.dueDate).toLocaleDateString()}
+                    {item.dueDate && (
+                      <Text style={[
+                        styles.taskItemDueDate,
+                        item.itemType === 'reminder' && styles.reminderDueDate
+                      ]}>
+                        {new Date(item.dueDate).toLocaleString()}
                       </Text>
                     )}
                   </View>
@@ -135,14 +168,17 @@ const TaskCard = memo(() => {
         ) : (
           <View style={styles.emptyContainer}>
             <Ionicons name="list-outline" size={40} color="#A3B8E8" />
-            <Text style={styles.emptyText}>No hay tareas pendientes</Text>
+            <Text style={styles.emptyText}>No hay items pendientes</Text>
             <TouchableOpacity 
               style={styles.addTaskButton}
-              onPress={() => navigation.navigate('Tasks', { openModal: true })}
+              onPress={() => navigation.navigate('Tasks', { 
+                mode: 'create',
+                openModal: true 
+              })}
               activeOpacity={0.7}
             >
               <Ionicons name="add" size={16} color="#1ADDDB" />
-              <Text style={styles.addTaskText}>Nueva tarea</Text>
+              <Text style={styles.addTaskText}>Nuevo item</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -269,6 +305,25 @@ const TaskCard = memo(() => {
     color: '#A3B8E8',
     fontSize: 16,
     textAlign: 'center',
+  },
+  reminderItem: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+  },
+  itemIcon: {
+    marginRight: 8,
+  },
+  priorityIndicator: {
+    width: 4,
+    height: '100%',
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  taskItemMain: {
+    flex: 1,
+    gap: 4,
+  },
+  reminderDueDate: {
+    color: '#FF6B6B',
   },
   });
 

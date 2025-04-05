@@ -31,8 +31,9 @@ const TaskScreen = ({ route }) => {
     title: '',
     description: '',
     dueDate: new Date(),
-    priority: PRIORITY_VALUES.MEDIUM,
-    itemType: 'task'
+    itemType: 'task',
+    priority: 'medium',
+    completed: false
   });
 
   const navigation = useNavigation();
@@ -71,11 +72,16 @@ const TaskScreen = ({ route }) => {
 
   // Efecto para manejar apertura automática del modal
   useEffect(() => {
-    if (route.params?.openModal) {
+    const { mode, taskId, task } = route.params || {};
+    
+    if (mode === 'view' && taskId) {
+      // Mostrar detalles de la tarea
+      setState(prev => ({ ...prev, selectedItem: task, detailModalVisible: true }));
+    } else if (mode === 'create') {
+      // Mostrar modal de creación
       setState(prev => ({ ...prev, modalVisible: true }));
-      navigation.setParams({ openModal: undefined });
     }
-  }, [route.params?.openModal, navigation]);
+  }, [route.params]);
 
   // Handlers
   const handleAddItem = async (formData) => {
@@ -176,6 +182,61 @@ const TaskScreen = ({ route }) => {
     );
   };
 
+  const handleSubmit = async (data) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      
+      // Preparar los datos según el tipo
+      const endpoint = data.itemType === 'task' ? '/api/tasks' : '/api/tasks'; // Usamos la misma ruta
+      const requestData = {
+        title: data.title,
+        dueDate: data.dueDate,
+        isReminder: data.itemType === 'reminder', // Agregamos esta bandera
+        // Si es una tarea, incluimos campos adicionales
+        ...(data.itemType === 'task' && {
+          description: data.description,
+          priority: data.priority,
+        }),
+        completed: false
+      };
+
+      console.log('Enviando datos:', requestData); // Para debug
+
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Error response:', errorData);
+        throw new Error(data.itemType === 'task' 
+          ? 'Error al crear la tarea' 
+          : 'Error al crear el recordatorio');
+      }
+
+      // Cerrar el modal y actualizar la lista
+      setState(prev => ({ ...prev, modalVisible: false }));
+      loadItems(); // Recargar las tareas/recordatorios
+      
+      // Mostrar mensaje de éxito
+      Alert.alert(
+        'Éxito',
+        data.itemType === 'task' 
+          ? 'Tarea creada correctamente' 
+          : 'Recordatorio creado correctamente'
+      );
+    } catch (error) {
+      console.error('Error completo:', error);
+      Alert.alert('Error', error.message);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#030A24" />
@@ -225,7 +286,7 @@ const TaskScreen = ({ route }) => {
       <CreateTaskModal
         visible={state.modalVisible}
         onClose={() => setState(prev => ({ ...prev, modalVisible: false }))}
-        onSubmit={handleAddItem}
+        onSubmit={handleSubmit}
         formData={formData}
         setFormData={setFormData}
       />
@@ -258,7 +319,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 80, // Ajustado para dar espacio al FloatingNavBar
+    bottom: 100, // Ajustado para dar espacio al FloatingNavBar
     width: 56,
     height: 56,
     borderRadius: 28,

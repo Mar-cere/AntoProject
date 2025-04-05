@@ -80,8 +80,8 @@ const styles = StyleSheet.create({
   itemCard: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: 12,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
   },
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8 ,
   },
   itemTitleContainer: {
     flexDirection: 'row',
