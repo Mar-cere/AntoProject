@@ -10,7 +10,8 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
-  ScrollView
+  ScrollView,
+  StatusBar
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +19,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
+import CreateHabitModal from '../components/habits/CreateHabitModal';
 
 const API_URL = 'https://antobackend.onrender.com';
 
@@ -37,22 +39,24 @@ const HabitsScreen = ({ route }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('active'); // 'active', 'archived'
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState('exercise');
-  const [frequency, setFrequency] = useState('daily');
-  const [reminder, setReminder] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    icon: 'exercise',
+    frequency: 'daily',
+    reminder: new Date(),
+  });
 
   const navigation = useNavigation();
 
-  // Cargar hábitos desde la API
+  // Cargar hábitos desde la API con filtros
   const loadHabits = useCallback(async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       
-      const response = await fetch(`${API_URL}/api/habits`, {
+      const status = filterType; // 'active' o 'archived'
+      const response = await fetch(`${API_URL}/api/habits?status=${status}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -70,11 +74,22 @@ const HabitsScreen = ({ route }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterType]);
 
+  // Recargar cuando cambia el filtro
   useEffect(() => {
     loadHabits();
-  }, []);
+  }, [filterType]);
+
+  const handleHabitPress = useCallback((habit) => {
+    navigation.navigate('Habits', { 
+      screen: 'HabitDetails',
+      params: {
+        habitId: habit._id,
+        habit: habit
+      }
+    });
+  }, [navigation]);
 
   // Manejar apertura automática del modal
   useEffect(() => {
@@ -85,20 +100,15 @@ const HabitsScreen = ({ route }) => {
   }, [route.params?.openModal]);
 
   // Agregar nuevo hábito
-  const handleAddHabit = async () => {
-    if (!title.trim()) {
-      Alert.alert('Error', 'Por favor ingresa un título');
-      return;
-    }
-
+  const handleAddHabit = async (data) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       const newHabit = {
-        title: title.trim(),
-        description: description.trim(),
-        icon: selectedIcon,
-        frequency,
-        reminder,
+        title: data.title.trim(),
+        description: data.description?.trim() || '',
+        icon: data.icon,
+        frequency: data.frequency,
+        reminder: data.reminder,
       };
 
       const response = await fetch(`${API_URL}/api/habits`, {
@@ -111,17 +121,18 @@ const HabitsScreen = ({ route }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Error al crear el hábito');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al crear el hábito');
       }
 
       const createdHabit = await response.json();
-      setHabits(prevHabits => [...prevHabits, createdHabit]);
+      setHabits(prevHabits => [createdHabit, ...prevHabits]);
       setModalVisible(false);
       resetForm();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error:', error);
-      Alert.alert('Error', 'No se pudo crear el hábito');
+      Alert.alert('Error', error.message || 'No se pudo crear el hábito');
     }
   };
 
@@ -218,212 +229,19 @@ const HabitsScreen = ({ route }) => {
 
   // Resetear formulario
   const resetForm = () => {
-    setTitle('');
-    setDescription('');
-    setSelectedIcon('exercise');
-    setFrequency('daily');
-    setReminder(new Date());
+    setFormData({
+      title: '',
+      description: '',
+      icon: 'exercise',
+      frequency: 'daily',
+      reminder: new Date(),
+    });
   };
 
-  // Renderizar item de hábito
-  const renderHabitItem = ({ item }) => (
-    <View style={styles.habitCard}>
-      <View style={styles.habitHeader}>
-        <View style={styles.habitTitleContainer}>
-          <MaterialCommunityIcons 
-            name={HABIT_ICONS[item.icon]} 
-            size={24} 
-            color="#1ADDDB" 
-          />
-          <Text style={styles.habitTitle}>{item.title}</Text>
-        </View>
-        <View style={styles.habitActions}>
-          <TouchableOpacity
-            onPress={() => toggleHabitComplete(item._id)}
-            style={styles.completeButton}
-          >
-            <MaterialCommunityIcons
-              name={item.completedToday ? "check-circle" : "circle-outline"}
-              size={28}
-              color={item.completedToday ? "#4CAF50" : "#A3B8E8"}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleDeleteHabit(item._id)}
-            style={styles.deleteButton}
-          >
-            <MaterialCommunityIcons name="trash-can-outline" size={24} color="#FF6B6B" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {item.description ? (
-        <Text style={styles.habitDescription}>{item.description}</Text>
-      ) : null}
-
-      <View style={styles.habitFooter}>
-        <View style={styles.habitStats}>
-          <View style={styles.statItem}>
-            <MaterialCommunityIcons name="fire" size={16} color="#FFD93D" />
-            <Text style={styles.statText}>Racha: {item.streak}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <MaterialCommunityIcons name="calendar-check" size={16} color="#6BCB77" />
-            <Text style={styles.statText}>
-              {item.completedDays}/{item.totalDays} días
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.archiveButton}
-          onPress={() => toggleArchiveHabit(item._id)}
-        >
-          <MaterialCommunityIcons
-            name={item.archived ? "archive-arrow-up" : "archive"}
-            size={20}
-            color="#A3B8E8"
-          />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  // Renderizar modal de nuevo hábito
-  const renderModal = () => (
-    <Modal
-      visible={modalVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setModalVisible(false)}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-      >
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Nuevo Hábito</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setModalVisible(false);
-                resetForm();
-              }}
-            >
-              <MaterialCommunityIcons name="close" size={24} color="#A3B8E8" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView>
-            <TextInput
-              style={styles.input}
-              placeholder="Título"
-              placeholderTextColor="#A3B8E8"
-              value={title}
-              onChangeText={setTitle}
-            />
-
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Descripción (opcional)"
-              placeholderTextColor="#A3B8E8"
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={4}
-            />
-
-            <Text style={styles.sectionTitle}>Icono</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.iconSelector}
-            >
-              {Object.entries(HABIT_ICONS).map(([key, icon]) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[
-                    styles.iconButton,
-                    selectedIcon === key && styles.iconButtonSelected
-                  ]}
-                  onPress={() => setSelectedIcon(key)}
-                >
-                  <MaterialCommunityIcons
-                    name={icon}
-                    size={24}
-                    color={selectedIcon === key ? "#1ADDDB" : "#A3B8E8"}
-                  />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.sectionTitle}>Frecuencia</Text>
-            <View style={styles.frequencySelector}>
-              <TouchableOpacity
-                style={[
-                  styles.frequencyButton,
-                  frequency === 'daily' && styles.frequencyButtonSelected
-                ]}
-                onPress={() => setFrequency('daily')}
-              >
-                <Text style={[
-                  styles.frequencyButtonText,
-                  frequency === 'daily' && styles.frequencyButtonTextSelected
-                ]}>Diario</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.frequencyButton,
-                  frequency === 'weekly' && styles.frequencyButtonSelected
-                ]}
-                onPress={() => setFrequency('weekly')}
-              >
-                <Text style={[
-                  styles.frequencyButtonText,
-                  frequency === 'weekly' && styles.frequencyButtonTextSelected
-                ]}>Semanal</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.sectionTitle}>Recordatorio</Text>
-            <TouchableOpacity
-              style={styles.reminderButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <MaterialCommunityIcons name="clock-outline" size={20} color="#1ADDDB" />
-              <Text style={styles.reminderButtonText}>
-                {reminder.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </TouchableOpacity>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={reminder}
-                mode="time"
-                is24Hour={true}
-                display="default"
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(false);
-                  if (selectedDate) {
-                    setReminder(selectedDate);
-                  }
-                }}
-              />
-            )}
-
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={handleAddHabit}
-            >
-              <Text style={styles.addButtonText}>Crear Hábito</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-
-  return (
-    <View style={styles.container}>
+  // Header fijo con transparencia
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      <StatusBar barStyle="light-content" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mis Hábitos</Text>
         <View style={styles.filterButtons}>
@@ -434,6 +252,11 @@ const HabitsScreen = ({ route }) => {
             ]}
             onPress={() => setFilterType('active')}
           >
+            <MaterialCommunityIcons 
+              name="checkbox-marked-circle-outline" 
+              size={20} 
+              color={filterType === 'active' ? '#FFFFFF' : '#A3B8E8'} 
+            />
             <Text style={[
               styles.filterButtonText,
               filterType === 'active' && styles.filterButtonTextActive
@@ -446,6 +269,11 @@ const HabitsScreen = ({ route }) => {
             ]}
             onPress={() => setFilterType('archived')}
           >
+            <MaterialCommunityIcons 
+              name="archive-outline" 
+              size={20} 
+              color={filterType === 'archived' ? '#FFFFFF' : '#A3B8E8'} 
+            />
             <Text style={[
               styles.filterButtonText,
               filterType === 'archived' && styles.filterButtonTextActive
@@ -453,15 +281,98 @@ const HabitsScreen = ({ route }) => {
           </TouchableOpacity>
         </View>
       </View>
+    </View>
+  );
 
+  // Renderizar item de hábito actualizado
+  const renderHabitItem = ({ item }) => (
+    <TouchableOpacity
+      style={[
+        styles.habitCard,
+        item.status?.archived && styles.archivedHabitCard
+      ]}
+      onPress={() => handleHabitPress(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.habitHeader}>
+        <View style={styles.habitTitleContainer}>
+          <View style={[
+            styles.iconContainer,
+            item.status?.archived && styles.archivedIconContainer
+          ]}>
+            <MaterialCommunityIcons 
+              name={HABIT_ICONS[item.icon]} 
+              size={24} 
+              color={item.status?.archived ? '#A3B8E8' : '#1ADDDB'} 
+            />
+          </View>
+          <View style={styles.habitInfo}>
+            <Text style={styles.habitTitle}>{item.title}</Text>
+            {item.description ? (
+              <Text style={styles.habitDescription} numberOfLines={2}>
+                {item.description}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={() => toggleHabitComplete(item._id)}
+          style={[
+            styles.completeButton,
+            item.status?.completedToday && styles.completedButton
+          ]}
+          disabled={item.status?.archived}
+        >
+          <MaterialCommunityIcons
+            name={item.status?.completedToday ? "check-circle" : "circle-outline"}
+            size={28}
+            color={item.status?.completedToday ? "#4CAF50" : "#A3B8E8"}
+          />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.habitFooter}>
+        <View style={styles.habitStats}>
+          <View style={styles.statItem}>
+            <MaterialCommunityIcons name="fire" size={16} color="#FFD93D" />
+            <Text style={styles.statText}>
+              Racha: {item.progress?.streak || 0}
+              {item.progress?.bestStreak > 0 && ` (Mejor: ${item.progress.bestStreak})`}
+            </Text>
+          </View>
+          <View style={styles.statItem}>
+            <MaterialCommunityIcons name="calendar-check" size={16} color="#6BCB77" />
+            <Text style={styles.statText}>
+              {item.progress?.completedDays || 0}/{item.progress?.totalDays || 0} días
+            </Text>
+          </View>
+          <View style={styles.statItem}>
+            <MaterialCommunityIcons 
+              name={item.frequency === 'daily' ? "repeat" : "calendar-week"} 
+              size={16} 
+              color="#1ADDDB" 
+            />
+            <Text style={styles.statText}>
+              {item.frequency === 'daily' ? 'Diario' : 'Semanal'}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={styles.container}>
+      {renderHeader()}
+      
       <FlatList
-        data={habits.filter(habit => 
-          filterType === 'active' ? !habit.archived : habit.archived
-        )}
+        data={habits}
         renderItem={renderHabitItem}
         keyExtractor={item => item._id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        onRefresh={loadHabits}
+        refreshing={loading}
       />
 
       <TouchableOpacity
@@ -474,8 +385,18 @@ const HabitsScreen = ({ route }) => {
         <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
       </TouchableOpacity>
 
+      <CreateHabitModal
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          resetForm();
+        }}
+        onSubmit={handleAddHabit}
+        formData={formData}
+        setFormData={setFormData}
+      />
+      
       <FloatingNavBar />
-      {renderModal()}
     </View>
   );
 };
@@ -485,11 +406,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#030A24',
   },
-  header: {
-    padding: 16,
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
+  headerContainer: {
+    backgroundColor: 'rgba(29, 43, 95, 0.1)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(26, 221, 219, 0.1)',
+    paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight,
+  },
+  header: {
+    padding: 16,
   },
   headerTitle: {
     fontSize: 24,
@@ -499,11 +423,14 @@ const styles = StyleSheet.create({
   },
   filterButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   filterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -521,6 +448,7 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 16,
     gap: 12,
+    paddingBottom: 100, // Espacio para FloatingNavBar
   },
   habitCard: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
@@ -530,6 +458,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
   },
+  archivedHabitCard: {
+    backgroundColor: 'rgba(29, 43, 95, 0.4)',
+    borderColor: 'rgba(163, 184, 232, 0.1)',
+  },
   habitHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -538,30 +470,32 @@ const styles = StyleSheet.create({
   habitTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
     flex: 1,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  archivedIconContainer: {
+    backgroundColor: 'rgba(163, 184, 232, 0.1)',
+  },
+  habitInfo: {
+    flex: 1,
+    gap: 4,
   },
   habitTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
-    flex: 1,
   },
   habitDescription: {
     fontSize: 14,
     color: '#A3B8E8',
-    marginTop: 4,
-  },
-  habitActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  habitFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
   },
   habitStats: {
     flexDirection: 'row',
@@ -576,10 +510,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#A3B8E8',
   },
+  completeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  completedButton: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  },
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 16,
+    bottom: 80, // Ajustado para FloatingNavBar
     width: 56,
     height: 56,
     borderRadius: 28,

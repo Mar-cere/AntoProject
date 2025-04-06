@@ -5,6 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+const API_URL = 'https://antobackend.onrender.com';
+
 const HabitCard = memo(() => {
     const navigation = useNavigation();
     const [habits, setHabits] = useState([]);
@@ -12,16 +14,24 @@ const HabitCard = memo(() => {
   
     const loadHabits = useCallback(async () => {
       try {
-        const storedHabits = await AsyncStorage.getItem('habits');
-        if (storedHabits) {
-          const parsedHabits = JSON.parse(storedHabits);
-          // Mostrar solo hábitos activos y ordenados por racha
-          const activeHabits = parsedHabits
-            .filter(habit => !habit.archived)
-            .sort((a, b) => b.streak - a.streak)
-            .slice(0, 3); // Mostrar solo los 3 mejores
-          setHabits(activeHabits);
+        const token = await AsyncStorage.getItem('userToken');
+        const response = await fetch(`${API_URL}/api/habits?status=active`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Error al obtener los hábitos');
         }
+
+        const data = await response.json();
+        // Ordenar por racha y mostrar solo los 3 mejores
+        const topHabits = data
+          .sort((a, b) => (b.progress?.streak || 0) - (a.progress?.streak || 0))
+          .slice(0, 3);
+        
+        setHabits(topHabits);
         setLoading(false);
       } catch (error) {
         console.error('Error al cargar hábitos:', error);
@@ -33,11 +43,17 @@ const HabitCard = memo(() => {
       loadHabits();
     }, []);
   
-    const getStreakColor = (streak) => {
-      if (streak >= 30) return '#FFD700';
-      if (streak >= 15) return '#C0C0C0';
-      if (streak >= 7) return '#CD7F32';
-      return '#1ADDDB';
+    const getStreakColor = (streak = 0) => {
+      if (streak >= 30) return '#FFD700'; // Oro
+      if (streak >= 15) return '#C0C0C0'; // Plata
+      if (streak >= 7) return '#CD7F32'; // Bronce
+      return '#1ADDDB'; // Color por defecto
+    };
+
+    const getProgressPercentage = (habit) => {
+      const completed = habit.progress?.completedDays || 0;
+      const total = habit.progress?.totalDays || 1;
+      return (completed / total) * 100;
     };
   
     return (
@@ -63,15 +79,15 @@ const HabitCard = memo(() => {
           <View style={styles.habitsContainer}>
             {habits.map((habit) => (
               <TouchableOpacity
-                key={habit.id}
+                key={habit._id}
                 style={styles.habitItem}
-                onPress={() => navigation.navigate('Habits', { habitId: habit.id })}
+                onPress={() => navigation.navigate('Habits', { habitId: habit._id })}
                 activeOpacity={0.7}
               >
                 <View style={styles.habitItemContent}>
                   <View style={[
                     styles.habitIcon,
-                    { backgroundColor: getStreakColor(habit.streak) }
+                    { backgroundColor: getStreakColor(habit.progress?.streak) }
                   ]}>
                     <MaterialCommunityIcons 
                       name={habit.icon} 
@@ -87,27 +103,32 @@ const HabitCard = memo(() => {
                       <MaterialCommunityIcons 
                         name="fire" 
                         size={14} 
-                        color={getStreakColor(habit.streak)} 
+                        color={getStreakColor(habit.progress?.streak)} 
                       />
                       <Text style={[
                         styles.streakText,
-                        { color: getStreakColor(habit.streak) }
+                        { color: getStreakColor(habit.progress?.streak) }
                       ]}>
-                        {habit.streak} días
+                        {habit.progress?.streak || 0} días
+                        {habit.progress?.bestStreak > habit.progress?.streak && 
+                          ` (Mejor: ${habit.progress.bestStreak})`}
                       </Text>
                     </View>
                   </View>
                   <View style={styles.habitProgress}>
-                    <Text style={styles.progressText}>
-                      {habit.completedToday ? '¡Completado!' : 'Pendiente'}
+                    <Text style={[
+                      styles.progressText,
+                      habit.status?.completedToday && styles.completedText
+                    ]}>
+                      {habit.status?.completedToday ? '¡Completado!' : 'Pendiente'}
                     </Text>
                     <View style={styles.progressBar}>
                       <View 
                         style={[
                           styles.progressFill,
                           { 
-                            width: `${(habit.completedDays / (habit.totalDays || 1)) * 100}%`,
-                            backgroundColor: getStreakColor(habit.streak)
+                            width: `${getProgressPercentage(habit)}%`,
+                            backgroundColor: getStreakColor(habit.progress?.streak)
                           }
                         ]} 
                       />
@@ -124,7 +145,9 @@ const HabitCard = memo(() => {
             <TouchableOpacity 
               style={styles.addHabitButton}
               onPress={() => navigation.navigate('Habits', { openModal: true })}
+              activeOpacity={0.7}
             >
+              <MaterialCommunityIcons name="plus" size={16} color="#1ADDDB" />
               <Text style={styles.addHabitText}>Crear hábito</Text>
             </TouchableOpacity>
           </View>
@@ -212,7 +235,7 @@ const HabitCard = memo(() => {
       },
       habitProgress: {
         alignItems: 'flex-end',
-        gap: 4,
+        gap: 2,
       },
       viewAllButton: {
         flexDirection: 'row',
@@ -241,6 +264,7 @@ const HabitCard = memo(() => {
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderRadius: 2,
         overflow: 'hidden',
+        marginTop: 4,
       },
       progressFill: {
         height: '100%',
@@ -290,6 +314,10 @@ const HabitCard = memo(() => {
       addHabitText: {
         color: '#1ADDDB',
         fontSize: 14,
+        fontWeight: '500',
+      },
+      completedText: {
+        color: '#4CAF50',
         fontWeight: '500',
       },
   });
