@@ -46,6 +46,15 @@ router.post('/', async (req, res) => {
     await task.save();
     
     console.log('Item creado:', task); // Para debug
+
+    // Verificar logro de primera tarea
+    const tasksCount = await Task.countDocuments({ userId: req.user._id });
+    if (tasksCount === 1) {
+      await req.user.unlockAchievement('FIRST_TASK');
+    } else if (tasksCount === 10) {
+      await req.user.unlockAchievement('TASK_MASTER');
+    }
+
     res.status(201).json(task);
   } catch (error) {
     console.error('Error al crear:', error);

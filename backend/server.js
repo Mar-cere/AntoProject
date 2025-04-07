@@ -9,6 +9,7 @@ import habitRoutes from './routes/habitRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
+import achievementRoutes from './routes/achievementRoutes.js';
 import { setupSocketIO } from './config/socket.js';
 import mailer from './config/mailer.js';
 import helmet from 'helmet';
@@ -50,7 +51,15 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    services: {
+      tasks: 'active',
+      habits: 'active',
+      users: 'active',
+      auth: 'active',
+      chat: 'active',
+      achievements: 'active'
+    }
   });
 });
 
@@ -61,6 +70,7 @@ app.use('/api/habits', habitRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/achievements', achievementRoutes);
 
 // Añade esto después de la configuración de express
 app.use((req, res, next) => {

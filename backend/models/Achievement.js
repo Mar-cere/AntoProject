@@ -18,16 +18,30 @@ const achievementSchema = new mongoose.Schema({
   category: {
     type: String,
     enum: ['tasks', 'habits', 'streaks', 'general'],
-    default: 'general'
+    default: 'general',
+    required: true
   },
   requirement: {
-    type: Number,
+    type: mongoose.Schema.Types.Mixed,
     required: true,
-    default: 1
+    validate: {
+      validator: function(value) {
+        return typeof value === 'number' || 
+               (typeof value === 'object' && value !== null);
+      },
+      message: 'El requisito debe ser un número o un objeto de condiciones'
+    }
+  },
+  requirementType: {
+    type: String,
+    enum: ['count', 'streak', 'duration', 'custom'],
+    required: true,
+    default: 'count'
   },
   progress: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   completed: {
     type: Boolean,
@@ -56,7 +70,18 @@ const achievementSchema = new mongoose.Schema({
   },
   points: {
     type: Number,
+    required: true,
+    min: 0,
     default: 0
+  },
+  isSecret: {
+    type: Boolean,
+    default: false
+  },
+  tier: {
+    type: String,
+    enum: ['bronze', 'silver', 'gold', 'platinum'],
+    default: 'bronze'
   }
 });
 
@@ -81,7 +106,28 @@ achievementSchema.methods.updateProgress = async function(newProgress) {
   return this.save();
 };
 
-// Método para obtener estadísticas
+// Método para verificar si un logro está disponible
+achievementSchema.methods.isAvailable = function() {
+  return !this.completed && this.progress < this.requirement;
+};
+
+// Método para calcular el porcentaje de progreso
+achievementSchema.methods.getProgressPercentage = function() {
+  if (typeof this.requirement === 'number') {
+    return Math.min(100, (this.progress / this.requirement) * 100);
+  }
+  return this.progress;
+};
+
+// Método estático para obtener logros por categoría
+achievementSchema.statics.getByCategory = async function(userId, category) {
+  return this.find({
+    userId,
+    ...(category !== 'all' ? { category } : {})
+  }).sort({ completed: 1, createdAt: -1 });
+};
+
+// Método estático mejorado para obtener estadísticas
 achievementSchema.statics.getStats = async function(userId) {
   return this.aggregate([
     { $match: { userId: mongoose.Types.ObjectId(userId) } },
@@ -90,7 +136,47 @@ achievementSchema.statics.getStats = async function(userId) {
         _id: null,
         total: { $sum: 1 },
         completed: { $sum: { $cond: [{ $eq: ['$completed', true] }, 1, 0] } },
-        totalPoints: { $sum: { $cond: [{ $eq: ['$completed', true] }, '$points', 0] } }
+        totalPoints: { $sum: { $cond: [{ $eq: ['$completed', true] }, '$points', 0] } },
+        byCategory: {
+          $push: {
+            category: '$category',
+            completed: '$completed'
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        total: 1,
+        completed: 1,
+        totalPoints: 1,
+        categoryStats: {
+          $reduce: {
+            input: '$byCategory',
+            initialValue: {},
+            in: {
+              $mergeObjects: [
+                '$$value',
+                {
+                  $let: {
+                    vars: {
+                      cat: '$$this.category'
+                    },
+                    in: {
+                      $object: {
+                        k: '$$cat',
+                        v: {
+                          $cond: ['$$this.completed', 1, 0]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
       }
     }
   ]);

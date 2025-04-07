@@ -89,7 +89,7 @@ const HabitsScreen = ({ route }) => {
         habit: habit
       }
     });
-  }, [navigation]);
+  }, [navigation]);r
 
   // Manejar apertura automática del modal
   useEffect(() => {

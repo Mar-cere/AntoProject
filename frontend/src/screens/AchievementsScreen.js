@@ -16,12 +16,13 @@ import * as Haptics from 'expo-haptics';
 import ParticleBackground from '../components/ParticleBackground';
 import FloatingNavBar from '../components/FloatingNavBar';
 
+const API_URL = 'https://antobackend.onrender.com';
 
 const ACHIEVEMENT_CATEGORIES = {
   TASKS: 'tasks',
   HABITS: 'habits',
-  POINTS: 'points',
-  SPECIAL: 'special'
+  STREAKS: 'streaks',
+  GENERAL: 'general'
 };
 
 const AchievementsScreen = ({ navigation }) => {
@@ -29,75 +30,92 @@ const AchievementsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [userPoints, setUserPoints] = useState(0);
+  const [stats, setStats] = useState({
+    total: 0,
+    completed: 0,
+    totalPoints: 0,
+    categoryStats: {}
+  });
 
-  const loadAchievements = useCallback(async () => {
+  const fetchAchievements = useCallback(async () => {
     try {
-      const [storedAchievements, storedPoints] = await Promise.all([
-        AsyncStorage.getItem('userAchievements'),
-        AsyncStorage.getItem('userPoints')
-      ]);
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/api/achievements`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
 
-      if (storedAchievements) {
-        setAchievements(JSON.parse(storedAchievements));
-      }
-      if (storedPoints) {
-        setUserPoints(parseInt(storedPoints));
-      }
+      const data = await response.json();
+      setAchievements(data.achievements);
+      setStats({
+        totalPoints: data.totalPoints,
+        completed: data.achievements.filter(a => a.unlocked).length,
+        total: data.achievements.length
+      });
     } catch (error) {
-      console.error('Error al cargar logros:', error);
-      Alert.alert('Error', 'No se pudieron cargar los logros');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      console.error('Error:', error);
     }
   }, []);
 
   useEffect(() => {
-    loadAchievements();
-  }, []);
+    fetchAchievements();
+  }, [fetchAchievements]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    loadAchievements();
-  }, []);
+    fetchAchievements();
+  }, [fetchAchievements]);
 
-  const getAchievementIcon = (type) => {
-    switch (type) {
-      case ACHIEVEMENT_CATEGORIES.TASKS:
+  const getAchievementIcon = (achievement) => {
+    if (achievement.icon) return achievement.icon;
+
+    // Iconos por defecto según la categoría
+    switch (achievement.category) {
+      case 'tasks':
         return 'checkbox-marked-circle';
-      case ACHIEVEMENT_CATEGORIES.HABITS:
+      case 'habits':
         return 'lightning-bolt';
-      case ACHIEVEMENT_CATEGORIES.POINTS:
-        return 'star';
-      case ACHIEVEMENT_CATEGORIES.SPECIAL:
-        return 'trophy';
+      case 'streaks':
+        return 'fire';
       default:
-        return 'medal';
+        return 'trophy';
     }
   };
 
-  const handleAchievementPress = (achievement) => {
+  const handleAchievementPress = useCallback((achievement) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    const formattedDate = achievement.completedAt 
+      ? new Date(achievement.completedAt).toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        })
+      : null;
+
+    const progressText = achievement.requirement > 1
+      ? `\nProgreso: ${achievement.progress}/${achievement.requirement}`
+      : '';
+
+    const message = achievement.completed
+      ? `${achievement.description}\n\nPuntos: +${achievement.points}${progressText}\n${formattedDate ? `\nCompletado el ${formattedDate}` : ''}`
+      : `${achievement.description}\n\nPuntos por obtener: +${achievement.points}${progressText}`;
+
     Alert.alert(
       achievement.title,
-      `${achievement.description}\n\nPuntos: +${achievement.points}`,
+      message,
       [{ text: 'Cerrar', style: 'default' }]
     );
-  };
+  }, []);
 
-  const filteredAchievements = achievements.filter(achievement => 
-    selectedCategory === 'all' || achievement.type === selectedCategory
-  );
-
-  const calculateProgress = () => {
-    const unlockedCount = achievements.filter(a => a.unlocked).length;
+  const calculateProgress = useCallback(() => {
     return {
-      total: achievements.length,
-      unlocked: unlockedCount,
-      percentage: (unlockedCount / achievements.length) * 100
+      total: stats.total || 0,
+      completed: stats.completed || 0,
+      percentage: stats.total ? (stats.completed / stats.total) * 100 : 0
     };
-  };
+  }, [stats]);
 
   const progress = calculateProgress();
 
@@ -121,7 +139,7 @@ const AchievementsScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Mis Logros</Text>
           <View style={styles.pointsContainer}>
             <MaterialCommunityIcons name="star" size={20} color="#FFD700" />
-            <Text style={styles.pointsText}>{userPoints}</Text>
+            <Text style={styles.pointsText}>{stats.totalPoints}</Text>
           </View>
         </View>
 
@@ -142,7 +160,7 @@ const AchievementsScreen = ({ navigation }) => {
             />
           </View>
           <Text style={styles.progressText}>
-            {progress.unlocked} de {progress.total} logros desbloqueados
+            {progress.completed} de {progress.total} logros completados
           </Text>
         </View>
 
@@ -164,25 +182,25 @@ const AchievementsScreen = ({ navigation }) => {
               selectedCategory === 'all' && styles.categoryTextActive
             ]}>Todos</Text>
           </TouchableOpacity>
-          {Object.values(ACHIEVEMENT_CATEGORIES).map((category) => (
+          {Object.entries(ACHIEVEMENT_CATEGORIES).map(([key, value]) => (
             <TouchableOpacity 
-              key={category}
+              key={value}
               style={[
                 styles.categoryButton,
-                selectedCategory === category && styles.categoryButtonActive
+                selectedCategory === value && styles.categoryButtonActive
               ]}
-              onPress={() => setSelectedCategory(category)}
+              onPress={() => setSelectedCategory(value)}
             >
               <MaterialCommunityIcons 
-                name={getAchievementIcon(category)} 
+                name={getAchievementIcon({ category: value })} 
                 size={20} 
-                color={selectedCategory === category ? '#1ADDDB' : '#A3B8E8'} 
+                color={selectedCategory === value ? '#1ADDDB' : '#A3B8E8'} 
               />
               <Text style={[
                 styles.categoryText,
-                selectedCategory === category && styles.categoryTextActive
+                selectedCategory === value && styles.categoryTextActive
               ]}>
-                {category.charAt(0).toUpperCase() + category.slice(1)}
+                {key.charAt(0) + key.slice(1).toLowerCase()}
               </Text>
             </TouchableOpacity>
           ))}
@@ -204,12 +222,12 @@ const AchievementsScreen = ({ navigation }) => {
           {loading ? (
             <ActivityIndicator color="#1ADDDB" style={styles.loader} />
           ) : (
-            filteredAchievements.map((achievement) => (
+            achievements.map((achievement) => (
               <TouchableOpacity
-                key={achievement.id}
+                key={achievement._id}
                 style={[
                   styles.achievementCard,
-                  achievement.unlocked && styles.achievementCardUnlocked
+                  achievement.completed && styles.achievementCardCompleted
                 ]}
                 onPress={() => handleAchievementPress(achievement)}
                 activeOpacity={0.7}
@@ -217,10 +235,10 @@ const AchievementsScreen = ({ navigation }) => {
                 <View style={styles.achievementContent}>
                   <View style={[
                     styles.achievementIcon,
-                    { backgroundColor: achievement.unlocked ? achievement.color || '#FFD700' : '#4A4A4A' }
+                    { backgroundColor: achievement.completed ? '#1ADDDB' : '#4A4A4A' }
                   ]}>
                     <MaterialCommunityIcons 
-                      name={getAchievementIcon(achievement.type)}
+                      name={getAchievementIcon(achievement)}
                       size={24}
                       color="#FFFFFF"
                     />
@@ -232,41 +250,36 @@ const AchievementsScreen = ({ navigation }) => {
                     <Text style={styles.achievementDescription}>
                       {achievement.description}
                     </Text>
-                    {achievement.unlocked && achievement.date && (
-                      <Text style={styles.achievementDate}>
-                        Desbloqueado el {new Date(achievement.date).toLocaleDateString()}
-                      </Text>
+                    {achievement.requirement > 1 && (
+                      <View style={styles.progressBarMini}>
+                        <View 
+                          style={[
+                            styles.progressBarMiniFill,
+                            { width: `${(achievement.progress / achievement.requirement) * 100}%` }
+                          ]} 
+                        />
+                      </View>
                     )}
                   </View>
                   <View style={styles.achievementPoints}>
                     <MaterialCommunityIcons 
                       name="star" 
                       size={16} 
-                      color={achievement.unlocked ? '#FFD700' : '#4A4A4A'} 
+                      color={achievement.completed ? '#FFD700' : '#4A4A4A'} 
                     />
                     <Text style={[
                       styles.pointsValue,
-                      !achievement.unlocked && styles.pointsValueLocked
+                      !achievement.completed && styles.pointsValueLocked
                     ]}>
                       +{achievement.points}
                     </Text>
                   </View>
                 </View>
-                {achievement.progress !== undefined && (
-                  <View style={styles.progressBarContainer}>
-                    <View 
-                      style={[
-                        styles.progressBar,
-                        { width: `${achievement.progress}%` }
-                      ]} 
-                    />
-                  </View>
-                )}
               </TouchableOpacity>
             ))
           )}
         </ScrollView>
-        <FloatingNavBar/>
+        <FloatingNavBar />
       </ImageBackground>
     </View>
   );
@@ -393,7 +406,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
   },
-  achievementCardUnlocked: {
+  achievementCardCompleted: {
     backgroundColor: 'rgba(29, 43, 95, 0.9)',
   },
   achievementContent: {
@@ -421,11 +434,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#A3B8E8',
   },
-  achievementDate: {
-    fontSize: 12,
-    color: '#A3B8E8',
-    marginTop: 4,
-  },
   achievementPoints: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -446,6 +454,18 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: 20,
   },
+  progressBarMini: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 1.5,
+    marginTop: 8,
+    width: '100%'
+  },
+  progressBarMiniFill: {
+    height: '100%',
+    backgroundColor: '#1ADDDB',
+    borderRadius: 1.5
+  }
 });
 
 export default AchievementsScreen; 
