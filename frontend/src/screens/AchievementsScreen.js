@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -40,11 +40,16 @@ const AchievementsScreen = ({ navigation }) => {
   const fetchAchievements = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
+      if (!token) throw new Error('No token found');
+
+      setLoading(true);
       const response = await fetch(`${API_URL}/api/achievements`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
+
+      if (!response.ok) throw new Error('Error fetching achievements');
 
       const data = await response.json();
       setAchievements(data.achievements);
@@ -55,6 +60,10 @@ const AchievementsScreen = ({ navigation }) => {
       });
     } catch (error) {
       console.error('Error:', error);
+      Alert.alert('Error', 'No se pudieron cargar los logros');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -86,21 +95,17 @@ const AchievementsScreen = ({ navigation }) => {
   const handleAchievementPress = useCallback((achievement) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    const formattedDate = achievement.completedAt 
-      ? new Date(achievement.completedAt).toLocaleDateString('es-ES', {
+    const formattedDate = achievement.unlockedAt 
+      ? new Date(achievement.unlockedAt).toLocaleDateString('es-ES', {
           day: 'numeric',
           month: 'long',
           year: 'numeric'
         })
       : null;
 
-    const progressText = achievement.requirement > 1
-      ? `\nProgreso: ${achievement.progress}/${achievement.requirement}`
-      : '';
-
-    const message = achievement.completed
-      ? `${achievement.description}\n\nPuntos: +${achievement.points}${progressText}\n${formattedDate ? `\nCompletado el ${formattedDate}` : ''}`
-      : `${achievement.description}\n\nPuntos por obtener: +${achievement.points}${progressText}`;
+    const message = achievement.unlocked
+      ? `${achievement.description}\n\nPuntos: +${achievement.points}\n${formattedDate ? `\nDesbloqueado el ${formattedDate}` : ''}`
+      : `${achievement.description}\n\nPuntos por obtener: +${achievement.points}`;
 
     Alert.alert(
       achievement.title,
@@ -118,6 +123,13 @@ const AchievementsScreen = ({ navigation }) => {
   }, [stats]);
 
   const progress = calculateProgress();
+
+  // Filtrar logros por categoría
+  const filteredAchievements = useMemo(() => {
+    return achievements.filter(achievement => 
+      selectedCategory === 'all' || achievement.category === selectedCategory
+    );
+  }, [achievements, selectedCategory]);
 
   return (
     <View style={styles.container}>
@@ -143,142 +155,140 @@ const AchievementsScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Progress Summary */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressInfo}>
-            <Text style={styles.progressTitle}>Progreso Total</Text>
-            <Text style={styles.progressPercentage}>
-              {Math.round(progress.percentage)}%
+        {/* Main Content Container */}
+        <View style={styles.mainContent}>
+          {/* Progress Summary */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressInfo}>
+              <Text style={styles.progressTitle}>Progreso Total</Text>
+              <Text style={styles.progressPercentage}>
+                {Math.round(progress.percentage)}%
+              </Text>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View 
+                style={[
+                  styles.progressBar,
+                  { width: `${progress.percentage}%` }
+                ]} 
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {progress.completed} de {progress.total} logros completados
             </Text>
           </View>
-          <View style={styles.progressBarContainer}>
-            <View 
-              style={[
-                styles.progressBar,
-                { width: `${progress.percentage}%` }
-              ]} 
-            />
-          </View>
-          <Text style={styles.progressText}>
-            {progress.completed} de {progress.total} logros completados
-          </Text>
-        </View>
 
-        {/* Category Filter */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriesContainer}
-        >
-          <TouchableOpacity 
-            style={[
-              styles.categoryButton,
-              selectedCategory === 'all' && styles.categoryButtonActive
-            ]}
-            onPress={() => setSelectedCategory('all')}
-          >
-            <Text style={[
-              styles.categoryText,
-              selectedCategory === 'all' && styles.categoryTextActive
-            ]}>Todos</Text>
-          </TouchableOpacity>
-          {Object.entries(ACHIEVEMENT_CATEGORIES).map(([key, value]) => (
-            <TouchableOpacity 
-              key={value}
-              style={[
-                styles.categoryButton,
-                selectedCategory === value && styles.categoryButtonActive
-              ]}
-              onPress={() => setSelectedCategory(value)}
-            >
-              <MaterialCommunityIcons 
-                name={getAchievementIcon({ category: value })} 
-                size={20} 
-                color={selectedCategory === value ? '#1ADDDB' : '#A3B8E8'} 
-              />
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === value && styles.categoryTextActive
-              ]}>
-                {key.charAt(0) + key.slice(1).toLowerCase()}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Achievements List */}
-        <ScrollView
-          style={styles.achievementsList}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor="#1ADDDB"
-              colors={["#1ADDDB"]}
-              progressBackgroundColor="rgba(29, 43, 95, 0.8)"
-            />
-          }
-        >
-          {loading ? (
-            <ActivityIndicator color="#1ADDDB" style={styles.loader} />
-          ) : (
-            achievements.map((achievement) => (
-              <TouchableOpacity
-                key={achievement._id}
-                style={[
-                  styles.achievementCard,
-                  achievement.completed && styles.achievementCardCompleted
-                ]}
-                onPress={() => handleAchievementPress(achievement)}
-                activeOpacity={0.7}
+          {/* Categories and List Container */}
+          <View style={styles.contentContainer}>
+            {/* Category Filter */}
+            <View style={styles.categoriesWrapper}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoriesContainer}
               >
-                <View style={styles.achievementContent}>
-                  <View style={[
-                    styles.achievementIcon,
-                    { backgroundColor: achievement.completed ? '#1ADDDB' : '#4A4A4A' }
-                  ]}>
+                <TouchableOpacity 
+                  style={[
+                    styles.categoryButton,
+                    selectedCategory === 'all' && styles.categoryButtonActive
+                  ]}
+                  onPress={() => setSelectedCategory('all')}
+                >
+                  <Text style={[
+                    styles.categoryText,
+                    selectedCategory === 'all' && styles.categoryTextActive
+                  ]}>Todos</Text>
+                </TouchableOpacity>
+                {Object.entries(ACHIEVEMENT_CATEGORIES).map(([key, value]) => (
+                  <TouchableOpacity 
+                    key={value}
+                    style={[
+                      styles.categoryButton,
+                      selectedCategory === value && styles.categoryButtonActive
+                    ]}
+                    onPress={() => setSelectedCategory(value)}
+                  >
                     <MaterialCommunityIcons 
-                      name={getAchievementIcon(achievement)}
-                      size={24}
-                      color="#FFFFFF"
-                    />
-                  </View>
-                  <View style={styles.achievementInfo}>
-                    <Text style={styles.achievementTitle}>
-                      {achievement.title}
-                    </Text>
-                    <Text style={styles.achievementDescription}>
-                      {achievement.description}
-                    </Text>
-                    {achievement.requirement > 1 && (
-                      <View style={styles.progressBarMini}>
-                        <View 
-                          style={[
-                            styles.progressBarMiniFill,
-                            { width: `${(achievement.progress / achievement.requirement) * 100}%` }
-                          ]} 
-                        />
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.achievementPoints}>
-                    <MaterialCommunityIcons 
-                      name="star" 
+                      name={getAchievementIcon({ category: value })} 
                       size={16} 
-                      color={achievement.completed ? '#FFD700' : '#4A4A4A'} 
+                      color={selectedCategory === value ? '#1ADDDB' : '#A3B8E8'} 
                     />
                     <Text style={[
-                      styles.pointsValue,
-                      !achievement.completed && styles.pointsValueLocked
+                      styles.categoryText,
+                      selectedCategory === value && styles.categoryTextActive
                     ]}>
-                      +{achievement.points}
+                      {key.charAt(0) + key.slice(1).toLowerCase()}
                     </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Achievements List */}
+            <ScrollView
+              style={styles.achievementsList}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  tintColor="#1ADDDB"
+                  colors={["#1ADDDB"]}
+                  progressBackgroundColor="rgba(29, 43, 95, 0.8)"
+                />
+              }
+            >
+              {loading ? (
+                <ActivityIndicator color="#1ADDDB" style={styles.loader} />
+              ) : (
+                filteredAchievements.map((achievement) => (
+                  <TouchableOpacity
+                    key={achievement.id}
+                    style={[
+                      styles.achievementCard,
+                      achievement.unlocked && styles.achievementCardCompleted
+                    ]}
+                    onPress={() => handleAchievementPress(achievement)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.achievementContent}>
+                      <View style={[
+                        styles.achievementIcon,
+                        { backgroundColor: achievement.unlocked ? '#1ADDDB' : '#4A4A4A' }
+                      ]}>
+                        <MaterialCommunityIcons 
+                          name={getAchievementIcon(achievement)}
+                          size={24}
+                          color="#FFFFFF"
+                        />
+                      </View>
+                      <View style={styles.achievementInfo}>
+                        <Text style={styles.achievementTitle}>
+                          {achievement.title}
+                        </Text>
+                        <Text style={styles.achievementDescription}>
+                          {achievement.description}
+                        </Text>
+                      </View>
+                      <View style={styles.achievementPoints}>
+                        <MaterialCommunityIcons 
+                          name="star" 
+                          size={16} 
+                          color={achievement.unlocked ? '#FFD700' : '#4A4A4A'} 
+                        />
+                        <Text style={[
+                          styles.pointsValue,
+                          !achievement.unlocked && styles.pointsValueLocked
+                        ]}>
+                          +{achievement.points}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
         <FloatingNavBar />
       </ImageBackground>
     </View>
@@ -326,8 +336,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  mainContent: {
+    flex: 1,
+  },
   progressContainer: {
-    margin: 16,
+    marginHorizontal: 16,
+    marginVertical: 8,
     padding: 16,
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
     borderRadius: 12,
@@ -367,19 +381,25 @@ const styles = StyleSheet.create({
     color: '#A3B8E8',
     textAlign: 'center',
   },
+  contentContainer: {
+    flex: 1,
+  },
+  categoriesWrapper: {
+    height: 32,
+    marginBottom: 8,
+  },
   categoriesContainer: {
     paddingHorizontal: 16,
-    marginBottom: 16,
   },
   categoryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    marginRight: 8,
-    gap: 6,
+    marginRight: 6,
+    gap: 3,
+    height: 32,
   },
   categoryButtonActive: {
     backgroundColor: 'rgba(26, 221, 219, 0.1)',
@@ -388,21 +408,21 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: '#A3B8E8',
-    fontSize: 14,
+    fontSize: 12,
+    lineHeight: 16,
   },
   categoryTextActive: {
     color: '#1ADDDB',
     fontWeight: '500',
   },
   achievementsList: {
-    flex: 1,
     paddingHorizontal: 16,
   },
   achievementCard: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
   },
@@ -452,20 +472,10 @@ const styles = StyleSheet.create({
     color: '#4A4A4A',
   },
   loader: {
-    marginTop: 20,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  progressBarMini: {
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 1.5,
-    marginTop: 8,
-    width: '100%'
-  },
-  progressBarMiniFill: {
-    height: '100%',
-    backgroundColor: '#1ADDDB',
-    borderRadius: 1.5
-  }
 });
 
 export default AchievementsScreen; 
