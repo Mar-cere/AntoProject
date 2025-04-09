@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,20 @@ import {
   ScrollView,
   ActivityIndicator,
   ImageBackground,
-  SafeAreaView
+  SafeAreaView,
+  Animated
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../config/api';
+import * as Haptics from 'expo-haptics';
 
 const EditProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -26,37 +31,46 @@ const EditProfileScreen = ({ navigation }) => {
     theme: 'light'
   });
   const [errors, setErrors] = useState({});
+  const [fadeAnim] = useState(new Animated.Value(0));
+
+  const { checkSession } = useSession();
 
   useEffect(() => {
     loadUserData();
   }, []);
 
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
   const loadUserData = async () => {
     try {
-      // Primero intentamos obtener el token
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await checkSession();
       
       if (!token) {
-        Alert.alert('Error', 'No se encontró la sesión del usuario');
         return;
       }
 
-      // Hacemos la petición al backend
-      const response = await fetch('http://tu-api.com/api/users/me', {
+      const response = await fetch(`${API_URL}/api/users/me`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
       });
 
       if (!response.ok) {
-        throw new Error('Error al obtener datos del usuario');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al obtener datos del usuario');
       }
 
       const userData = await response.json();
       
-      // Actualizamos el estado con los datos del usuario
       setFormData({
         name: userData.name || '',
         username: userData.username || '',
@@ -67,19 +81,58 @@ const EditProfileScreen = ({ navigation }) => {
 
     } catch (error) {
       console.error('Error al cargar datos:', error);
-      Alert.alert('Error', 'No se pudieron cargar los datos del perfil');
+      handleError(error);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleError = (error) => {
+    console.error('Error:', error);
+    
+    let errorMessage = 'Ha ocurrido un error';
+    
+    if (error.message.includes('network')) {
+      errorMessage = 'Error de conexión. Por favor, verifica tu internet.';
+    } else if (error.message.includes('timeout')) {
+      errorMessage = 'La solicitud ha tardado demasiado. Intenta de nuevo.';
+    }
+
+    Alert.alert(
+      'Error',
+      errorMessage,
+      [
+        { 
+          text: 'Reintentar', 
+          onPress: () => loadUserData() 
+        },
+        { 
+          text: 'OK',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
   const validateForm = () => {
     const newErrors = {};
     
+    if (formData.name && formData.name.length < 3) {
+      newErrors.name = 'El nombre debe tener al menos 3 caracteres';
+    }
+
     if (!formData.email) {
       newErrors.email = 'El correo es requerido';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Correo inválido';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      Alert.alert(
+        'Errores de validación',
+        Object.values(newErrors).join('\n'),
+        [{ text: 'OK' }]
+      );
     }
 
     setErrors(newErrors);
@@ -91,21 +144,22 @@ const EditProfileScreen = ({ navigation }) => {
 
     setSaving(true);
     try {
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await checkSession();
       
       if (!token) {
         throw new Error('No se encontró la sesión del usuario');
       }
 
-      const response = await fetch('http://tu-api.com/api/users/me', {
+      const response = await fetch(`${API_URL}/api/users/me`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
+          name: formData.name.trim(),
+          email: formData.email.trim(),
           preferences: {
             notifications: formData.notifications,
             theme: formData.theme
@@ -114,28 +168,71 @@ const EditProfileScreen = ({ navigation }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Error al actualizar el perfil');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al actualizar el perfil');
       }
 
       const updatedUser = await response.json();
-      
-      // Actualizamos el almacenamiento local
       await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
       
       Alert.alert(
         'Éxito',
         'Perfil actualizado correctamente',
-        [{ text: 'OK', onPress: () => {
-          setEditing(false);
-        }}]
+        [{ text: 'OK', onPress: () => setEditing(false) }]
       );
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+      setHasChanges(false);
+      
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error al guardar:', error);
-      Alert.alert('Error', 'No se pudo actualizar el perfil');
+      handleError(error);
     } finally {
       setSaving(false);
     }
   };
+
+  const handleFormChange = (field, value) => {
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      setHasChanges(true);
+      return newData;
+    });
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!hasChanges) return;
+
+      e.preventDefault();
+      Alert.alert(
+        'Cambios sin guardar',
+        '¿Deseas descartar los cambios?',
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => {} },
+          {
+            text: 'Descartar',
+            style: 'destructive',
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [hasChanges, navigation]);
+
+  const handleToggleNotifications = useCallback(() => {
+    if (!editing) return;
+    handleFormChange('notifications', !formData.notifications);
+  }, [editing, formData.notifications]);
+
+  const handleToggleTheme = useCallback(() => {
+    if (!editing) return;
+    handleFormChange('theme', formData.theme === 'light' ? 'dark' : 'light');
+  }, [editing, formData.theme]);
 
   if (loading) {
     return (
@@ -182,12 +279,12 @@ const EditProfileScreen = ({ navigation }) => {
           )}
         </View>
 
-        <ScrollView style={styles.content}>
+        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               <MaterialCommunityIcons name="account-circle" size={80} color="#1ADDDB" />
             </View>
-            <Text style={styles.profileName}>{formData.name || formData.username}</Text>
+            <Text style={styles.profileName}>{formData.name || ""}</Text>
             <Text style={styles.profileUsername}>@{formData.username}</Text>
           </View>
 
@@ -195,16 +292,16 @@ const EditProfileScreen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Información Personal</Text>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Nombre Completo</Text>
+              <Text style={styles.label}>Nombre</Text>
               <TextInput
                 style={[
                   styles.input,
                   !editing && styles.inputDisabled
                 ]}
                 value={formData.name}
-                onChangeText={(text) => setFormData({...formData, name: text})}
+                onChangeText={(text) => handleFormChange('name', text)}
                 editable={editing}
-                placeholder="Agregar nombre completo"
+                placeholder="Agregar nombre"
                 placeholderTextColor="#A3B8E8"
               />
             </View>
@@ -226,7 +323,7 @@ const EditProfileScreen = ({ navigation }) => {
               <TextInput
                 style={[styles.input, errors.email && styles.inputError]}
                 value={formData.email}
-                onChangeText={(text) => setFormData({...formData, email: text})}
+                onChangeText={(text) => handleFormChange('email', text)}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 editable={editing}
@@ -242,10 +339,7 @@ const EditProfileScreen = ({ navigation }) => {
             
             <TouchableOpacity 
               style={styles.optionButton}
-              onPress={() => editing && setFormData({
-                ...formData,
-                notifications: !formData.notifications
-              })}
+              onPress={handleToggleNotifications}
             >
               <View style={styles.optionLeft}>
                 <MaterialCommunityIcons name="bell" size={24} color="#1ADDDB" />
@@ -264,10 +358,7 @@ const EditProfileScreen = ({ navigation }) => {
 
             <TouchableOpacity 
               style={styles.optionButton}
-              onPress={() => editing && setFormData({
-                ...formData,
-                theme: formData.theme === 'light' ? 'dark' : 'light'
-              })}
+              onPress={handleToggleTheme}
             >
               <View style={styles.optionLeft}>
                 <MaterialCommunityIcons 
@@ -284,7 +375,14 @@ const EditProfileScreen = ({ navigation }) => {
               />
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </Animated.View>
+
+        {saveSuccess && (
+          <View style={styles.saveSuccessIndicator}>
+            <MaterialCommunityIcons name="check-circle" size={20} color="#4CAF50" />
+            <Text style={styles.saveSuccessText}>Guardado</Text>
+          </View>
+        )}
       </ImageBackground>
     </SafeAreaView>
   );
@@ -445,6 +543,52 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.5,
   },
+  saveSuccessIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    position: 'absolute',
+    top: 60,
+    right: 16,
+  },
+  saveSuccessText: {
+    color: '#4CAF50',
+    marginLeft: 4,
+    fontSize: 14,
+  },
+  inputFocused: {
+    borderColor: '#1ADDDB',
+    borderWidth: 2,
+  },
+  headerButtonWithBadge: {
+    position: 'relative',
+  },
+  changesBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1ADDDB',
+  },
 });
+
+const useSession = () => {
+  const checkSession = useCallback(async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      Alert.alert('Sesión Expirada', 'Por favor, inicia sesión nuevamente');
+      navigation.replace('Login');
+      return null;
+    }
+    return token;
+  }, []);
+
+  return { checkSession };
+};
 
 export default EditProfileScreen;

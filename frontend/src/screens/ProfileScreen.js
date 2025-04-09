@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import FloatingNavBar from '../components/FloatingNavBar';
+import { ROUTES } from '../constants/routes';
 
 const LEVEL_CONFIG = {
   BASE_XP: 100,
@@ -171,14 +172,51 @@ const ProfileScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.clear();
+              setLoading(true);
+              
+              // Limpiar solo los datos relevantes de la sesión
+              const keysToRemove = [
+                'userToken',
+                'userData',
+                'userPreferences'
+              ];
+              
+              await Promise.all(
+                keysToRemove.map(key => AsyncStorage.removeItem(key))
+              );
+
+              // Reiniciar el estado local
+              setUserData({
+                username: '',
+                email: '',
+                avatar: null,
+                lastLogin: null,
+                preferences: {
+                  theme: 'light',
+                  notifications: true
+                },
+                stats: {
+                  tasksCompleted: 0,
+                  habitsStreak: 0,
+                  lastActive: null
+                },
+                achievements: [],
+                totalPoints: 0
+              });
+
+              // Navegar a la pantalla de inicio de sesión usando la constante de ruta
               navigation.reset({
                 index: 0,
-                routes: [{ name: 'SignIn' }],
+                routes: [{ name: ROUTES.SIGN_IN }],
               });
             } catch (error) {
               console.error('Error al cerrar sesión:', error);
-              Alert.alert('Error', 'No se pudo cerrar sesión');
+              Alert.alert(
+                'Error',
+                'No se pudo cerrar sesión. Por favor, intenta nuevamente.'
+              );
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -323,15 +361,6 @@ const ProfileScreen = ({ navigation }) => {
             >
               <MaterialCommunityIcons name="account-edit" size={24} color="#1ADDDB" />
               <Text style={styles.optionText}>Editar Perfil</Text>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#A3B8E8" />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.optionButton}
-              onPress={() => navigation.navigate('Privacy')}
-            >
-              <MaterialCommunityIcons name="shield-lock" size={24} color="#1ADDDB" />
-              <Text style={styles.optionText}>Privacidad</Text>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#A3B8E8" />
             </TouchableOpacity>
 

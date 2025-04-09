@@ -320,7 +320,7 @@ const SignInScreen = () => {
                   
                   <TouchableOpacity 
                     style={styles.backButton}
-                    onPress={() => navigation.goBack()}
+                    onPress={() => navigation.navigate('Home')}
                     activeOpacity={0.7}
                   >
                     <Ionicons name="arrow-back" size={24} color="#1ADDDB" />
