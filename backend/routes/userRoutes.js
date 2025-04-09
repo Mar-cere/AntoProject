@@ -7,11 +7,7 @@ const router = express.Router();
 // Ruta para obtener datos del usuario actual
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    console.log('Token recibido:', req.headers.authorization);
-    console.log('ID de usuario:', req.user.id);
-    
-    const user = await User.findOne({ id: req.user.id });
-    console.log('Usuario encontrado:', user);
+    const user = await User.findOne({ id: req.user.id }).select('-password -salt -__v');
     
     if (!user) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
@@ -35,10 +31,17 @@ router.put('/me', authenticateToken, async (req, res) => {
   }
 
   try {
-    updates.forEach(update => req.user[update] = req.body[update]);
-    await req.user.save();
-    res.json(req.user);
+    const user = await User.findOne({ id: req.user.id });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    updates.forEach(update => user[update] = req.body[update]);
+    await user.save();
+    res.json(user);
   } catch (error) {
+    console.error('Error al actualizar usuario:', error);
     res.status(400).json({ message: error.message });
   }
 });

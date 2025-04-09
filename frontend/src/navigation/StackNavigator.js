@@ -15,6 +15,7 @@ import HabitsScreen from '../screens/HabitsScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import JournalScreen from '../screens/JournalScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 import { ROUTES } from '../constants/routes';
 
 const Stack = createStackNavigator();
@@ -45,6 +46,11 @@ const StackNavigator = () => {
       <Stack.Screen name="Achievements" component={AchievementsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Journal" component={JournalScreen} />
+      <Stack.Screen 
+  name="EditProfile" 
+  component={EditProfileScreen}
+  options={{ headerShown: false }}
+/>
     </Stack.Navigator>
   );
 };

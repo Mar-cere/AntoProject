@@ -19,6 +19,13 @@ const userSchema = new mongoose.Schema({
     default: () => crypto.randomBytes(16).toString('hex'),
     unique: true
   },
+  name: {
+    type: String,
+    trim: true,
+    minlength: [3, 'El nombre completo debe tener al menos 3 caracteres'],
+    maxlength: [50, 'El nombre completo debe tener máximo 50 caracteres'],
+    default: ''
+  },
   username: {
     type: String,
     required: [true, 'El nombre de usuario es requerido'],

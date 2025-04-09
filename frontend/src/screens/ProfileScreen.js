@@ -9,24 +9,60 @@ import {
   ActivityIndicator,
   Alert,
   ImageBackground,
-  RefreshControl
+  RefreshControl,
+  SafeAreaView
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import FloatingNavBar from '../components/FloatingNavBar';
 
+const LEVEL_CONFIG = {
+  BASE_XP: 100,
+  XP_INCREASE: 50, // Cada nivel requiere 50 XP más que el anterior
+  MAX_LEVEL: 50
+};
+
+const calculateLevelInfo = (points) => {
+  let level = 1;
+  let remainingPoints = points;
+  let requiredXP = LEVEL_CONFIG.BASE_XP;
+  
+  while (remainingPoints >= requiredXP && level < LEVEL_CONFIG.MAX_LEVEL) {
+    remainingPoints -= requiredXP;
+    level++;
+    requiredXP = LEVEL_CONFIG.BASE_XP + (LEVEL_CONFIG.XP_INCREASE * (level - 1));
+  }
+
+  const progress = remainingPoints / requiredXP;
+  
+  return {
+    level,
+    currentXP: remainingPoints,
+    requiredXP,
+    progress: Math.min(progress, 1)
+  };
+};
 
 const ProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState({
-    name: '',
+    username: '',
     email: '',
     avatar: null,
-    points: 0,
-    level: 1,
-    joinDate: null,
+    lastLogin: null,
+    preferences: {
+      theme: 'light',
+      notifications: true
+    },
+    stats: {
+      tasksCompleted: 0,
+      habitsStreak: 0,
+      lastActive: null
+    },
+    achievements: [],
+    totalPoints: 0
   });
   const [stats, setStats] = useState({
     tasksCompleted: 0,
@@ -35,40 +71,41 @@ const ProfileScreen = ({ navigation }) => {
     currentStreak: 0,
     bestStreak: 0,
   });
+  const [detailedStats, setDetailedStats] = useState({
+    totalTasks: 0,
+    tasksCompleted: 0,
+    tasksThisWeek: 0,
+    habitsActive: 0,
+    habitsCompleted: 0,
+    totalHabits: 0,
+    achievementsUnlocked: 0,
+    totalAchievements: 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    lastActive: null
+  });
 
   const loadUserData = useCallback(async () => {
     try {
-      const [
-        storedUserData,
-        storedTasks,
-        storedHabits,
-        storedAchievements
-      ] = await Promise.all([
-        AsyncStorage.getItem('userData'),
-        AsyncStorage.getItem('tasks'),
-        AsyncStorage.getItem('habits'),
-        AsyncStorage.getItem('userAchievements')
-      ]);
-
+      const storedUserData = await AsyncStorage.getItem('userData');
       if (storedUserData) {
         const parsedUserData = JSON.parse(storedUserData);
         setUserData(prevData => ({
           ...prevData,
-          ...parsedUserData
+          ...parsedUserData,
+          stats: {
+            ...parsedUserData.stats,
+            lastActive: new Date()
+          }
         }));
       }
 
-      // Calcular estadísticas
-      const tasks = storedTasks ? JSON.parse(storedTasks) : [];
-      const habits = storedHabits ? JSON.parse(storedHabits) : [];
-      const achievements = storedAchievements ? JSON.parse(storedAchievements) : [];
-
-      setStats({
-        tasksCompleted: tasks.filter(task => task.completed).length,
-        habitsActive: habits.filter(habit => !habit.archived).length,
-        achievementsUnlocked: achievements.filter(achievement => achievement.unlocked).length,
-        currentStreak: calculateCurrentStreak(habits),
-        bestStreak: calculateBestStreak(habits),
+      // Calculamos estadísticas detalladas
+      setDetailedStats({
+        ...detailedStats,
+        achievementsUnlocked: userData.achievements.length,
+        currentStreak: userData.stats.habitsStreak,
+        lastActive: userData.stats.lastActive
       });
 
     } catch (error) {
@@ -149,6 +186,8 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
+  const levelInfo = calculateLevelInfo(userData.totalPoints);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -158,7 +197,7 @@ const ProfileScreen = ({ navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ImageBackground
         source={require('../images/back.png')}
         style={styles.background}
@@ -175,17 +214,17 @@ const ProfileScreen = ({ navigation }) => {
             />
           }
         >
-          {/* Header */}
+          {/* Header Mejorado */}
           <View style={styles.header}>
             <TouchableOpacity 
-              style={styles.backButton}
+              style={styles.headerButton}
               onPress={() => navigation.goBack()}
             >
               <MaterialCommunityIcons name="arrow-left" size={24} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Mi Perfil</Text>
             <TouchableOpacity 
-              style={styles.settingsButton}
+              style={styles.headerButton}
               onPress={() => navigation.navigate('Settings')}
             >
               <MaterialCommunityIcons name="cog" size={24} color="#FFFFFF" />
@@ -212,47 +251,66 @@ const ProfileScreen = ({ navigation }) => {
                 <MaterialCommunityIcons name="camera" size={16} color="#FFFFFF" />
               </View>
             </TouchableOpacity>
-            <Text style={styles.userName}>{userData.name}</Text>
+            <Text style={styles.userName}>{userData.username}</Text>
             <Text style={styles.userEmail}>{userData.email}</Text>
             
-            {/* Nivel y Progreso */}
+            {/* Nivel y Progreso Mejorado */}
             <View style={styles.levelContainer}>
-              <Text style={styles.levelText}>Nivel {calculateLevel(userData.points)}</Text>
+              <Text style={styles.levelText}>Nivel {levelInfo.level}</Text>
               <View style={styles.progressBarContainer}>
                 <View 
                   style={[
                     styles.progressBar,
-                    { width: `${calculateProgress(userData.points) * 100}%` }
+                    { width: `${levelInfo.progress * 100}%` }
                   ]} 
                 />
               </View>
-              <Text style={styles.pointsText}>{userData.points} puntos</Text>
+              <Text style={styles.pointsText}>
+                {levelInfo.currentXP} / {levelInfo.requiredXP} XP
+              </Text>
+              <Text style={styles.totalPointsText}>
+                Total: {userData.totalPoints} puntos
+              </Text>
             </View>
           </View>
 
-          {/* Estadísticas */}
+          {/* Estadísticas actualizadas */}
           <View style={styles.statsContainer}>
             <Text style={styles.sectionTitle}>Estadísticas</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
                 <MaterialCommunityIcons name="check-circle" size={24} color="#1ADDDB" />
-                <Text style={styles.statValue}>{stats.tasksCompleted}</Text>
+                <Text style={styles.statValue}>{userData.stats.tasksCompleted}</Text>
                 <Text style={styles.statLabel}>Tareas Completadas</Text>
+                <Text style={styles.statSubLabel}>
+                  {detailedStats.tasksThisWeek} esta semana
+                </Text>
               </View>
               <View style={styles.statItem}>
                 <MaterialCommunityIcons name="lightning-bolt" size={24} color="#FFD700" />
-                <Text style={styles.statValue}>{stats.habitsActive}</Text>
+                <Text style={styles.statValue}>{detailedStats.habitsActive}</Text>
                 <Text style={styles.statLabel}>Hábitos Activos</Text>
+                <Text style={styles.statSubLabel}>
+                  {detailedStats.habitsCompleted} completados hoy
+                </Text>
               </View>
               <View style={styles.statItem}>
                 <MaterialCommunityIcons name="trophy" size={24} color="#FF6B6B" />
-                <Text style={styles.statValue}>{stats.achievementsUnlocked}</Text>
+                <Text style={styles.statValue}>
+                  {userData.achievements.length}/{detailedStats.totalAchievements}
+                </Text>
                 <Text style={styles.statLabel}>Logros Desbloqueados</Text>
+                <Text style={styles.statSubLabel}>
+                  {Math.round((userData.achievements.length / detailedStats.totalAchievements) * 100)}% completado
+                </Text>
               </View>
               <View style={styles.statItem}>
                 <MaterialCommunityIcons name="fire" size={24} color="#FF9F1C" />
-                <Text style={styles.statValue}>{stats.currentStreak}</Text>
+                <Text style={styles.statValue}>{userData.stats.habitsStreak}</Text>
                 <Text style={styles.statLabel}>Racha Actual</Text>
+                <Text style={styles.statSubLabel}>
+                  Mejor: {detailedStats.bestStreak} días
+                </Text>
               </View>
             </View>
           </View>
@@ -265,15 +323,6 @@ const ProfileScreen = ({ navigation }) => {
             >
               <MaterialCommunityIcons name="account-edit" size={24} color="#1ADDDB" />
               <Text style={styles.optionText}>Editar Perfil</Text>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#A3B8E8" />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.optionButton}
-              onPress={() => navigation.navigate('Notifications')}
-            >
-              <MaterialCommunityIcons name="bell" size={24} color="#1ADDDB" />
-              <Text style={styles.optionText}>Notificaciones</Text>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#A3B8E8" />
             </TouchableOpacity>
 
@@ -306,7 +355,7 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </ScrollView>
       </ImageBackground>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -332,13 +381,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 44,
-    paddingBottom: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(3, 10, 36, 0.8)', // Fondo semi-transparente
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(26, 221, 219, 0.1)',
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(29, 43, 95, 0.5)',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
+    textAlign: 'center',
   },
   profileSection: {
     alignItems: 'center',
@@ -478,6 +538,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FF6B6B',
     fontWeight: '500',
+  },
+  totalPointsText: {
+    fontSize: 12,
+    color: '#A3B8E8',
+    marginTop: 4,
+  },
+  statSubLabel: {
+    fontSize: 10,
+    color: '#A3B8E8',
+    textAlign: 'center',
+    marginTop: 4,
   },
 });
 

@@ -142,14 +142,6 @@ const HabitCard = memo(() => {
           <View style={styles.emptyContainer}>
             <MaterialCommunityIcons name="lightning-bolt" size={40} color="#A3B8E8" />
             <Text style={styles.emptyText}>No hay hábitos activos</Text>
-            <TouchableOpacity 
-              style={styles.addHabitButton}
-              onPress={() => navigation.navigate('Habits', { openModal: true })}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons name="plus" size={16} color="#1ADDDB" />
-              <Text style={styles.addHabitText}>Crear hábito</Text>
-            </TouchableOpacity>
           </View>
         )}
   
