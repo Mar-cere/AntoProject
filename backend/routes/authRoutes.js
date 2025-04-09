@@ -15,13 +15,14 @@ router.get('/health', (req, res) => {
 router.post('/register', async (req, res) => {
   try {
     console.log('📝 Iniciando registro de usuario...');
-    const { email, password, username } = req.body;
+    const { email, password, username, name } = req.body;
 
     // Log de datos recibidos
     console.log('📬 Datos recibidos:', {
       email,
       username,
-      hasPassword: !!password
+      hasPassword: !!password,
+      name: name ? name.trim() : null
     });
 
     // Validar campos requeridos
@@ -54,7 +55,7 @@ router.post('/register', async (req, res) => {
 
     // Crear nuevo usuario
     console.log('👤 Creando nuevo usuario...');
-    const user = new User({
+    const userData = {
       email,
       username,
       password: hash,
@@ -67,8 +68,11 @@ router.post('/register', async (req, res) => {
         tasksCompleted: 0,
         habitsStreak: 0,
         lastActive: new Date()
-      }
-    });
+      },
+      ...(name && name.trim() ? { name: name.trim() } : {})
+    };
+
+    const user = new User(userData);
 
     // Guardar usuario con timeout
     console.log('💾 Guardando usuario en la base de datos...');

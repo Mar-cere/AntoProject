@@ -24,7 +24,13 @@ const userSchema = new mongoose.Schema({
     trim: true,
     minlength: [3, 'El nombre completo debe tener al menos 3 caracteres'],
     maxlength: [50, 'El nombre completo debe tener máximo 50 caracteres'],
-    default: ''
+    default: null,
+    validate: {
+      validator: function(v) {
+        return v === null || v === undefined || v.length >= 3;
+      },
+      message: props => `El nombre completo debe tener al menos 3 caracteres`
+    }
   },
   username: {
     type: String,
