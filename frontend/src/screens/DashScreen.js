@@ -20,6 +20,7 @@ import QuoteSection from '../components/QuoteSection';
 import { usePoints } from '../components/Points';
 import { API_URL } from '../config/api';
 import DashboardScroll from '../components/DashboardScroll';
+import PomodoroCard from '../components/PomodoroCard';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -176,6 +177,8 @@ const DashScreen = () => {
         >
           <QuoteSection />
           
+          
+          
           <TaskCard 
             tasks={state.tasks}
             onComplete={async (taskId) => {
@@ -190,6 +193,8 @@ const DashScreen = () => {
             }}
           />
           
+          <PomodoroCard />
+
           <AchievementCard 
             achievements={state.achievements}
           />

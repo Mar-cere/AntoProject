@@ -17,6 +17,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import JournalScreen from '../screens/JournalScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import HelpScreen from '../screens/HelpScreen';
+import PomodoroScreen from '../screens/PomodoroScreen';
 import { ROUTES } from '../constants/routes';
 
 const Stack = createStackNavigator();
@@ -53,6 +54,7 @@ const StackNavigator = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen name="Help" component={HelpScreen} />
+      <Stack.Screen name="Pomodoro" component={PomodoroScreen} />
     </Stack.Navigator>
   );
 };
