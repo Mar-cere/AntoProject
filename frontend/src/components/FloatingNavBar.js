@@ -1,14 +1,7 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, Animated, StyleSheet, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-// Hacemos que useSafeAreaInsets sea opcional para evitar errores si no está disponible
-const useSafeAreaInsets = () => ({ bottom: 0 });
-try {
-  const { useSafeAreaInsets: safeAreaHook } = require('react-native-safe-area-context');
-  if (safeAreaHook) useSafeAreaInsets = safeAreaHook;
-} catch (error) {
-  console.warn('react-native-safe-area-context no está disponible, usando fallback');
-}
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * Componente de barra de navegación flotante

@@ -434,17 +434,23 @@ const PomodoroScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#030A24" />
       <View style={styles.header}>
-        <Animated.Text 
-          style={[
-            styles.headerTitle,
-            { color: modes[mode].color }
-          ]}
+        <Text style={styles.headerTitle}>Mi Diario</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setCurrentEntry({
+              id: null,
+              date: new Date(),
+              content: '',
+              mood: 'neutral',
+              tags: []
+            });
+            setShowModal(true);
+          }}
         >
-          {modes[mode].label}
-        </Animated.Text>
-        <Text style={styles.headerSubtitle}>
-          {isActive ? "En progreso..." : "Listo para empezar"}
-        </Text>
+          <MaterialCommunityIcons name="plus" size={24} color="#1ADDDB" />
+        </TouchableOpacity>
       </View>
       <View style={styles.container}>
         <ScrollView style={styles.content}>
@@ -732,9 +738,9 @@ const styles = StyleSheet.create({
     paddingBottom: 85, // Agregar padding para el FloatingNavBar
   },
   header: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
@@ -745,10 +751,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 4,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#A3B8E8',
-    opacity: 0.8,
+  addButton: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#1ADDDB',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,

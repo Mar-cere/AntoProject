@@ -31,6 +31,13 @@ export const ENDPOINTS = {
   HABITS: '/api/habits',
   HABIT_BY_ID: (id) => `/api/habits/${id}`,
   HABIT_COMPLETE: (id) => `/api/habits/${id}/complete`,
+
+  // Journal (Nuevo)
+  JOURNAL: '/api/journal',
+  JOURNAL_BY_ID: (id) => `/api/journal/${id}`,
+  JOURNAL_MOOD_SUMMARY: '/api/journal/mood-summary',
+  JOURNAL_BY_TAGS: '/api/journal/by-tags',
+  JOURNAL_PRIVACY: (id) => `/api/journal/${id}/privacy`,
 };
 
 const makeRequest = (url, options) => {
@@ -93,9 +100,12 @@ export const api = {
     }
   },
 
-  get: async (endpoint) => {
+  get: async (endpoint, params = {}) => {
     try {
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `${API_URL}${endpoint}?${queryString}` : `${API_URL}${endpoint}`;
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json'
@@ -109,6 +119,79 @@ export const api = {
       }
 
       return data;
+    } catch (error) {
+      console.error(`Error en ${endpoint}:`, error);
+      throw error;
+    }
+  },
+
+  // Nuevo método para PUT
+  put: async (endpoint, data) => {
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.message || 'Error en la petición');
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error(`Error en ${endpoint}:`, error);
+      throw error;
+    }
+  },
+
+  // Nuevo método para DELETE
+  delete: async (endpoint) => {
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Error en la petición');
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`Error en ${endpoint}:`, error);
+      throw error;
+    }
+  },
+
+  // Nuevo método para PATCH
+  patch: async (endpoint, data) => {
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.message || 'Error en la petición');
+      }
+
+      return responseData;
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
       throw error;
