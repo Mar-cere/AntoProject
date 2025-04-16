@@ -1,14 +1,11 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+import { protect } from '../middleware/authMiddleware.js';
 import Message from '../models/Message.js';
 
 const router = express.Router();
 
-// Middleware de autenticación para todas las rutas
-router.use(authenticateToken);
-
 // Obtener mensajes de una conversación con filtros
-router.get('/conversations/:conversationId', async (req, res) => {
+router.get('/conversations/:conversationId', protect, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { 
@@ -55,7 +52,7 @@ router.get('/conversations/:conversationId', async (req, res) => {
 });
 
 // Crear nuevo mensaje
-router.post('/messages', async (req, res) => {
+router.post('/messages', protect, async (req, res) => {
   try {
     const message = new Message({
       ...req.body,
@@ -77,7 +74,7 @@ router.post('/messages', async (req, res) => {
 });
 
 // Obtener todas las conversaciones del usuario con estadísticas
-router.get('/conversations', async (req, res) => {
+router.get('/conversations', protect, async (req, res) => {
   try {
     const conversations = await Message.aggregate([
       {
@@ -114,7 +111,7 @@ router.get('/conversations', async (req, res) => {
 });
 
 // Actualizar estado de mensajes
-router.patch('/messages/status', async (req, res) => {
+router.patch('/messages/status', protect, async (req, res) => {
   try {
     const { messageIds, status } = req.body;
 
@@ -148,7 +145,7 @@ router.patch('/messages/status', async (req, res) => {
 });
 
 // Eliminar mensajes de una conversación
-router.delete('/conversations/:conversationId', async (req, res) => {
+router.delete('/conversations/:conversationId', protect, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { type } = req.query; // Opcional: eliminar solo cierto tipo de mensajes
@@ -176,7 +173,7 @@ router.delete('/conversations/:conversationId', async (req, res) => {
 });
 
 // Buscar mensajes con filtros avanzados
-router.get('/messages/search', async (req, res) => {
+router.get('/messages/search', protect, async (req, res) => {
   try {
     const { 
       query,
