@@ -6,7 +6,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import ParticleBackground from '../components/ParticleBackground';
-import { api, ENDPOINTS } from '../config/api';
+import { api, ENDPOINTS, login } from '../config/api';
 import { ROUTES } from '../../constants/routes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -33,7 +33,7 @@ const SignInScreen = () => {
       setIsLoading(false);
       Animated.parallel([
         Animated.timing(fadeAnim, {
-          toValue: 1,
+          toValue: Number(1),
           duration: 800,
           useNativeDriver: true,
         }),
@@ -158,50 +158,76 @@ const SignInScreen = () => {
 
   // Función para manejar el inicio de sesión
   const handleLogin = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
     try {
       setIsSubmitting(true);
-      setIsLoading(true);
 
-      const loginData = {
+      if (!validateForm()) {
+        setIsSubmitting(false);
+        return;
+      }
+
+      const response = await api.post(ENDPOINTS.LOGIN, {
         email: formData.email.toLowerCase().trim(),
         password: formData.password
-      };
-
-      console.log('Intentando login con:', {
-        ...loginData,
-        password: '***HIDDEN***'
       });
 
-      const response = await api.post(ENDPOINTS.LOGIN, loginData);
-      console.log('Respuesta del login:', response);
+      console.log('Respuesta del servidor:', response);
 
-      if (response.token) {
-        await AsyncStorage.setItem('userToken', response.token);
-        await AsyncStorage.setItem('savedEmail', loginData.email);
-        
+      if (response.token && response.user) {
+        // Guardamos los datos del usuario
+        await Promise.all([
+          AsyncStorage.setItem('userToken', response.token),
+          AsyncStorage.setItem('userData', JSON.stringify(response.user)),
+          AsyncStorage.setItem('savedEmail', formData.email)
+        ]);
+
+        // Navegamos al Dashboard y limpiamos el stack de navegación
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
         });
       } else {
-        throw new Error('No se recibió token de autenticación');
+        Alert.alert(
+          'Error',
+          'No se pudo iniciar sesión. Por favor, intenta de nuevo.'
+        );
       }
-
     } catch (error) {
       console.error('Error en login:', error);
-      Alert.alert(
-        'Error de inicio de sesión',
-        error.message || 'No se pudo iniciar sesión. Por favor, verifica tus credenciales.'
-      );
+      
+      let errorMessage = 'Hubo un problema al iniciar sesión';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Correo o contraseña incorrectos';
+      } else if (error.response?.status === 429) {
+        errorMessage = 'Demasiados intentos. Por favor, espera un momento';
+      } else if (!error.response) {
+        errorMessage = 'Error de conexión. Verifica tu internet';
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
-      setIsLoading(false);
     }
   };
+
+  const isButtonDisabled = Boolean(
+    isSubmitting || 
+    isLoading || 
+    !formData.email || 
+    !formData.password ||
+    errors.email || 
+    errors.password
+  );
+
+  useEffect(() => {
+    setErrors({ email: '', password: '' });
+    return () => {
+      // Limpieza al desmontar
+      setFormData({ email: '', password: '' });
+      setErrors({ email: '', password: '' });
+    };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -213,7 +239,7 @@ const SignInScreen = () => {
       >
         <ParticleBackground />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -278,13 +304,15 @@ const SignInScreen = () => {
                     <TouchableOpacity
                       onPressIn={handlePressIn}
                       onPress={handleLogin}
-                      disabled={isSubmitting || isLoading || !formData.email || !formData.password}
+                      disabled={Boolean(isButtonDisabled)}
                       style={[
                         styles.mainButton,
                         {
                           transform: [{ scale: buttonScale }],
-                          opacity: buttonOpacity,
-                          backgroundColor: (isSubmitting || isLoading) ? 'rgba(26, 221, 219, 0.5)' : 'rgba(26, 221, 219, 0.9)'
+                          opacity: isButtonDisabled ? 0.5 : buttonOpacity,
+                          backgroundColor: isButtonDisabled ? 
+                            'rgba(26, 221, 219, 0.5)' : 
+                            'rgba(26, 221, 219, 0.9)'
                         }
                       ]}
                       activeOpacity={0.8}

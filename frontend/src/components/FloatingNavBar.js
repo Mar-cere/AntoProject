@@ -30,7 +30,7 @@ const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
       // Si no, usa navigation directamente
       switch (screen) {
         case 'Dash':
-          navigation.navigate('Dashboard');
+          navigation.navigate('Dash');
           break;
         case 'Calendar':
           navigation.navigate('Tasks');

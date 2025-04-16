@@ -51,15 +51,28 @@ router.get('/', async (req, res) => {
 // Crear nueva entrada
 router.post('/', async (req, res) => {
   try {
+    console.log('Datos recibidos para nueva entrada:', req.body);
+    
     const entry = new Journal({
       ...req.body,
-      userId: req.user._id
+      userId: req.user._id,
+      date: new Date()
     });
 
-    await entry.save();
-    res.status(201).json(entry);
+    const validationError = entry.validateSync();
+    if (validationError) {
+      console.error('Error de validación:', validationError);
+      return res.status(400).json({
+        message: 'Error de validación',
+        errors: Object.values(validationError.errors).map(err => err.message)
+      });
+    }
+
+    const savedEntry = await entry.save();
+    console.log('Entrada guardada exitosamente:', savedEntry);
+    res.status(201).json(savedEntry);
   } catch (error) {
-    console.error('Error al crear entrada:', error);
+    console.error('Error detallado al crear entrada:', error);
     res.status(400).json({ 
       message: 'Error al crear la entrada', 
       error: error.message,

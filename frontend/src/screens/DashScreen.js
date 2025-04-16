@@ -21,6 +21,7 @@ import { usePoints } from '../components/Points';
 import { API_URL } from '../config/api';
 import DashboardScroll from '../components/DashboardScroll';
 import PomodoroCard from '../components/PomodoroCard';
+import NetInfo from '@react-native-community/netinfo';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -37,6 +38,15 @@ const ACHIEVEMENTS = [
   { id: '3', title: 'Productividad', description: 'Completa 10 tareas en una semana', points: 150, icon: '⚡', unlocked: false },
   { id: '4', title: 'Maestría', description: 'Alcanza el 100% en un hábito', points: 200, icon: '🌟', unlocked: false },
 ];
+
+// Constante para caché
+const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutos
+const CACHE_KEYS = {
+  TASKS: '@app_tasks_cache',
+  HABITS: '@app_habits_cache',
+  ACHIEVEMENTS: '@app_achievements_cache',
+  TIMESTAMP: '@app_cache_timestamp'
+};
 
 // Componente para mostrar errores con opciones de recuperación
 const ErrorMessage = ({ message, onRetry, onDismiss }) => (
@@ -72,7 +82,10 @@ const DashScreen = () => {
     greeting: ''
   });
 
-  const loadData = useCallback(async () => {
+  // Función para cargar datos
+  const loadData = useCallback(async (forceRefresh = false) => {
+    if (!forceRefresh && state.refreshing) return;
+
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
@@ -80,21 +93,34 @@ const DashScreen = () => {
         return;
       }
 
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      // Función para manejar respuestas
+      const fetchWithSafeResponse = async (url) => {
+        try {
+          const response = await fetch(url, { headers });
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const text = await response.text();
+          return text ? JSON.parse(text) : [];
+        } catch (error) {
+          console.error(`Error fetching ${url}:`, error);
+          return [];
+        }
+      };
+
       const [userData, tasks, habits, achievements] = await Promise.all([
-        fetch(`${API_URL}/api/users/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()),
-        fetch(`${API_URL}/api/tasks`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()),
-        fetch(`${API_URL}/api/habits`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()),
-        fetch(`${API_URL}/api/achievements`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json())
+        fetchWithSafeResponse(`${API_URL}/api/users/me`),
+        fetchWithSafeResponse(`${API_URL}/api/tasks`),
+        fetchWithSafeResponse(`${API_URL}/api/habits`),
+        fetchWithSafeResponse(`${API_URL}/api/achievements`)
       ]);
 
+      // Actualizar el saludo
       const currentHour = new Date().getHours();
       const greeting = currentHour < 12 ? 'Buenos días' :
                       currentHour < 18 ? 'Buenas tardes' :
@@ -104,41 +130,33 @@ const DashScreen = () => {
         ...prev,
         loading: false,
         refreshing: false,
-        userData,
-        tasks,
-        habits,
-        achievements,
-        greeting
+        userData: userData || {},
+        tasks: Array.isArray(tasks) ? tasks : [],
+        habits: Array.isArray(habits) ? habits : [],
+        achievements: Array.isArray(achievements) ? achievements : [],
+        greeting,
+        error: null
       }));
 
     } catch (error) {
-      console.error('Error:', error);
-      if (error.message.includes('401')) {
-        await AsyncStorage.removeItem('userToken');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'SignIn' }],
-        });
-      }
+      console.error('Error en loadData:', error);
       setState(prev => ({
         ...prev,
-        error: 'No se pudieron cargar los datos',
+        error: 'Error al cargar los datos',
         loading: false,
         refreshing: false
       }));
     }
   }, [navigation]);
 
+  // Efecto para carga inicial
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (state.loading) {
+      loadData();
+    }
+  }, [loadData, state.loading]);
 
-  const handleScroll = useCallback((event) => {
-    // Aquí puedes manejar el evento de scroll
-    const offsetY = event.nativeEvent.contentOffset.y;
-    // Hacer algo con offsetY si es necesario
-  }, []);
-
+  // Componente de carga
   if (state.loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -157,7 +175,6 @@ const DashScreen = () => {
       >
         <ParticleBackground />
         
-        {/* Header fijo */}
         <View style={styles.headerFixed}>
           <Header 
             greeting={state.greeting}
@@ -167,29 +184,39 @@ const DashScreen = () => {
           />
         </View>
 
-        {/* Contenido scrolleable */}
         <DashboardScroll 
           refreshing={state.refreshing}
           onRefresh={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setState(prev => ({ ...prev, refreshing: true }));
-            loadData();
+            loadData(true);
           }}
         >
           <QuoteSection />
           
-          
+          {state.error && (
+            <ErrorMessage 
+              message={state.error}
+              onRetry={() => loadData(true)}
+              onDismiss={() => setState(prev => ({ ...prev, error: null }))}
+            />
+          )}
           
           <TaskCard 
             tasks={state.tasks}
             onComplete={async (taskId) => {
-              const newPoints = await addPoints(10, 'complete_task');
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await addPoints(POINTS.COMPLETE_TASK, 'complete_task');
+              loadData(true);
             }}
           />
           
           <HabitCard 
             habits={state.habits}
             onUpdate={async (habitId) => {
-              const newPoints = await addPoints(20, 'maintain_habit');
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await addPoints(POINTS.MAINTAIN_HABIT, 'maintain_habit');
+              loadData(true);
             }}
           />
           
@@ -197,13 +224,15 @@ const DashScreen = () => {
 
           <AchievementCard 
             achievements={state.achievements}
+            onUnlock={async (achievementId) => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              await addPoints(POINTS.UNLOCK_ACHIEVEMENT, 'unlock_achievement');
+              loadData(true);
+            }}
           />
         </DashboardScroll>
         
-        <FloatingNavBar 
-          activeTab="Dash"
-          onTabPress={(screen) => navigation.navigate(screen)}
-        />
+        <FloatingNavBar activeTab="home" />
       </ImageBackground>
     </View>
   );
@@ -349,11 +378,25 @@ const styles = StyleSheet.create({
   },
   headerFixed: {
     backgroundColor: '#030A24',
-    paddingTop: StatusBar.currentHeight || 44, // Espacio para la barra de estado
+    paddingTop: StatusBar.currentHeight || 44,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(163, 184, 232, 0.1)', // Línea sutil de separación
-    zIndex: 2, // Asegura que el header esté por encima del scroll
+    borderBottomColor: 'rgba(163, 184, 232, 0.1)',
+    zIndex: 2,
+  },
+  offlineBanner: {
+    backgroundColor: 'rgba(255, 193, 7, 0.2)',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineText: {
+    color: '#FFC107',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
-export default DashScreen;
+export default memo(DashScreen);

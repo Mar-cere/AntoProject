@@ -4,7 +4,6 @@
  * y pueden ser utilizadas en otras partes de la aplicación
  */
 export const emotions = [
-  "¿Te sientes triste?",
   "¿Ansiedad?",
   "¿Estrés?",
   "¿Confusión?",

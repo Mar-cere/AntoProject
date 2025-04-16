@@ -291,7 +291,7 @@ const TaskScreen = ({ route }) => {
         setFormData={setFormData}
       />
 
-      <FloatingNavBar activeTab="Tasks" />
+      <FloatingNavBar activeTab="calendar" />
     </View>
   );
 };

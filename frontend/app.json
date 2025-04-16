@@ -4,47 +4,25 @@
     "slug": "ProyectoAnto",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/Anto.png",
-    "scheme": "yourapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.yourapp"
+      "bundleIdentifier": "com.yourcompany.yourapp",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "ProyectoAnto necesita usar Face ID para autenticar tu identidad de forma segura",
+        "LSApplicationQueriesSchemes": ["face-id"]
+      }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/Anto.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.yourcompany.yourapp",
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "category": [
-            "DEFAULT",
-            "BROWSABLE"
-          ],
-          "data": {
-            "scheme": "yourapp"
-          }
-        }
-      ]
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/Anto.png"
+      "package": "com.yourcompany.yourapp"
     },
     "plugins": [
       "expo-router",
       [
-        "expo-splash-screen",
+        "expo-local-authentication",
         {
-          "image": "./assets/images/Anto.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "faceIDPermission": "ProyectoAnto necesita usar Face ID para autenticar tu identidad"
         }
       ]
     ],

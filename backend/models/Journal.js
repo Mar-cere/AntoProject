@@ -33,7 +33,7 @@ const journalSchema = new mongoose.Schema({
   mood: {
     type: String,
     required: [true, 'El estado de ánimo es requerido'],
-    enum: ['feliz', 'tranquilo', 'neutral', 'triste', 'ansioso', 'estresado'],
+    enum: ['happy', 'neutral', 'sad', 'excited', 'tired'],
     default: 'neutral'
   },
   tags: [{

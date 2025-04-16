@@ -110,7 +110,7 @@ const HomeScreen = () => {
                 />
 
                 <AnimatedButton
-                  title="Creata"
+                  title="Crear cuenta"
                   onPress={() => handleNavigation(ROUTES.REGISTER)}
                   buttonScale={buttonScale}
                   buttonOpacity={buttonOpacity}

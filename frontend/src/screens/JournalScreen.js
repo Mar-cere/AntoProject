@@ -77,16 +77,28 @@ const JournalScreen = ({ navigation }) => {
     }
 
     try {
+      const entryData = {
+        content: currentEntry.content.trim(),
+        mood: currentEntry.mood,
+        tags: currentEntry.tags || [],
+        metadata: {
+          // Opcional: puedes agregar estos campos si los necesitas
+          location: null,
+          weather: null,
+          activity: null
+        }
+      };
+
       let response;
       if (currentEntry.id) {
         // Editar entrada existente
         response = await api.put(
           ENDPOINTS.JOURNAL_BY_ID(currentEntry.id),
-          currentEntry
+          entryData
         );
       } else {
         // Crear nueva entrada
-        response = await api.post(ENDPOINTS.JOURNAL, currentEntry);
+        response = await api.post(ENDPOINTS.JOURNAL, entryData);
       }
 
       setEntries(prev => {
@@ -107,7 +119,7 @@ const JournalScreen = ({ navigation }) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error al guardar entrada:', error);
-      Alert.alert('Error', 'No se pudo guardar la entrada');
+      Alert.alert('Error', 'No se pudo guardar la entrada. Por favor, intenta de nuevo.');
     }
   };
 
@@ -276,8 +288,8 @@ const JournalScreen = ({ navigation }) => {
   };
 
   const renderEntry = (entry, index) => (
-    <FadeInView delay={index * 100}>
-      <View key={entry.id} style={styles.entryCard}>
+    <FadeInView key={entry.id || index} delay={index * 100}>
+      <View style={styles.entryCard}>
         <View style={styles.entryHeader}>
           <MaterialCommunityIcons 
             name={moods[entry.mood].icon} 
@@ -384,7 +396,7 @@ const JournalScreen = ({ navigation }) => {
               style={styles.content}
             >
               {entries.length > 0 ? (
-                entries.map(renderEntry)
+                entries.map((entry, index) => renderEntry(entry, index))
               ) : (
                 <View style={styles.emptyContainer}>
                   <MaterialCommunityIcons 

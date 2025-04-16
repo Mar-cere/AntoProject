@@ -71,28 +71,36 @@ const makeRequest = (url, options) => {
   });
 };
 
+// Función auxiliar para obtener headers con autorización
+const getAuthHeaders = async () => {
+  const token = await AsyncStorage.getItem('userToken');
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Authorization': token ? `Bearer ${token}` : ''
+  };
+};
+
 // API helper functions
 export const api = {
   post: async (endpoint, data) => {
     try {
       console.log(`Iniciando petición a ${endpoint}`);
+      const headers = await getAuthHeaders();
       
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers,
         body: JSON.stringify(data)
       });
 
-      const responseData = await response.json();
-      console.log(`Respuesta de ${endpoint}:`, responseData);
-
       if (!response.ok) {
-        throw new Error(responseData.message || 'Error en la petición');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en la petición');
       }
 
+      const responseData = await response.json();
+      console.log(`Respuesta de ${endpoint}:`, responseData);
       return responseData;
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
@@ -102,22 +110,21 @@ export const api = {
 
   get: async (endpoint, params = {}) => {
     try {
+      const headers = await getAuthHeaders();
       const queryString = new URLSearchParams(params).toString();
       const url = queryString ? `${API_URL}${endpoint}?${queryString}` : `${API_URL}${endpoint}`;
       
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
+        headers
       });
 
-      const data = await response.json();
-      
       if (!response.ok) {
-        throw new Error(data.message || 'Error en la petición');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en la petición');
       }
 
+      const data = await response.json();
       return data;
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
@@ -125,73 +132,62 @@ export const api = {
     }
   },
 
-  // Nuevo método para PUT
   put: async (endpoint, data) => {
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers,
         body: JSON.stringify(data)
       });
 
-      const responseData = await response.json();
-
       if (!response.ok) {
-        throw new Error(responseData.message || 'Error en la petición');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en la petición');
       }
 
-      return responseData;
+      return await response.json();
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
       throw error;
     }
   },
 
-  // Nuevo método para DELETE
   delete: async (endpoint) => {
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'DELETE',
-        headers: {
-          'Accept': 'application/json'
-        }
+        headers
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Error en la petición');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en la petición');
       }
 
-      return data;
+      return await response.json();
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
       throw error;
     }
   },
 
-  // Nuevo método para PATCH
   patch: async (endpoint, data) => {
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers,
         body: JSON.stringify(data)
       });
 
-      const responseData = await response.json();
-
       if (!response.ok) {
-        throw new Error(responseData.message || 'Error en la petición');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en la petición');
       }
 
-      return responseData;
+      return await response.json();
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);
       throw error;
@@ -207,6 +203,93 @@ export const checkServerConnection = async () => {
   } catch (error) {
     console.error('Error verificando conexión:', error);
     return false;
+  }
+};
+
+export const login = async (credentials) => {
+  try {
+    console.log('Iniciando login con:', credentials);
+    
+    // Usar el helper api.post en lugar de fetch directamente
+    const data = await api.post(ENDPOINTS.LOGIN, credentials);
+    console.log('Respuesta del servidor:', data);
+
+    if (data.token && data.user) {
+      // Guardar el token
+      await AsyncStorage.setItem('userToken', data.token);
+      
+      // Guardar los datos del usuario completos
+      await AsyncStorage.setItem('userData', JSON.stringify(data.user));
+      
+      console.log('Datos guardados exitosamente');
+      console.log('Token guardado:', data.token);
+      console.log('Usuario guardado:', data.user);
+
+      return {
+        success: true,
+        data: {
+          token: data.token,
+          user: data.user
+        }
+      };
+    } else {
+      throw new Error('Respuesta del servidor incompleta');
+    }
+  } catch (error) {
+    console.error('Error en login:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+export const logout = async () => {
+  try {
+    await AsyncStorage.removeItem('userToken');
+    await AsyncStorage.removeItem('userData');
+    return { success: true };
+  } catch (error) {
+    console.error('Error en logout:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Función para verificar el estado de autenticación
+export const checkAuthStatus = async () => {
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const userData = await AsyncStorage.getItem('userData');
+    
+    console.log('Token almacenado:', token);
+    console.log('Datos de usuario almacenados:', userData);
+    
+    if (token && userData) {
+      return {
+        isAuthenticated: true,
+        user: JSON.parse(userData),
+        token
+      };
+    }
+    
+    return { isAuthenticated: false };
+  } catch (error) {
+    console.error('Error verificando autenticación:', error);
+    return { isAuthenticated: false };
+  }
+};
+
+// También sería útil tener una función para verificar los datos guardados
+const checkStoredData = async () => {
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const userData = await AsyncStorage.getItem('userData');
+    console.log('Token almacenado:', token);
+    console.log('UserData almacenado:', userData);
+    return { token, userData };
+  } catch (error) {
+    console.error('Error checking stored data:', error);
+    return { token: null, userData: null };
   }
 };
 
