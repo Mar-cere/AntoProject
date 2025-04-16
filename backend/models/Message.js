@@ -33,6 +33,19 @@ const messageSchema = new mongoose.Schema({
     type: String,
     enum: ['sent', 'delivered', 'read', 'failed'],
     default: 'sent'
+  },
+  type: {
+    type: String,
+    enum: ['text', 'system', 'error'],
+    default: 'text'
+  },
+  isSystemMessage: {
+    type: Boolean,
+    default: false
+  },
+  replyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Message'
   }
 }, {
   timestamps: true

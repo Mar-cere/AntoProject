@@ -24,11 +24,13 @@ import Markdown from 'react-native-markdown-display';
 import { generateAIResponse } from '../services/openaiService';
 import { initializeSocket, sendMessage, onMessage, onTyping, onError, closeSocket } from '../services/chatService';
 import ParticleBackground from '../components/ParticleBackground';
+import api, { ENDPOINTS } from '../config/api';
 
 const { width } = Dimensions.get('window');
 
 const ChatScreen = () => {
   // Estados
+  const [conversationId, setConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -50,7 +52,7 @@ const ChatScreen = () => {
   
   // Efecto para cargar mensajes al inicio
   useEffect(() => {
-    loadMessages();
+    initializeConversation();
     
     // Animación de entrada
     Animated.timing(fadeAnim, {
@@ -142,69 +144,91 @@ const ChatScreen = () => {
     }
   }, []);
   
-  // Enviar mensaje
+  // Función para cargar o crear una conversación
+  const initializeConversation = async () => {
+    try {
+      setIsLoading(true);
+      // Intentar obtener una conversación existente
+      const savedConversationId = await AsyncStorage.getItem('currentConversationId');
+      
+      if (savedConversationId) {
+        // Cargar mensajes de la conversación existente
+        const response = await api.get(ENDPOINTS.CHAT_CONVERSATION_BY_ID(savedConversationId));
+        setConversationId(savedConversationId);
+        setMessages(response.messages || []);
+      } else {
+        // Crear nueva conversación
+        const response = await api.post(ENDPOINTS.CHAT_CONVERSATIONS, {
+          metadata: {
+            type: 'general',
+            startedAt: new Date().toISOString()
+          }
+        });
+        setConversationId(response.conversationId);
+        await AsyncStorage.setItem('currentConversationId', response.conversationId);
+        
+        // Agregar mensaje de bienvenida
+        const welcomeMessage = {
+          content: '¡Hola! Soy Anto, tu asistente personal. ¿En qué puedo ayudarte hoy?',
+          role: 'assistant',
+          metadata: {
+            type: 'welcome'
+          }
+        };
+        await sendMessage(welcomeMessage);
+      }
+    } catch (error) {
+      console.error('Error al inicializar conversación:', error);
+      setError('Error al cargar la conversación');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Actualizar la función handleSend
   const handleSend = async () => {
-    if (inputText.trim() === '') return;
+    if (inputText.trim() === '' || !conversationId) return;
     
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
       console.log('Haptics error:', error);
     }
-    
+
     // Crear mensaje del usuario
     const userMessage = {
-      id: Date.now().toString(),
-      text: inputText,
-      sender: 'user',
-      timestamp: new Date().toISOString()
-    };
-    
-    // Limpiar input antes de procesar para mejor UX
-    const messageToSend = inputText;
-    setInputText('');
-    
-    // Actualizar estado con el mensaje del usuario
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    
-    // Mostrar indicador de escritura
-    setIsTyping(true);
-    
-    try {
-      // Generar respuesta de la IA
-      const aiResponse = await generateAIResponse(updatedMessages);
-      
-      // Crear mensaje de respuesta
-      const responseMessage = {
-        id: (Date.now() + 1).toString(),
-        text: aiResponse.text || "Entiendo. ¿Hay algo más en lo que pueda ayudarte?",
-        sender: 'assistant',
+      content: inputText.trim(),
+      role: 'user',
+      conversationId,
+      metadata: {
         timestamp: new Date().toISOString()
-      };
+      }
+    };
+
+    setInputText('');
+    setIsTyping(true);
+
+    try {
+      // Enviar mensaje al servidor
+      const response = await api.post(ENDPOINTS.CHAT_MESSAGES, userMessage);
       
-      // Actualizar mensajes con la respuesta
-      const messagesWithResponse = [...updatedMessages, responseMessage];
-      setMessages(messagesWithResponse);
-      
-      // Guardar mensajes
-      saveMessages(messagesWithResponse);
+      // Actualizar mensajes localmente
+      setMessages(prevMessages => [...prevMessages, response.message]);
+
+      // Obtener respuesta del asistente
+      const assistantResponse = await api.post(ENDPOINTS.CHAT_MESSAGES, {
+        conversationId,
+        role: 'assistant',
+        content: await generateAIResponse(response.message.content),
+        metadata: {
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      setMessages(prevMessages => [...prevMessages, assistantResponse.message]);
     } catch (error) {
-      console.error('Error al generar respuesta:', error);
-      
-      // Mensaje de error
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        text: isOnline 
-          ? 'Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo.'
-          : 'Lo siento, no puedo conectarme en este momento. Por favor, verifica tu conexión a internet e intenta de nuevo.',
-        sender: 'assistant',
-        timestamp: new Date().toISOString(),
-        isError: true
-      };
-      
-      setMessages([...updatedMessages, errorMessage]);
-      saveMessages([...updatedMessages, errorMessage]);
+      console.error('Error al enviar mensaje:', error);
+      handleMessageError();
     } finally {
       setIsTyping(false);
     }
@@ -212,9 +236,9 @@ const ChatScreen = () => {
   
   // Renderizar cada mensaje
   const renderMessage = ({ item }) => {
-    const isUser = item.sender === 'user';
-    const isAssistant = item.sender === 'assistant' || item.sender === 'bot';
-    const hasError = item.isError;
+    const isUser = item.role === 'user';
+    const isAssistant = item.role === 'assistant';
+    const hasError = item.metadata?.error;
     
     return (
       <View style={[
@@ -231,7 +255,7 @@ const ChatScreen = () => {
             isUser ? styles.userMessageText : styles.botMessageText,
             hasError && styles.errorText
           ]}>
-            {item.text}
+            {item.content}
           </Text>
           
           {hasError && (
@@ -325,25 +349,21 @@ const ChatScreen = () => {
     }
   };
   
-  // Función para borrar la conversación
+  // Actualizar la función clearConversation
   const clearConversation = async () => {
     try {
-      // Mensaje de bienvenida
-      const welcomeMessage = {
-        id: '1',
-        text: '¡Hola! Soy Anto, tu asistente personal. ¿En qué puedo ayudarte hoy?',
-        sender: 'bot',
-        timestamp: new Date().toISOString(),
-      };
+      if (conversationId) {
+        await api.delete(ENDPOINTS.CHAT_CONVERSATION_BY_ID(conversationId));
+      }
       
-      // Actualizar estado
-      setMessages([welcomeMessage]);
-      await AsyncStorage.setItem('chatMessages', JSON.stringify([welcomeMessage]));
+      // Eliminar ID de conversación actual
+      await AsyncStorage.removeItem('currentConversationId');
       
-      // Cerrar modal
+      // Inicializar nueva conversación
+      await initializeConversation();
+      
       setShowClearModal(false);
       
-      // Feedback táctil
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (error) {
@@ -351,6 +371,7 @@ const ChatScreen = () => {
       }
     } catch (error) {
       console.error('Error al borrar la conversación:', error);
+      setError('Error al borrar la conversación');
     }
   };
   
@@ -358,8 +379,8 @@ const ChatScreen = () => {
   const retryMessage = (failedMessage) => {
     // Encontrar el mensaje del usuario que causó el error
     const userMessageIndex = messages.findIndex(
-      msg => msg.sender === 'user' && 
-      new Date(msg.timestamp) < new Date(failedMessage.timestamp) &&
+      msg => msg.role === 'user' && 
+      new Date(msg.metadata.timestamp) < new Date(failedMessage.metadata.timestamp) &&
       messages.indexOf(msg) === messages.lastIndexOf(msg)
     );
     
@@ -373,7 +394,7 @@ const ChatScreen = () => {
       
       // Reintentar con el mensaje del usuario
       setRetryCount(retryCount + 1);
-      setInputText(userMessage.text);
+      setInputText(userMessage.content);
       setTimeout(() => handleSend(), 100);
     }
   };

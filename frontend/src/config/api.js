@@ -38,6 +38,14 @@ export const ENDPOINTS = {
   JOURNAL_MOOD_SUMMARY: '/api/journal/mood-summary',
   JOURNAL_BY_TAGS: '/api/journal/by-tags',
   JOURNAL_PRIVACY: (id) => `/api/journal/${id}/privacy`,
+
+  // Chat
+  CHAT: '/api/chat',
+  CHAT_MESSAGES: '/api/chat/messages',
+  CHAT_CONVERSATIONS: '/api/chat/conversations',
+  CHAT_CONVERSATION_BY_ID: (id) => `/api/chat/conversations/${id}`,
+  CHAT_MESSAGE_STATUS: '/api/chat/messages/status',
+  CHAT_SEARCH: '/api/chat/messages/search',
 };
 
 const makeRequest = (url, options) => {
