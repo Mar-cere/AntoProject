@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect } from '../middleware/authMiddleware.js';
+import { authenticateToken as protect } from '../middleware/auth.js';
 import Message from '../models/Message.js';
 
 const router = express.Router();
