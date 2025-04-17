@@ -14,6 +14,66 @@ const RESPONSE_LENGTHS = {
   largo: 300    // Respuestas elaboradas para temas importantes
 };
 
+const emotionalPatterns = {
+  anxiety: {
+    patterns: /(?:ansie(?:dad|oso)|nervios|inquiet(?:o|ud)|preocupa(?:do|ción)|angustia)/i,
+    responses: {
+      immediate: "técnicas de respiración y grounding",
+      followUp: "exploración de desencadenantes",
+      tools: ["respiración 4-7-8", "5-4-3-2-1 sensorial", "mindfulness rápido"]
+    }
+  },
+  depression: {
+    patterns: /(?:triste(?:za)?|deprimi(?:do|da)|sin energía|desánimo|desmotiva(?:do|da)|solo|soledad)/i,
+    responses: {
+      immediate: "validación y activación conductual",
+      followUp: "estructura y rutinas diarias",
+      tools: ["pequeñas metas", "registro de logros", "actividades placenteras"]
+    }
+  },
+  anger: {
+    patterns: /(?:enoja(?:do|da)|ira|rabia|molest(?:o|a)|frustrad(?:o|a)|impotencia)/i,
+    responses: {
+      immediate: "técnicas de regulación emocional",
+      followUp: "análisis de disparadores",
+      tools: ["tiempo fuera", "expresión regulada", "reencuadre"]
+    }
+  },
+  crisis: {
+    patterns: /(?:crisis|emergencia|suicid(?:a|o)|no puedo más|ayuda urgente|desesperado)/i,
+    responses: {
+      immediate: "contención inmediata y evaluación de riesgo",
+      followUp: "plan de seguridad",
+      tools: ["contactos de emergencia", "recursos inmediatos", "plan de crisis"]
+    }
+  }
+};
+
+const analyzeEmotionalContent = (message) => {
+  const analysis = {
+    primaryEmotion: null,
+    intensity: 0,
+    requiresUrgentCare: false,
+    suggestedTools: [],
+    followUpNeeded: false
+  };
+
+  for (const [emotion, data] of Object.entries(emotionalPatterns)) {
+    if (data.patterns.test(message.content)) {
+      analysis.primaryEmotion = emotion;
+      analysis.suggestedTools = data.responses.tools;
+      analysis.followUpNeeded = true;
+      
+      if (emotion === 'crisis') {
+        analysis.requiresUrgentCare = true;
+        analysis.intensity = 10;
+      }
+    }
+  }
+
+  return analysis;
+};
+
 const determineResponseLength = (message, context) => {
   // Palabras clave que indican necesidad de respuesta elaborada
   const longResponseTriggers = [
@@ -117,42 +177,54 @@ const sanitizeJsonString = (str) => {
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
-    // 1. Eliminamos el análisis de contexto complejo y usamos uno más simple
-    const quickContext = {
-      isQuestion: message.content.includes('?'),
-      isGreeting: /^(hola|hi|hey|buenos días|buenas|que tal)/i.test(message.content),
-      isShort: message.content.split(' ').length <= 4
-    };
-
-    // 2. Usamos un modelo más rápido para respuestas simples
-    const shouldUseGPT4 = !quickContext.isShort || 
-                         message.content.length > 50 || 
-                         conversationHistory.length > 5;
-
-    const enrichedPrompt = {
+    const emotionalAnalysis = analyzeEmotionalContent(message);
+    const conversationState = await analyzeConversationState(conversationHistory);
+    
+    const therapeuticPrompt = {
       role: 'system',
-      content: `Eres Anto, un asistente conversacional amigable y conciso.
-      
-      INSTRUCCIONES CLAVE:
-      - Responde siempre en español
-      - Usa respuestas cortas y naturales
-      - Mantén un tono casual como WhatsApp
-      - Usa máximo un emoji por respuesta
-      - Si el mensaje es complejo, divide la respuesta
-      ${quickContext.isQuestion ? '- Da respuestas directas y útiles' : ''}
-      ${quickContext.isGreeting ? '- Responde al saludo de forma amigable y breve' : ''}
-      
-      NO uses frases formales o académicas.
-      NO des explicaciones innecesarias.
-      NO uses más de 2 líneas si no es necesario.`
+      content: `Eres Anto, asistente terapéutico empático y profesional.
+
+      ANÁLISIS ACTUAL:
+      - Emoción principal: ${emotionalAnalysis.primaryEmotion || 'neutral'}
+      - Intensidad: ${emotionalAnalysis.intensity}/10
+      - Requiere urgencia: ${emotionalAnalysis.requiresUrgentCare ? 'Sí' : 'No'}
+      - Herramientas sugeridas: ${emotionalAnalysis.suggestedTools.join(', ')}
+
+      ESTADO DE LA CONVERSACIÓN:
+      - Fase: ${conversationState.phase}
+      - Temas recurrentes: ${conversationState.recurringThemes.join(', ')}
+      - Progreso: ${conversationState.progress}
+
+      DIRECTRICES DE RESPUESTA:
+      1. PRIORIDAD TERAPÉUTICA:
+         ${emotionalAnalysis.requiresUrgentCare ? '- Contención inmediata y evaluación de riesgo' : ''}
+         ${emotionalAnalysis.primaryEmotion ? '- Validación emocional y herramientas específicas' : ''}
+         - Mantener continuidad terapéutica
+         - Promover autonomía y autorregulación
+
+      2. ESTRUCTURA DE RESPUESTA:
+         - Validación: Reconocer y normalizar la experiencia
+         - Exploración: Preguntas que promuevan el insight
+         - Herramientas: Sugerir técnicas específicas
+         - Seguimiento: Establecer continuidad
+
+      3. ESTILO COMUNICATIVO:
+         - Empático pero profesional
+         - Claro y directo
+         - Orientado a soluciones
+         - Promover la reflexión
+
+      4. CONSIDERACIONES ESPECIALES:
+         ${conversationState.needsReframing ? '- Ofrecer perspectivas alternativas' : ''}
+         ${conversationState.needsStabilization ? '- Priorizar estabilización emocional' : ''}
+         ${conversationState.needsResourceBuilding ? '- Fortalecer recursos de afrontamiento' : ''}`
     };
 
     const completion = await openai.chat.completions.create({
-      model: shouldUseGPT4 ? 'gpt-4-turbo-preview' : 'gpt-3.5-turbo',
+      model: 'gpt-4-turbo-preview',
       messages: [
-        enrichedPrompt,
-        // Solo incluimos los últimos 2 mensajes para contexto rápido
-        ...conversationHistory.slice(-2).map(msg => ({
+        therapeuticPrompt,
+        ...conversationHistory.slice(-5).map(msg => ({
           role: msg.role,
           content: msg.content
         })),
@@ -161,24 +233,53 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
           content: message.content
         }
       ],
-      temperature: quickContext.isQuestion ? 0.3 : 0.7, // Más preciso para preguntas
-      max_tokens: quickContext.isShort ? 30 : 100,     // Respuestas más cortas
-      presence_penalty: 0.6,                           // Mantener variedad
-      frequency_penalty: 0.5                           // Evitar repeticiones
+      temperature: emotionalAnalysis.requiresUrgentCare ? 0.3 : 0.7,
+      max_tokens: determineResponseLength(emotionalAnalysis, conversationState),
+      presence_penalty: 0.6
+    });
+
+    // Actualizar el registro terapéutico
+    await updateTherapeuticRecord(userId, {
+      emotion: emotionalAnalysis.primaryEmotion,
+      tools: emotionalAnalysis.suggestedTools,
+      progress: conversationState.progress
     });
 
     return {
       content: completion.choices[0].message.content,
-      context: quickContext
+      analysis: emotionalAnalysis,
+      state: conversationState
     };
 
   } catch (error) {
-    console.error('Error generando respuesta:', error);
-    // En caso de error, dar una respuesta rápida por defecto
-    return {
-      content: "Disculpa, ¿podrías repetir eso? 😊",
-      context: { error: true }
-    };
+    console.error('Error en respuesta terapéutica:', error);
+    throw error;
+  }
+};
+
+const updateTherapeuticRecord = async (userId, sessionData) => {
+  try {
+    await TherapeuticRecord.findOneAndUpdate(
+      { userId },
+      {
+        $push: {
+          sessions: {
+            timestamp: new Date(),
+            emotion: sessionData.emotion,
+            toolsUsed: sessionData.tools,
+            progress: sessionData.progress
+          }
+        },
+        $set: {
+          lastInteraction: new Date(),
+          currentStatus: sessionData.emotion,
+          activeTools: sessionData.tools
+        }
+      },
+      { upsert: true }
+    );
+  } catch (error) {
+    console.error('Error actualizando registro terapéutico:', error);
   }
 };
 
