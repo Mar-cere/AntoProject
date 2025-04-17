@@ -74,34 +74,131 @@ const analyzeEmotionalContent = (message) => {
   return analysis;
 };
 
-const determineResponseLength = (message, context) => {
-  // Palabras clave que indican necesidad de respuesta elaborada
-  const longResponseTriggers = [
-    'explica', 'explícame', 'por qué', 'ayúdame a entender',
-    'necesito ayuda con', 'cómo puedo', 'qué opinas sobre'
-  ];
+const analyzeConversationState = async (conversationHistory) => {
+  try {
+    // Estados de conversación predefinidos
+    const conversationPhases = {
+      INITIAL: 'inicial',
+      EXPLORATION: 'exploración',
+      INSIGHT: 'comprensión',
+      TOOL_LEARNING: 'aprendizaje',
+      PRACTICE: 'práctica',
+      FOLLOW_UP: 'seguimiento'
+    };
 
-  // Palabras clave que indican respuesta corta
-  const shortResponseTriggers = [
-    'ok', 'sí', 'no', 'bien', 'gracias', 'entiendo',
-    'claro', 'vale', '👍', '😊'
-  ];
+    // Si no hay historial suficiente, retornar estado inicial
+    if (!conversationHistory || conversationHistory.length < 3) {
+      return {
+        phase: conversationPhases.INITIAL,
+        recurringThemes: [],
+        progress: 'iniciando',
+        needsReframing: false,
+        needsStabilization: false,
+        needsResourceBuilding: true
+      };
+    }
 
-  const messageContent = message.content.toLowerCase();
+    // Analizar últimos mensajes para identificar temas recurrentes
+    const recentMessages = conversationHistory.slice(-5);
+    const themes = new Set();
+    let emotionalInstability = 0;
+    let resourceMentions = 0;
 
-  // Si el mensaje del usuario es corto y simple, responder de forma similar
-  if (messageContent.split(' ').length <= 4 || 
-      shortResponseTriggers.some(trigger => messageContent.includes(trigger))) {
-    return 'corto';
+    recentMessages.forEach(msg => {
+      // Detectar temas emocionales
+      if (/(?:ansie|triste|deprimi|angustia|miedo|preocupa)/i.test(msg.content)) {
+        themes.add('emocional');
+        emotionalInstability++;
+      }
+      // Detectar temas de relaciones
+      if (/(?:familia|amigos|pareja|relación)/i.test(msg.content)) {
+        themes.add('relaciones');
+      }
+      // Detectar temas de trabajo/estudio
+      if (/(?:trabajo|estudio|escuela|universidad)/i.test(msg.content)) {
+        themes.add('ocupacional');
+      }
+      // Detectar menciones de herramientas o técnicas
+      if (/(?:respiración|meditación|ejercicio|técnica)/i.test(msg.content)) {
+        resourceMentions++;
+      }
+    });
+
+    // Determinar fase de la conversación
+    let currentPhase;
+    if (conversationHistory.length <= 3) {
+      currentPhase = conversationPhases.INITIAL;
+    } else if (themes.size >= 2) {
+      currentPhase = conversationPhases.EXPLORATION;
+    } else if (resourceMentions > 0) {
+      currentPhase = conversationPhases.TOOL_LEARNING;
+    } else {
+      currentPhase = conversationPhases.FOLLOW_UP;
+    }
+
+    // Evaluar necesidades específicas
+    const needsReframing = emotionalInstability > 2;
+    const needsStabilization = emotionalInstability > 3;
+    const needsResourceBuilding = resourceMentions < 2;
+
+    // Determinar progreso
+    let progress;
+    if (resourceMentions > 2) {
+      progress = 'aplicando herramientas';
+    } else if (themes.size > 0) {
+      progress = 'identificando patrones';
+    } else {
+      progress = 'explorando';
+    }
+
+    return {
+      phase: currentPhase,
+      recurringThemes: Array.from(themes),
+      progress,
+      needsReframing,
+      needsStabilization,
+      needsResourceBuilding
+    };
+
+  } catch (error) {
+    console.error('Error analizando estado de conversación:', error);
+    // Retornar estado por defecto en caso de error
+    return {
+      phase: 'inicial',
+      recurringThemes: [],
+      progress: 'iniciando',
+      needsReframing: false,
+      needsStabilization: false,
+      needsResourceBuilding: true
+    };
+  }
+};
+
+const determineResponseLength = (emotionalAnalysis, conversationState) => {
+  // Base tokens para diferentes tipos de respuestas
+  const tokenLengths = {
+    SHORT: 75,    // Respuestas breves
+    MEDIUM: 150,  // Respuestas estándar
+    LONG: 250     // Respuestas elaboradas
+  };
+
+  // Si requiere atención urgente, usar respuesta media
+  if (emotionalAnalysis.requiresUrgentCare) {
+    return tokenLengths.MEDIUM;
   }
 
-  // Si el mensaje indica necesidad de explicación o ayuda específica
-  if (longResponseTriggers.some(trigger => messageContent.includes(trigger))) {
-    return 'largo';
+  // Si está en fase inicial o necesita estabilización, usar respuestas más largas
+  if (conversationState.phase === 'inicial' || conversationState.needsStabilization) {
+    return tokenLengths.LONG;
   }
 
-  // Por defecto, usar respuestas medias para mantener la conversación fluida
-  return 'medio';
+  // Si está aprendiendo herramientas o necesita reencuadre, usar respuesta media
+  if (conversationState.phase === 'aprendizaje' || conversationState.needsReframing) {
+    return tokenLengths.MEDIUM;
+  }
+
+  // Para seguimiento general, usar respuestas cortas
+  return tokenLengths.SHORT;
 };
 
 const analyzeMessageContext = async (message, conversationHistory) => {
