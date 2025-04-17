@@ -48,87 +48,64 @@ const analyzeMessageContext = async (message, conversationHistory) => {
   try {
     const contextPrompt = {
       role: 'system',
-      content: `Analiza el siguiente mensaje y su contexto. Responde SOLO con un objeto JSON válido que contenga:
-      {
-        "emotionalContext": {
-          "mainEmotion": string,
-          "intensity": number (1-10),
-          "sentiment": "positive" | "neutral" | "negative"
-        },
-        "topics": string[],
-        "intent": string,
-        "urgency": number (1-5)
-      }
+      content: `Analiza el mensaje y responde con un objeto JSON simple.
+      IMPORTANTE: SOLO devuelve el JSON, sin texto adicional.
       
-      NO incluyas comentarios, explicaciones o texto adicional fuera del JSON.
-      NO uses caracteres especiales o saltos de línea dentro de los valores string.
-      ASEGÚRATE de que el JSON sea válido y parseable.`
+      Formato requerido:
+      {
+        "emotion": "alegría|tristeza|enojo|neutral|preocupación|etc",
+        "intensity": 1-10,
+        "topic": "tema principal",
+        "urgent": true|false
+      }`
     };
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
         contextPrompt,
-        ...conversationHistory.slice(-3).map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
         {
           role: 'user',
           content: message.content
         }
       ],
-      temperature: 0.3, // Temperatura baja para respuestas más consistentes
-      max_tokens: 150,
-      response_format: { type: "json_object" } // Forzar formato JSON
+      temperature: 0.1,
+      max_tokens: 100,
+      response_format: { type: "json_object" }
     });
 
-    let contextData;
+    let parsedResponse;
     try {
-      contextData = JSON.parse(completion.choices[0].message.content);
+      parsedResponse = JSON.parse(completion.choices[0].message.content.trim());
     } catch (parseError) {
-      console.error('Error parseando JSON:', parseError);
-      // Retornar un contexto por defecto si hay error de parsing
-      return {
-        emotionalContext: {
-          mainEmotion: 'neutral',
-          intensity: 5,
-          sentiment: 'neutral'
-        },
-        topics: ['general'],
-        intent: 'conversation',
-        urgency: 1
-      };
+      console.error('Error en el parsing inicial:', completion.choices[0].message.content);
+      return getDefaultContext();
     }
 
-    // Validar y sanitizar el objeto JSON
+    // Validar y sanitizar la respuesta
     return {
       emotionalContext: {
-        mainEmotion: String(contextData.emotionalContext?.mainEmotion || 'neutral'),
-        intensity: Number(contextData.emotionalContext?.intensity || 5),
-        sentiment: String(contextData.emotionalContext?.sentiment || 'neutral')
+        mainEmotion: String(parsedResponse.emotion || 'neutral'),
+        intensity: Number(parsedResponse.intensity) || 5
       },
-      topics: Array.isArray(contextData.topics) ? 
-        contextData.topics.map(topic => String(topic)) : ['general'],
-      intent: String(contextData.intent || 'conversation'),
-      urgency: Number(contextData.urgency || 1)
+      topics: [String(parsedResponse.topic || 'general')],
+      urgent: Boolean(parsedResponse.urgent)
     };
 
   } catch (error) {
     console.error('Error en análisis de contexto:', error);
-    // Retornar un contexto por defecto si hay error general
-    return {
-      emotionalContext: {
-        mainEmotion: 'neutral',
-        intensity: 5,
-        sentiment: 'neutral'
-      },
-      topics: ['general'],
-      intent: 'conversation',
-      urgency: 1
-    };
+    return getDefaultContext();
   }
 };
+
+const getDefaultContext = () => ({
+  emotionalContext: {
+    mainEmotion: 'neutral',
+    intensity: 5
+  },
+  topics: ['general'],
+  urgent: false
+});
 
 // Función auxiliar para sanitizar strings JSON
 const sanitizeJsonString = (str) => {
@@ -140,47 +117,42 @@ const sanitizeJsonString = (str) => {
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
-    const personalizedPrompt = await personalizationService.getPersonalizedPrompt(userId);
-    const context = await analyzeMessageContext(message, conversationHistory);
-    
-    // Determinar la longitud apropiada de la respuesta
-    const responseLength = determineResponseLength(message, context);
+    // 1. Eliminamos el análisis de contexto complejo y usamos uno más simple
+    const quickContext = {
+      isQuestion: message.content.includes('?'),
+      isGreeting: /^(hola|hi|hey|buenos días|buenas|que tal)/i.test(message.content),
+      isShort: message.content.split(' ').length <= 4
+    };
+
+    // 2. Usamos un modelo más rápido para respuestas simples
+    const shouldUseGPT4 = !quickContext.isShort || 
+                         message.content.length > 50 || 
+                         conversationHistory.length > 5;
 
     const enrichedPrompt = {
       role: 'system',
-      content: `Eres Anto, un asistente conversacional amigable y empático. 
-
-      ESTILO DE CONVERSACIÓN:
-      - Mantén un tono casual y natural, como en una conversación por WhatsApp
-      - Usa respuestas cortas y directas cuando sea posible
-      - Divide mensajes largos en varios más cortos si es necesario
-      - Usa emojis ocasionalmente para dar calidez 😊
-      - Evita respuestas demasiado formales o académicas
+      content: `Eres Anto, un asistente conversacional amigable y conciso.
       
-      LONGITUD DE RESPUESTA: ${responseLength}
-      - corto: respuesta concisa y directa
-      - medio: respuesta con contexto pero manteniendo la fluidez
-      - largo: respuesta detallada para temas importantes
+      INSTRUCCIONES CLAVE:
+      - Responde siempre en español
+      - Usa respuestas cortas y naturales
+      - Mantén un tono casual como WhatsApp
+      - Usa máximo un emoji por respuesta
+      - Si el mensaje es complejo, divide la respuesta
+      ${quickContext.isQuestion ? '- Da respuestas directas y útiles' : ''}
+      ${quickContext.isGreeting ? '- Responde al saludo de forma amigable y breve' : ''}
       
-      CONTEXTO TEMPORAL:
-      - Momento del día: ${personalizedPrompt.timeContext || 'afternoon'}
-      - Saludo: ${personalizedPrompt.greeting || 'Hola'}
-      
-      CONTEXTO EMOCIONAL:
-      - Emoción actual: ${context?.emotionalContext?.mainEmotion || 'neutral'}
-      
-      INSTRUCCIONES ESPECÍFICAS:
-      1. Responde siempre en español
-      2. Mantén la conversación fluida y natural
-      3. Si el tema es complejo, sugiere dividirlo en partes más manejables
-      4. Adapta tu estilo al contexto emocional del usuario`
+      NO uses frases formales o académicas.
+      NO des explicaciones innecesarias.
+      NO uses más de 2 líneas si no es necesario.`
     };
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: shouldUseGPT4 ? 'gpt-4-turbo-preview' : 'gpt-3.5-turbo',
       messages: [
         enrichedPrompt,
-        ...conversationHistory.map(msg => ({
+        // Solo incluimos los últimos 2 mensajes para contexto rápido
+        ...conversationHistory.slice(-2).map(msg => ({
           role: msg.role,
           content: msg.content
         })),
@@ -189,29 +161,24 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
           content: message.content
         }
       ],
-      temperature: 0.7,
-      max_tokens: RESPONSE_LENGTHS[responseLength],
-      presence_penalty: 0.6,  // Favorece respuestas más variadas
-      frequency_penalty: 0.5  // Evita repeticiones
+      temperature: quickContext.isQuestion ? 0.3 : 0.7, // Más preciso para preguntas
+      max_tokens: quickContext.isShort ? 30 : 100,     // Respuestas más cortas
+      presence_penalty: 0.6,                           // Mantener variedad
+      frequency_penalty: 0.5                           // Evitar repeticiones
     });
-
-    // Actualizar el patrón de interacción
-    await personalizationService.updateInteractionPattern(
-      userId,
-      context?.emotionalContext?.mainEmotion || 'neutral',
-      context?.topics?.[0] || 'general'
-    );
 
     return {
       content: completion.choices[0].message.content,
-      context: context || { 
-        emotionalContext: { mainEmotion: 'neutral', intensity: 5 }, 
-        topics: ['general'] 
-      }
+      context: quickContext
     };
+
   } catch (error) {
     console.error('Error generando respuesta:', error);
-    throw error;
+    // En caso de error, dar una respuesta rápida por defecto
+    return {
+      content: "Disculpa, ¿podrías repetir eso? 😊",
+      context: { error: true }
+    };
   }
 };
 
