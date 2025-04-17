@@ -27,28 +27,12 @@ const messageSchema = new mongoose.Schema({
     index: true
   },
   metadata: {
-    timestamp: Date,
-    topics: [String],         // Temas detectados en el mensaje
-    emotionalContext: {
-      mainEmotion: String,    // Emoción principal detectada
-      intensity: Number,      // Intensidad de la emoción (1-10)
-      valence: String         // Positiva, negativa, neutral
-    },
-    contextualMemory: {
-      relatedTopics: [String],    // Temas relacionados de conversaciones anteriores
-      previousReferences: [{       // Referencias a mensajes anteriores relevantes
-        messageId: mongoose.Schema.Types.ObjectId,
-        relevance: Number,        // Puntuación de relevancia (0-1)
-        topic: String            // Tema relacionado
-      }],
-      userPreferences: {          // Preferencias detectadas del usuario
-        communicationStyle: String,  // Directo, empático, técnico, etc.
-        responseLength: String,      // Corto, medio, largo
-        topicsOfInterest: [String]   // Temas que interesan al usuario
-      }
-    },
-    type: String,              // Tipo de mensaje (text, error, suggestion, etc.)
-    status: String            // Estado del mensaje (sent, read, etc.)
+    type: Object,  // Cambiado de String a Object
+    default: () => ({
+      timestamp: new Date(),
+      type: 'text',
+      status: 'sent'
+    })
   },
   status: {
     type: String,

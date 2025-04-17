@@ -121,33 +121,59 @@ router.post('/messages', protect, async (req, res) => {
     await userMessage.save();
 
     if (role === 'user') {
-      // Generar respuesta con contexto mejorado
-      const response = await openaiService.generateAIResponse(
-        userMessage,
-        conversationHistory
-      );
+      try {
+        // Generar respuesta con contexto mejorado
+        const response = await openaiService.generateAIResponse(
+          userMessage,
+          conversationHistory
+        );
 
-      // Crear mensaje del asistente con el contexto
-      const assistantMessage = new Message({
-        userId: req.user._id,
-        content: response.content,
-        role: 'assistant',
-        conversationId,
-        timestamp: new Date(),
-        metadata: {
-          ...response.context,
+        // Crear mensaje del asistente con el contexto
+        const assistantMessage = new Message({
+          userId: req.user._id,
+          content: response.content,
+          role: 'assistant',
+          conversationId,
           timestamp: new Date(),
-          type: 'text',
-          status: 'sent'
-        }
-      });
+          metadata: {
+            ...response.context,
+            timestamp: new Date(),
+            type: 'text',
+            status: 'sent'
+          }
+        });
 
-      await assistantMessage.save();
+        await assistantMessage.save();
 
-      res.status(201).json({
-        userMessage,
-        assistantMessage
-      });
+        res.status(201).json({
+          userMessage,
+          assistantMessage
+        });
+      } catch (error) {
+        console.error('Error generando respuesta:', error);
+        
+        // Si hay error en la generación, crear mensaje de error
+        const errorMessage = new Message({
+          userId: req.user._id,
+          content: 'Lo siento, tuve un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?',
+          role: 'assistant',
+          conversationId,
+          timestamp: new Date(),
+          metadata: {
+            timestamp: new Date(),
+            type: 'error',
+            status: 'error',
+            error: error.message
+          }
+        });
+
+        await errorMessage.save();
+
+        res.status(201).json({
+          userMessage,
+          assistantMessage: errorMessage
+        });
+      }
     } else {
       res.status(201).json({ message: userMessage });
     }
