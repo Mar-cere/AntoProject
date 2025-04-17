@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { User } from '../models/User';
 import { API_URL, ENDPOINTS, fetchWithToken } from '../config/api';
-import { OPENAI_API_KEY } from './openai';
 
 // URL base de la API
 export const API_BASE_URL = 'https://antobackend.onrender.com';

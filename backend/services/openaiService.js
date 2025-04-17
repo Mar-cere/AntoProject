@@ -65,7 +65,7 @@ const openaiService = {
         messages: [
           {
             role: 'system',
-            content: 'Analiza el sentimiento y las emociones en el texto. Responde en formato JSON con: emocion_principal, intensidad (1-10), nivel_de_angustia (1-10), temas_detectados'
+            content: 'Eres un analizador de emociones. Analiza el texto y responde SOLO con un objeto JSON que contenga: emocion_principal (string), intensidad (número 1-10), nivel_de_angustia (número 1-10), temas_detectados (string). NO incluyas comillas backtick, formato markdown ni explicaciones adicionales.'
           },
           {
             role: 'user',
@@ -73,17 +73,32 @@ const openaiService = {
           }
         ],
         temperature: 0.3,
-        max_tokens: 150
+        max_tokens: 150,
+        response_format: { type: "json_object" } // Forzar formato JSON
       });
 
-      return JSON.parse(completion.choices[0].message.content);
+      const responseText = completion.choices[0].message.content;
+      
+      try {
+        return JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Error parseando JSON:', responseText);
+        // Valor por defecto si hay error de parseo
+        return {
+          emocion_principal: "neutral",
+          intensidad: 5,
+          nivel_de_angustia: 3,
+          temas_detectados: "conversación general"
+        };
+      }
     } catch (error) {
       console.error('Error en analyzeEmotions:', error);
+      // Valor por defecto si hay error en la llamada a OpenAI
       return {
-        emocion_principal: 'neutral',
+        emocion_principal: "neutral",
         intensidad: 5,
         nivel_de_angustia: 3,
-        temas_detectados: 'general'
+        temas_detectados: "general"
       };
     }
   }
