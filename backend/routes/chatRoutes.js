@@ -91,96 +91,63 @@ router.post('/conversations', protect, async (req, res) => {
 // Crear nuevo mensaje
 router.post('/messages', protect, async (req, res) => {
   try {
-    const { conversationId, content, role = 'user', type = 'text' } = req.body;
+    const { conversationId, content, role = 'user' } = req.body;
 
-    if (!conversationId || !content) {
-      return res.status(400).json({
-        message: 'Se requiere conversationId y contenido del mensaje'
-      });
-    }
+    // Obtener historial reciente
+    const conversationHistory = await Message.find({ 
+      conversationId,
+      timestamp: { 
+        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Últimas 24 horas
+      }
+    })
+    .sort({ timestamp: -1 })
+    .limit(10)
+    .lean();
 
-    // Crear y guardar mensaje del usuario
+    // Crear mensaje del usuario con contexto
     const userMessage = new Message({
       userId: req.user._id,
       content,
       role,
       conversationId,
-      type,
       timestamp: new Date(),
-      status: 'sent',
       metadata: {
-        ...req.body.metadata,
-        timestamp: new Date()
+        timestamp: new Date(),
+        type: 'text',
+        status: 'sent'
       }
     });
 
     await userMessage.save();
 
-    // Si el mensaje es del usuario, generar respuesta del asistente
     if (role === 'user') {
-      try {
-        // Obtener historial reciente de la conversación (últimos 5 mensajes)
-        const conversationHistory = await Message.find({ conversationId })
-          .sort({ timestamp: -1 })
-          .limit(5)
-          .lean();
+      // Generar respuesta con contexto mejorado
+      const response = await openaiService.generateAIResponse(
+        userMessage,
+        conversationHistory
+      );
 
-        // Generar respuesta con OpenAI
-        const aiResponse = await openaiService.generateAIResponse(
-          content,
-          conversationHistory.reverse()
-        );
-
-        // Analizar emociones del mensaje del usuario
-        const emotionAnalysis = await openaiService.analyzeEmotions(content);
-
-        // Crear mensaje del asistente
-        const assistantMessage = new Message({
-          userId: req.user._id,
-          content: aiResponse.content,
-          role: 'assistant',
-          conversationId,
+      // Crear mensaje del asistente con el contexto
+      const assistantMessage = new Message({
+        userId: req.user._id,
+        content: response.content,
+        role: 'assistant',
+        conversationId,
+        timestamp: new Date(),
+        metadata: {
+          ...response.context,
+          timestamp: new Date(),
           type: 'text',
-          timestamp: new Date(),
-          status: 'sent',
-          metadata: {
-            ...aiResponse.metadata,
-            emotionAnalysis,
-            timestamp: new Date()
-          }
-        });
+          status: 'sent'
+        }
+      });
 
-        await assistantMessage.save();
+      await assistantMessage.save();
 
-        res.status(201).json({
-          userMessage,
-          assistantMessage
-        });
-      } catch (error) {
-        console.error('Error al generar respuesta:', error);
-        
-        // Si hay error en la generación de la respuesta, enviar mensaje de error
-        const errorMessage = new Message({
-          userId: req.user._id,
-          content: 'Lo siento, tuve un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?',
-          role: 'assistant',
-          conversationId,
-          type: 'error',
-          timestamp: new Date(),
-          status: 'error',
-          metadata: {
-            error: error.message,
-            timestamp: new Date()
-          }
-        });
-
-        await errorMessage.save();
-
-        res.status(201).json({
-          userMessage,
-          assistantMessage: errorMessage
-        });
-      }
+      res.status(201).json({
+        userMessage,
+        assistantMessage
+      });
     } else {
       res.status(201).json({ message: userMessage });
     }
