@@ -104,25 +104,28 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
       ]
     };
 
+    // Asegurarnos de que tenemos sugerencias válidas
+    const currentSuggestions = timeBasedSuggestions[personalizedPrompt.timeContext] || timeBasedSuggestions.afternoon;
+
     const enrichedPrompt = {
       role: 'system',
       content: `Eres Anto, un asistente terapéutico empático y profesional.
       
       CONTEXTO TEMPORAL:
-      - Momento del día: ${personalizedPrompt.timeContext}
-      - Saludo apropiado: ${personalizedPrompt.greeting}
+      - Momento del día: ${personalizedPrompt.timeContext || 'afternoon'}
+      - Saludo apropiado: ${personalizedPrompt.greeting || 'Hola'}
       
       PREFERENCIAS DEL USUARIO:
-      - Estilo de comunicación: ${personalizedPrompt.style}
-      - Longitud de respuesta: ${personalizedPrompt.responseLength}
-      - Temas preferidos: ${personalizedPrompt.preferredTopics.join(', ')}
+      - Estilo de comunicación: ${personalizedPrompt.style || 'empático'}
+      - Longitud de respuesta: ${personalizedPrompt.responseLength || 'medio'}
+      - Temas preferidos: ${(personalizedPrompt.preferredTopics || ['general']).join(', ')}
       
       CONTEXTO EMOCIONAL:
-      - Emoción actual: ${context.emotionalContext.mainEmotion}
-      - Intensidad: ${context.emotionalContext.intensity}/10
+      - Emoción actual: ${context?.emotionalContext?.mainEmotion || 'neutral'}
+      - Intensidad: ${context?.emotionalContext?.intensity || 5}/10
       
       SUGERENCIAS CONTEXTUALES:
-      ${timeBasedSuggestions[personalizedPrompt.timeContext].join('\n')}
+      ${currentSuggestions.join('\n')}
       
       INSTRUCCIONES:
       1. Usa el saludo apropiado para la hora del día
@@ -154,13 +157,13 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
     // Actualizar el patrón de interacción
     await personalizationService.updateInteractionPattern(
       userId,
-      context.emotionalContext.mainEmotion,
-      context.topics[0]
+      context?.emotionalContext?.mainEmotion || 'neutral',
+      context?.topics?.[0] || 'general'
     );
 
     return {
       content: completion.choices[0].message.content,
-      context: context
+      context: context || { emotionalContext: { mainEmotion: 'neutral', intensity: 5 }, topics: ['general'] }
     };
   } catch (error) {
     console.error('Error generando respuesta:', error);

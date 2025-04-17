@@ -8,11 +8,33 @@ const getTimeOfDay = () => {
   return 'night';
 };
 
+const DEFAULT_PROFILE = {
+  greeting: '',
+  style: 'empático',
+  responseLength: 'medio',
+  preferredTopics: ['general'],
+  timeContext: ''
+};
+
 const personalizationService = {
   async getPersonalizedPrompt(userId) {
     try {
-      const userProfile = await UserProfile.findOne({ userId });
-      if (!userProfile) return null;
+      let userProfile = await UserProfile.findOne({ userId });
+      
+      // Si no existe el perfil, lo creamos
+      if (!userProfile) {
+        userProfile = await UserProfile.create({
+          userId,
+          preferences: {
+            communicationStyle: 'empático',
+            responseLength: 'medio',
+            topics: {
+              preferred: ['general'],
+              avoided: []
+            }
+          }
+        });
+      }
 
       const timeOfDay = getTimeOfDay();
       const greetings = {
@@ -22,24 +44,23 @@ const personalizationService = {
         night: 'Buenas noches'
       };
 
-      // Obtener el estilo según la hora del día
-      const timeBasedStyle = {
-        morning: 'motivacional',
-        afternoon: 'analítico',
-        evening: 'empático',
-        night: 'reconfortante'
-      };
-
       return {
         greeting: greetings[timeOfDay],
-        style: userProfile.preferences.communicationStyle || timeBasedStyle[timeOfDay],
+        style: userProfile.preferences.communicationStyle,
         responseLength: userProfile.preferences.responseLength,
         preferredTopics: userProfile.preferences.topics.preferred,
         timeContext: timeOfDay
       };
     } catch (error) {
       console.error('Error obteniendo perfil personalizado:', error);
-      return null;
+      // Retornamos un perfil por defecto en caso de error
+      const timeOfDay = getTimeOfDay();
+      return {
+        ...DEFAULT_PROFILE,
+        greeting: timeOfDay === 'morning' ? 'Buenos días' :
+                 timeOfDay === 'night' ? 'Buenas noches' : 'Buenas tardes',
+        timeContext: timeOfDay
+      };
     }
   },
 
@@ -59,11 +80,11 @@ const personalizationService = {
           $push: {
             lastInteractions: {
               $each: [{ timestamp: new Date(), emotion, topic }],
-              $slice: -10 // Mantener solo las últimas 10 interacciones
+              $slice: -10
             }
           }
         },
-        { upsert: true }
+        { upsert: true, new: true }
       );
     } catch (error) {
       console.error('Error actualizando patrón de interacción:', error);
