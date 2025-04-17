@@ -8,6 +8,42 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+const RESPONSE_LENGTHS = {
+  corto: 50,    // Respuestas rápidas y conversacionales
+  medio: 150,   // Respuestas con algo más de contexto
+  largo: 300    // Respuestas elaboradas para temas importantes
+};
+
+const determineResponseLength = (message, context) => {
+  // Palabras clave que indican necesidad de respuesta elaborada
+  const longResponseTriggers = [
+    'explica', 'explícame', 'por qué', 'ayúdame a entender',
+    'necesito ayuda con', 'cómo puedo', 'qué opinas sobre'
+  ];
+
+  // Palabras clave que indican respuesta corta
+  const shortResponseTriggers = [
+    'ok', 'sí', 'no', 'bien', 'gracias', 'entiendo',
+    'claro', 'vale', '👍', '😊'
+  ];
+
+  const messageContent = message.content.toLowerCase();
+
+  // Si el mensaje del usuario es corto y simple, responder de forma similar
+  if (messageContent.split(' ').length <= 4 || 
+      shortResponseTriggers.some(trigger => messageContent.includes(trigger))) {
+    return 'corto';
+  }
+
+  // Si el mensaje indica necesidad de explicación o ayuda específica
+  if (longResponseTriggers.some(trigger => messageContent.includes(trigger))) {
+    return 'largo';
+  }
+
+  // Por defecto, usar respuestas medias para mantener la conversación fluida
+  return 'medio';
+};
+
 const analyzeMessageContext = async (message, conversationHistory) => {
   try {
     const completion = await openai.chat.completions.create({
@@ -81,59 +117,37 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
     const personalizedPrompt = await personalizationService.getPersonalizedPrompt(userId);
     const context = await analyzeMessageContext(message, conversationHistory);
     
-    const timeBasedSuggestions = {
-      morning: [
-        "¿Has planificado tus objetivos para hoy?",
-        "¿Qué te gustaría lograr esta mañana?",
-        "Empecemos el día con energía positiva"
-      ],
-      afternoon: [
-        "¿Cómo va tu día hasta ahora?",
-        "Tomemos un momento para reflexionar sobre tu progreso",
-        "¿Necesitas ayuda para manejar el estrés del día?"
-      ],
-      evening: [
-        "¿Cómo te sientes después de tu día?",
-        "Hablemos sobre lo que te preocupa antes de dormir",
-        "Practiquemos algo de relajación"
-      ],
-      night: [
-        "Es importante cuidar tu descanso",
-        "Podemos hablar de lo que te mantiene despierto",
-        "Practiquemos técnicas de relajación para dormir mejor"
-      ]
-    };
-
-    // Asegurarnos de que tenemos sugerencias válidas
-    const currentSuggestions = timeBasedSuggestions[personalizedPrompt.timeContext] || timeBasedSuggestions.afternoon;
+    // Determinar la longitud apropiada de la respuesta
+    const responseLength = determineResponseLength(message, context);
 
     const enrichedPrompt = {
       role: 'system',
-      content: `Eres Anto, un asistente terapéutico empático y profesional.
+      content: `Eres Anto, un asistente conversacional amigable y empático. 
+
+      ESTILO DE CONVERSACIÓN:
+      - Mantén un tono casual y natural, como en una conversación por WhatsApp
+      - Usa respuestas cortas y directas cuando sea posible
+      - Divide mensajes largos en varios más cortos si es necesario
+      - Usa emojis ocasionalmente para dar calidez 😊
+      - Evita respuestas demasiado formales o académicas
+      
+      LONGITUD DE RESPUESTA: ${responseLength}
+      - corto: respuesta concisa y directa
+      - medio: respuesta con contexto pero manteniendo la fluidez
+      - largo: respuesta detallada para temas importantes
       
       CONTEXTO TEMPORAL:
       - Momento del día: ${personalizedPrompt.timeContext || 'afternoon'}
-      - Saludo apropiado: ${personalizedPrompt.greeting || 'Hola'}
-      
-      PREFERENCIAS DEL USUARIO:
-      - Estilo de comunicación: ${personalizedPrompt.style || 'empático'}
-      - Longitud de respuesta: ${personalizedPrompt.responseLength || 'medio'}
-      - Temas preferidos: ${(personalizedPrompt.preferredTopics || ['general']).join(', ')}
+      - Saludo: ${personalizedPrompt.greeting || 'Hola'}
       
       CONTEXTO EMOCIONAL:
       - Emoción actual: ${context?.emotionalContext?.mainEmotion || 'neutral'}
-      - Intensidad: ${context?.emotionalContext?.intensity || 5}/10
       
-      SUGERENCIAS CONTEXTUALES:
-      ${currentSuggestions.join('\n')}
-      
-      INSTRUCCIONES:
-      1. Usa el saludo apropiado para la hora del día
-      2. Adapta tu tono al estilo preferido del usuario
-      3. Mantén la longitud de respuesta preferida
-      4. Considera el contexto temporal para tus sugerencias
-      5. Responde siempre en español
-      6. Prioriza temas relevantes para este momento del día`
+      INSTRUCCIONES ESPECÍFICAS:
+      1. Responde siempre en español
+      2. Mantén la conversación fluida y natural
+      3. Si el tema es complejo, sugiere dividirlo en partes más manejables
+      4. Adapta tu estilo al contexto emocional del usuario`
     };
 
     const completion = await openai.chat.completions.create({
@@ -150,8 +164,9 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: personalizedPrompt.responseLength === 'corto' ? 150 :
-                 personalizedPrompt.responseLength === 'medio' ? 300 : 500
+      max_tokens: RESPONSE_LENGTHS[responseLength],
+      presence_penalty: 0.6,  // Favorece respuestas más variadas
+      frequency_penalty: 0.5  // Evita repeticiones
     });
 
     // Actualizar el patrón de interacción
@@ -163,7 +178,10 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
 
     return {
       content: completion.choices[0].message.content,
-      context: context || { emotionalContext: { mainEmotion: 'neutral', intensity: 5 }, topics: ['general'] }
+      context: context || { 
+        emotionalContext: { mainEmotion: 'neutral', intensity: 5 }, 
+        topics: ['general'] 
+      }
     };
   } catch (error) {
     console.error('Error generando respuesta:', error);
