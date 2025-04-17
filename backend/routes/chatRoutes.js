@@ -2,14 +2,14 @@ import express from 'express';
 import { authenticateToken as protect } from '../middleware/auth.js';
 import Message from '../models/Message.js';
 import mongoose from 'mongoose';
-import openaiService from '../services/openaiService.js';
-import UserProfile from '../models/UserProfile.js';
-import userProfileService from '../services/userProfileService.js';
 import { 
+  openaiService, 
   memoryService, 
   contextAnalyzer, 
   goalTracker 
 } from '../services/index.js';
+import UserProfile from '../models/UserProfile.js';
+import userProfileService from '../services/userProfileService.js';
 
 const router = express.Router();
 

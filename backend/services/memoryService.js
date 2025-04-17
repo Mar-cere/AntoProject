@@ -1,3 +1,5 @@
+import UserInsight from '../models/UserInsight.js';
+
 const memoryService = {
   async updateUserInsights(userId, message, analysis) {
     try {

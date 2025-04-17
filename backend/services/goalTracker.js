@@ -1,3 +1,5 @@
+import UserGoals from '../models/UserGoals.js';
+
 const goalTracker = {
   async updateGoalProgress(userId, message, analysis) {
     const goals = {
@@ -32,7 +34,7 @@ const goalTracker = {
                 'goals.$.milestones': {
                   date: new Date(),
                   description: message.content,
-                  emotionalState: analysis.emotionalContext.mainEmotion
+                  emotionalState: analysis.emotionalContext?.mainEmotion || 'neutral'
                 }
               }
             }

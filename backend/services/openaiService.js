@@ -2,9 +2,9 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import personalizationService from './personalizationService.js';
 import TherapeuticRecord from '../models/TherapeuticRecord.js';
-import { memoryService } from './memoryService.js';
+import memoryService from './memoryService.js';
 import contextAnalyzer from './contextAnalyzer.js';
-import { goalTracker } from './goalTracker.js';
+import goalTracker from './goalTracker.js';
 import UserInsight from '../models/UserInsight.js';
 import UserGoals from '../models/UserGoals.js';
 
