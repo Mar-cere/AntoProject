@@ -46,70 +46,96 @@ const determineResponseLength = (message, context) => {
 
 const analyzeMessageContext = async (message, conversationHistory) => {
   try {
+    const contextPrompt = {
+      role: 'system',
+      content: `Analiza el siguiente mensaje y su contexto. Responde SOLO con un objeto JSON válido que contenga:
+      {
+        "emotionalContext": {
+          "mainEmotion": string,
+          "intensity": number (1-10),
+          "sentiment": "positive" | "neutral" | "negative"
+        },
+        "topics": string[],
+        "intent": string,
+        "urgency": number (1-5)
+      }
+      
+      NO incluyas comentarios, explicaciones o texto adicional fuera del JSON.
+      NO uses caracteres especiales o saltos de línea dentro de los valores string.
+      ASEGÚRATE de que el JSON sea válido y parseable.`
+    };
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
-        {
-          role: 'system',
-          content: `Analiza el mensaje y su contexto. Extrae:
-          1. Temas principales y relacionados
-          2. Contexto emocional
-          3. Preferencias de comunicación
-          4. Referencias a conversaciones previas
-          
-          Responde SOLO con un objeto JSON que contenga:
-          {
-            "topics": ["tema1", "tema2"],
-            "emotionalContext": {
-              "mainEmotion": "emoción",
-              "intensity": número,
-              "valence": "positiva/negativa/neutral"
-            },
-            "userPreferences": {
-              "communicationStyle": "estilo",
-              "responseLength": "longitud",
-              "topicsOfInterest": ["tema1", "tema2"]
-            },
-            "contextualMemory": {
-              "relatedTopics": ["tema1", "tema2"],
-              "previousReferences": [
-                {
-                  "topic": "tema",
-                  "relevance": número
-                }
-              ]
-            }
-          }`
-        },
+        contextPrompt,
+        ...conversationHistory.slice(-3).map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
         {
           role: 'user',
-          content: `Mensaje actual: ${message.content}\n\nHistorial reciente: ${JSON.stringify(conversationHistory.map(m => m.content))}`
+          content: message.content
         }
       ],
-      response_format: { type: "json_object" }
+      temperature: 0.3, // Temperatura baja para respuestas más consistentes
+      max_tokens: 150,
+      response_format: { type: "json_object" } // Forzar formato JSON
     });
 
-    return JSON.parse(completion.choices[0].message.content);
+    let contextData;
+    try {
+      contextData = JSON.parse(completion.choices[0].message.content);
+    } catch (parseError) {
+      console.error('Error parseando JSON:', parseError);
+      // Retornar un contexto por defecto si hay error de parsing
+      return {
+        emotionalContext: {
+          mainEmotion: 'neutral',
+          intensity: 5,
+          sentiment: 'neutral'
+        },
+        topics: ['general'],
+        intent: 'conversation',
+        urgency: 1
+      };
+    }
+
+    // Validar y sanitizar el objeto JSON
+    return {
+      emotionalContext: {
+        mainEmotion: String(contextData.emotionalContext?.mainEmotion || 'neutral'),
+        intensity: Number(contextData.emotionalContext?.intensity || 5),
+        sentiment: String(contextData.emotionalContext?.sentiment || 'neutral')
+      },
+      topics: Array.isArray(contextData.topics) ? 
+        contextData.topics.map(topic => String(topic)) : ['general'],
+      intent: String(contextData.intent || 'conversation'),
+      urgency: Number(contextData.urgency || 1)
+    };
+
   } catch (error) {
     console.error('Error en análisis de contexto:', error);
+    // Retornar un contexto por defecto si hay error general
     return {
-      topics: [],
       emotionalContext: {
-        mainEmotion: "neutral",
+        mainEmotion: 'neutral',
         intensity: 5,
-        valence: "neutral"
+        sentiment: 'neutral'
       },
-      userPreferences: {
-        communicationStyle: "neutral",
-        responseLength: "medium",
-        topicsOfInterest: []
-      },
-      contextualMemory: {
-        relatedTopics: [],
-        previousReferences: []
-      }
+      topics: ['general'],
+      intent: 'conversation',
+      urgency: 1
     };
   }
+};
+
+// Función auxiliar para sanitizar strings JSON
+const sanitizeJsonString = (str) => {
+  return str
+    .replace(/[\n\r\t]/g, ' ') // Reemplazar saltos de línea y tabs con espacios
+    .replace(/\s+/g, ' ')      // Reducir múltiples espacios a uno solo
+    .trim();                   // Eliminar espacios al inicio y final
 };
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
