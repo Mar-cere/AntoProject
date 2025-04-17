@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,47 +10,76 @@ import {
   StyleSheet,
   Image,
   Animated,
-  Keyboard,
   ActivityIndicator,
   StatusBar,
   Dimensions
 } from 'react-native';
-import NetInfo from "@react-native-community/netinfo";
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import Markdown from 'react-native-markdown-display';
-import { generateAIResponse } from '../services/openaiService';
-import { initializeSocket, sendMessage, onMessage, onTyping, onError, closeSocket } from '../services/chatService';
 import ParticleBackground from '../components/ParticleBackground';
-import api, { ENDPOINTS } from '../config/api';
+import chatService from '../services/chatService';
 
 const { width } = Dimensions.get('window');
 
 const ChatScreen = () => {
   // Estados
-  const [conversationId, setConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
   const [error, setError] = useState(null);
   
   // Referencias
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
-  const typingTimeout = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
   // Navegación
   const navigation = useNavigation();
   
-  // Efecto para cargar mensajes al inicio
+  // Inicializar chat
+  const initializeConversation = async () => {
+    try {
+      setIsLoading(true);
+      
+      await chatService.initializeSocket();
+      const conversationId = await AsyncStorage.getItem('currentConversationId');
+      
+      if (conversationId) {
+        const serverMessages = await chatService.getMessages(conversationId);
+        if (serverMessages && serverMessages.length > 0) {
+          setMessages(serverMessages);
+          return;
+        }
+      }
+
+      // Si no hay mensajes, crear mensaje de bienvenida
+      const welcomeMessage = {
+        id: `welcome-${Date.now()}`,
+        content: '¡Hola! Soy Anto, tu asistente personal. ¿En qué puedo ayudarte hoy?',
+        role: 'assistant',
+        type: 'text',
+        metadata: {
+          timestamp: new Date().toISOString(),
+          type: 'welcome'
+        }
+      };
+      
+      setMessages([welcomeMessage]);
+      await chatService.saveMessages([welcomeMessage]);
+      
+    } catch (error) {
+      console.error('Error al inicializar chat:', error);
+      setError('Error al cargar el chat');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Efecto inicial
   useEffect(() => {
     initializeConversation();
     
@@ -60,308 +89,80 @@ const ChatScreen = () => {
       duration: 500,
       useNativeDriver: true,
     }).start();
-    
-    return () => {
-      if (typingTimeout.current) clearTimeout(typingTimeout.current);
-    };
-  }, []);
-  
-  // Efecto para monitorear la conexión a internet
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(state => {
-      setIsOnline(state.isConnected);
+
+    // Configurar callbacks para mensajes y errores
+    const messageUnsubscribe = chatService.onMessage((message) => {
+      setMessages(prevMessages => {
+        const newMessages = [...prevMessages, message];
+        chatService.saveMessages(newMessages);
+        return newMessages;
+      });
     });
-    
-    return () => unsubscribe();
-  }, []);
-  
-  // Efecto para inicializar WebSocket
-  useEffect(() => {
-    // Inicializar socket al montar el componente
-    const initSocket = async () => {
-      try {
-        await initializeSocket();
-      } catch (err) {
-        console.error('Error al conectar socket:', err);
-        setError('Error de conexión');
-      }
-    };
-    
-    initSocket();
-    
-    // Registrar callbacks
-    const messageUnsubscribe = onMessage((message) => {
-      setMessages(prev => [...prev, message]);
+
+    const errorUnsubscribe = chatService.onError((error) => {
+      console.error('Error en el chat:', error);
+      setError('Error en la comunicación');
     });
-    
-    const typingUnsubscribe = onTyping((typing) => {
-      setIsTyping(typing);
-    });
-    
-    const errorUnsubscribe = onError((err) => {
-      setError(err.message);
-    });
-    
-    // Limpiar al desmontar
+
     return () => {
       messageUnsubscribe();
-      typingUnsubscribe();
       errorUnsubscribe();
-      closeSocket();
+      chatService.closeSocket();
     };
   }, []);
-  
-  // Cargar mensajes desde AsyncStorage
-  const loadMessages = async () => {
-    try {
-      const savedMessages = await AsyncStorage.getItem('chatMessages');
-      if (savedMessages) {
-        setMessages(JSON.parse(savedMessages));
-      } else {
-        // Mensaje de bienvenida si no hay mensajes previos
-        const welcomeMessage = {
-          id: '1',
-          text: '¡Hola! Soy Anto, tu asistente personal. ¿En qué puedo ayudarte hoy?',
-          sender: 'bot',
-          timestamp: new Date().toISOString(),
-        };
-        setMessages([welcomeMessage]);
-        await AsyncStorage.setItem('chatMessages', JSON.stringify([welcomeMessage]));
-      }
-    } catch (error) {
-      console.error('Error al cargar mensajes:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  // Guardar mensajes en AsyncStorage
-  const saveMessages = useCallback(async (newMessages) => {
-    try {
-      await AsyncStorage.setItem('chatMessages', JSON.stringify(newMessages));
-    } catch (error) {
-      console.error('Error al guardar mensajes:', error);
-    }
-  }, []);
-  
-  // Función para cargar o crear una conversación
-  const initializeConversation = async () => {
-    try {
-      setIsLoading(true);
-      // Intentar obtener una conversación existente
-      const savedConversationId = await AsyncStorage.getItem('currentConversationId');
-      
-      if (savedConversationId) {
-        // Cargar mensajes de la conversación existente
-        const response = await api.get(ENDPOINTS.CHAT_CONVERSATION_BY_ID(savedConversationId));
-        setConversationId(savedConversationId);
-        setMessages(response.messages || []);
-      } else {
-        // Crear nueva conversación
-        const response = await api.post(ENDPOINTS.CHAT_CONVERSATIONS, {
-          metadata: {
-            type: 'general',
-            startedAt: new Date().toISOString()
-          }
-        });
-        setConversationId(response.conversationId);
-        await AsyncStorage.setItem('currentConversationId', response.conversationId);
-        
-        // Agregar mensaje de bienvenida
-        const welcomeMessage = {
-          content: '¡Hola! Soy Anto, tu asistente personal. ¿En qué puedo ayudarte hoy?',
-          role: 'assistant',
-          metadata: {
-            type: 'welcome'
-          }
-        };
-        await sendMessage(welcomeMessage);
-      }
-    } catch (error) {
-      console.error('Error al inicializar conversación:', error);
-      setError('Error al cargar la conversación');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  // Actualizar la función handleSend
+
+  // Manejar envío de mensajes
   const handleSend = async () => {
-    if (inputText.trim() === '' || !conversationId) return;
-    
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (error) {
-      console.log('Haptics error:', error);
-    }
+    if (inputText.trim() === '') return;
 
-    // Crear mensaje del usuario
-    const userMessage = {
-      content: inputText.trim(),
+    const messageText = inputText.trim();
+    setInputText('');
+
+    // Mensaje temporal
+    const tempUserMessage = {
+      id: `temp-${Date.now()}`,
+      content: messageText,
       role: 'user',
-      conversationId,
+      type: 'text',
       metadata: {
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        pending: true
       }
     };
 
-    setInputText('');
-    setIsTyping(true);
-
     try {
-      // Enviar mensaje al servidor
-      const response = await api.post(ENDPOINTS.CHAT_MESSAGES, userMessage);
+      setMessages(prev => [...prev, tempUserMessage]);
       
-      // Actualizar mensajes localmente
-      setMessages(prevMessages => [...prevMessages, response.message]);
+      const success = await chatService.sendMessage(messageText);
+      
+      if (!success) {
+        throw new Error('Error al enviar el mensaje');
+      }
 
-      // Obtener respuesta del asistente
-      const assistantResponse = await api.post(ENDPOINTS.CHAT_MESSAGES, {
-        conversationId,
-        role: 'assistant',
-        content: await generateAIResponse(response.message.content),
-        metadata: {
-          timestamp: new Date().toISOString()
-        }
-      });
-
-      setMessages(prevMessages => [...prevMessages, assistantResponse.message]);
     } catch (error) {
       console.error('Error al enviar mensaje:', error);
-      handleMessageError();
-    } finally {
-      setIsTyping(false);
-    }
-  };
-  
-  // Renderizar cada mensaje
-  const renderMessage = ({ item }) => {
-    const isUser = item.role === 'user';
-    const isAssistant = item.role === 'assistant';
-    const hasError = item.metadata?.error;
-    
-    return (
-      <View style={[
-        styles.messageContainer,
-        isUser ? styles.userMessageContainer : styles.botMessageContainer
-      ]}>
-        <View style={[
-          styles.messageBubble,
-          isUser ? styles.userBubble : styles.botBubble,
-          hasError && styles.errorBubble
-        ]}>
-          <Text style={[
-            styles.messageText,
-            isUser ? styles.userMessageText : styles.botMessageText,
-            hasError && styles.errorText
-          ]}>
-            {item.content}
-          </Text>
-          
-          {hasError && (
-            <TouchableOpacity 
-              style={styles.retryButton}
-              onPress={() => retryMessage(item)}
-            >
-              <Text style={styles.retryButtonText}>Reintentar</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
-  };
-  
-  // Renderizar indicador de escritura
-  const renderTypingIndicator = () => {
-    if (!isTyping) return null;
-    
-    return (
-      <View style={styles.typingContainer}>
-        <View style={styles.avatarContainer}>
-          <Image 
-            source={require('../images/Anto.png')} 
-            style={styles.avatar} 
-          />
-        </View>
-        <View style={styles.typingBubble}>
-          <View style={styles.typingIndicator}>
-            <Animated.View style={[styles.typingDot, useTypingAnimation(0)]} />
-            <Animated.View style={[styles.typingDot, {marginLeft: 4}, useTypingAnimation(150)]} />
-            <Animated.View style={[styles.typingDot, {marginLeft: 4}, useTypingAnimation(300)]} />
-          </View>
-        </View>
-      </View>
-    );
-  };
-  
-  // Función para animar los puntos del indicador de escritura
-  const useTypingAnimation = (delay = 0) => {
-    const animation = useRef(new Animated.Value(0)).current;
-    
-    useEffect(() => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(animation, {
-            toValue: 1,
-            duration: 500,
-            delay,
-            useNativeDriver: true,
-          }),
-          Animated.timing(animation, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
-          })
-        ])
-      ).start();
       
-      return () => animation.stopAnimation();
-    }, []);
-    
-    return {
-      opacity: animation,
-      transform: [
-        {
-          translateY: animation.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, -4],
-          }),
-        },
-      ],
-    };
-  };
-  
-  // Función para manejar el evento de desplazamiento
-  const handleScroll = (event) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const contentHeight = event.nativeEvent.contentSize.height;
-    const scrollViewHeight = event.nativeEvent.layoutMeasurement.height;
-    
-    // Si estamos a más de 100px del final, mostrar el botón
-    const isCloseToBottom = contentHeight - offsetY - scrollViewHeight < 100;
-    setShowScrollButton(!isCloseToBottom);
-  };
-  
-  // Función para desplazarse al final de la lista
-  const scrollToBottom = (animated = true) => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated });
+      const errorMessage = {
+        id: `error-${Date.now()}`,
+        content: 'Error al enviar el mensaje. Por favor, intenta de nuevo.',
+        role: 'assistant',
+        type: 'error',
+        metadata: {
+          timestamp: new Date().toISOString(),
+          error: true
+        }
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+      await chatService.saveMessages([...messages, errorMessage]);
     }
   };
-  
-  // Actualizar la función clearConversation
+
+  // Limpiar conversación
   const clearConversation = async () => {
     try {
-      if (conversationId) {
-        await api.delete(ENDPOINTS.CHAT_CONVERSATION_BY_ID(conversationId));
-      }
-      
-      // Eliminar ID de conversación actual
-      await AsyncStorage.removeItem('currentConversationId');
-      
-      // Inicializar nueva conversación
+      await chatService.clearMessages();
       await initializeConversation();
-      
       setShowClearModal(false);
       
       try {
@@ -374,34 +175,49 @@ const ChatScreen = () => {
       setError('Error al borrar la conversación');
     }
   };
-  
-  // Función para reintentar un mensaje fallido
-  const retryMessage = (failedMessage) => {
-    // Encontrar el mensaje del usuario que causó el error
-    const userMessageIndex = messages.findIndex(
-      msg => msg.role === 'user' && 
-      new Date(msg.metadata.timestamp) < new Date(failedMessage.metadata.timestamp) &&
-      messages.indexOf(msg) === messages.lastIndexOf(msg)
-    );
+
+  // Renderizar mensaje
+  const renderMessage = ({ item }) => {
+    const isUser = item.role === 'user';
     
-    if (userMessageIndex >= 0) {
-      const userMessage = messages[userMessageIndex];
-      
-      // Eliminar el mensaje de error
-      const updatedMessages = messages.filter(msg => msg.id !== failedMessage.id);
-      setMessages(updatedMessages);
-      saveMessages(updatedMessages);
-      
-      // Reintentar con el mensaje del usuario
-      setRetryCount(retryCount + 1);
-      setInputText(userMessage.content);
-      setTimeout(() => handleSend(), 100);
+    return (
+      <View style={[
+        styles.messageContainer,
+        isUser ? styles.userMessageContainer : styles.botMessageContainer
+      ]}>
+        <View style={[
+          styles.messageBubble,
+          isUser ? styles.userBubble : styles.botBubble
+        ]}>
+          <Text style={[
+            styles.messageText,
+            isUser ? styles.userMessageText : styles.botMessageText
+          ]}>
+            {item.content}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  // Manejar scroll
+  const handleScroll = (event) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const contentHeight = event.nativeEvent.contentSize.height;
+    const scrollViewHeight = event.nativeEvent.layoutMeasurement.height;
+    
+    setShowScrollButton(contentHeight - offsetY - scrollViewHeight > 100);
+  };
+
+  // Scroll al final
+  const scrollToBottom = (animated = true) => {
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToEnd({ animated });
     }
   };
-  
+
   return (
     <View style={styles.container}>
-      {/* Imagen de fondo */}
       <Image 
         source={require('../images/back.png')} 
         style={styles.backgroundImage} 
@@ -411,7 +227,7 @@ const ChatScreen = () => {
       
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       
-      {/* Encabezado */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -434,10 +250,8 @@ const ChatScreen = () => {
         </TouchableOpacity>
       </View>
       
-      {/* Lista de mensajes */}
-      <Animated.View 
-        style={[styles.chatContainer, { opacity: fadeAnim }]}
-      >
+      {/* Chat Container */}
+      <Animated.View style={[styles.chatContainer, { opacity: fadeAnim }]}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#1ADDDB" />
@@ -448,19 +262,17 @@ const ChatScreen = () => {
             ref={flatListRef}
             data={messages}
             renderItem={renderMessage}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id || item._id || `${item.role}-${item.metadata.timestamp}`}
             contentContainerStyle={styles.messagesList}
             onContentSizeChange={() => scrollToBottom(false)}
             onLayout={() => scrollToBottom(false)}
-            ListFooterComponent={renderTypingIndicator}
             onScroll={handleScroll}
             scrollEventThrottle={16}
-            ListFooterComponentStyle={styles.listFooter}
           />
         )}
       </Animated.View>
       
-      {/* Área de entrada de texto */}
+      {/* Input Container */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
@@ -492,7 +304,7 @@ const ChatScreen = () => {
         </TouchableOpacity>
       </KeyboardAvoidingView>
       
-      {/* Botón para desplazarse al final */}
+      {/* Scroll To Bottom Button */}
       {showScrollButton && (
         <TouchableOpacity 
           style={styles.scrollToBottomButton}
@@ -502,12 +314,14 @@ const ChatScreen = () => {
         </TouchableOpacity>
       )}
       
-      {/* Modal de confirmación */}
+      {/* Clear Chat Modal */}
       {showClearModal && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Borrar conversación</Text>
-            <Text style={styles.modalText}>¿Estás seguro de que quieres borrar toda la conversación? Esta acción no se puede deshacer.</Text>
+            <Text style={styles.modalText}>
+              ¿Estás seguro de que quieres borrar toda la conversación? Esta acción no se puede deshacer.
+            </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity 
                 style={[styles.modalButton, styles.modalCancelButton]}
@@ -519,7 +333,9 @@ const ChatScreen = () => {
                 style={[styles.modalButton, styles.modalConfirmButton]}
                 onPress={clearConversation}
               >
-                <Text style={[styles.modalButtonText, styles.modalConfirmButtonText]}>Borrar</Text>
+                <Text style={[styles.modalButtonText, styles.modalConfirmButtonText]}>
+                  Borrar
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -539,7 +355,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-    opacity: 0.1, // Opacidad baja para no interferir con el contenido
+    opacity: 0.1,
   },
   header: {
     flexDirection: 'row',
@@ -569,17 +385,6 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     marginRight: 8,
-  },
-  avatarContainer: {
-    width: 36,
-    height: 36,
-    marginRight: 8,
-    alignSelf: 'flex-end',
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
   },
   menuButton: {
     padding: 10,
@@ -613,16 +418,11 @@ const styles = StyleSheet.create({
   botMessageContainer: {
     justifyContent: 'flex-start',
   },
-
-  messageBubble: {
-    borderRadius: 18,
-  },
-
   messageBubble: {
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    maxWidth: '90%',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: '80%',
   },
   userBubble: {
     backgroundColor: '#1ADDDB',
@@ -632,61 +432,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#1D2B5F',
     borderBottomLeftRadius: 4,
   },
-  errorBubble: {
-    backgroundColor: 'rgba(255, 100, 100, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 100, 100, 0.5)',
-  },
   messageText: {
     fontSize: 16,
     lineHeight: 22,
   },
   userMessageText: {
     color: '#030A24',
-    fontWeight: '500',
   },
   botMessageText: {
     color: '#FFFFFF',
-  },
-  errorText: {
-    color: '#FFCCCC',
-  },
-  retryButton: {
-    marginTop: 8,
-    alignSelf: 'flex-end',
-    backgroundColor: 'rgba(26, 221, 219, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1ADDDB',
-  },
-  retryButtonText: {
-    color: '#1ADDDB',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  typingContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  typingBubble: {
-    backgroundColor: '#1D2B5F',
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxWidth: '75%',
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#A3B8E8',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -696,7 +450,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(6, 12, 40, 0.3)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(26, 221, 219, 0.3)',
-    marginBottom:28,
+    marginBottom: 28,
   },
   input: {
     flex: 1,
@@ -785,9 +539,6 @@ const styles = StyleSheet.create({
   },
   modalConfirmButtonText: {
     color: '#FF6464',
-  },
-  listFooter: {
-    paddingBottom: 16,
   },
 });
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken as protect } from '../middleware/auth.js';
 import Message from '../models/Message.js';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
@@ -51,24 +52,104 @@ router.get('/conversations/:conversationId', protect, async (req, res) => {
   }
 });
 
+// Crear nueva conversación
+router.post('/conversations', protect, async (req, res) => {
+  try {
+    // Generar un conversationId único
+    const conversationId = new mongoose.Types.ObjectId().toString();
+    
+    // Crear mensaje inicial del sistema
+    const welcomeMessage = new Message({
+      userId: req.user._id,
+      content: '¡Hola! Soy Anto, tu asistente personal. ¿En qué puedo ayudarte hoy?',
+      role: 'assistant',
+      conversationId,
+      type: 'system',
+      isSystemMessage: true,
+      metadata: {
+        type: 'welcome',
+        timestamp: new Date()
+      }
+    });
+
+    await welcomeMessage.save();
+
+    res.status(201).json({
+      conversationId,
+      message: welcomeMessage
+    });
+  } catch (error) {
+    console.error('Error al crear conversación:', error);
+    res.status(500).json({
+      message: 'Error al crear la conversación',
+      error: error.message
+    });
+  }
+});
+
 // Crear nuevo mensaje
 router.post('/messages', protect, async (req, res) => {
   try {
+    const { conversationId, content, role = 'user', type = 'text' } = req.body;
+
+    if (!conversationId) {
+      return res.status(400).json({
+        message: 'Se requiere conversationId'
+      });
+    }
+
+    if (!content) {
+      return res.status(400).json({
+        message: 'Se requiere contenido del mensaje'
+      });
+    }
+
     const message = new Message({
-      ...req.body,
       userId: req.user._id,
+      content,
+      role,
+      conversationId,
+      type,
       timestamp: new Date(),
-      status: 'sent'
+      status: 'sent',
+      metadata: {
+        ...req.body.metadata,
+        timestamp: new Date()
+      }
     });
 
     await message.save();
-    res.status(201).json(message);
+
+    // Si el mensaje es del usuario, generar respuesta del asistente
+    if (role === 'user') {
+      // Aquí iría la lógica para generar la respuesta del asistente
+      const assistantMessage = new Message({
+        userId: req.user._id,
+        content: 'Esta es una respuesta temporal del asistente',
+        role: 'assistant',
+        conversationId,
+        type: 'text',
+        timestamp: new Date(),
+        status: 'sent',
+        metadata: {
+          timestamp: new Date()
+        }
+      });
+
+      await assistantMessage.save();
+
+      res.status(201).json({
+        userMessage: message,
+        assistantMessage
+      });
+    } else {
+      res.status(201).json({ message });
+    }
   } catch (error) {
     console.error('Error al crear mensaje:', error);
     res.status(400).json({
       message: 'Error al crear el mensaje',
-      error: error.message,
-      validationErrors: error.errors
+      error: error.message
     });
   }
 });
