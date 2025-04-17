@@ -5,6 +5,11 @@ import mongoose from 'mongoose';
 import openaiService from '../services/openaiService.js';
 import UserProfile from '../models/UserProfile.js';
 import userProfileService from '../services/userProfileService.js';
+import { 
+  memoryService, 
+  contextAnalyzer, 
+  goalTracker 
+} from '../services/index.js';
 
 const router = express.Router();
 
@@ -95,13 +100,11 @@ router.post('/messages', protect, async (req, res) => {
   try {
     const { conversationId, content, role = 'user' } = req.body;
 
-    // Crear mensaje del usuario
     const userMessage = new Message({
       userId: req.user._id,
       content,
       role,
       conversationId,
-      timestamp: new Date(),
       metadata: {
         timestamp: new Date(),
         type: 'text',
@@ -109,21 +112,15 @@ router.post('/messages', protect, async (req, res) => {
       }
     });
 
-    await userMessage.save();
-
     if (role === 'user') {
-      // Obtener historial reciente
       const conversationHistory = await Message.find({ 
         conversationId,
-        timestamp: { 
-          $gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
-        }
+        timestamp: { $gte: new Date(Date.now() - 30 * 60 * 1000) }
       })
       .sort({ timestamp: -1 })
       .limit(10)
       .lean();
 
-      // Generar respuesta personalizada
       const response = await openaiService.generateAIResponse(
         userMessage,
         conversationHistory,
@@ -135,22 +132,26 @@ router.post('/messages', protect, async (req, res) => {
         content: response.content,
         role: 'assistant',
         conversationId,
-        timestamp: new Date(),
         metadata: {
-          ...response.context,
           timestamp: new Date(),
           type: 'text',
-          status: 'sent'
+          status: 'sent',
+          context: response.context,
+          intent: response.intent
         }
       });
 
-      await assistantMessage.save();
+      await Promise.all([
+        userMessage.save(),
+        assistantMessage.save()
+      ]);
 
       res.status(201).json({
         userMessage,
         assistantMessage
       });
     } else {
+      await userMessage.save();
       res.status(201).json({ message: userMessage });
     }
   } catch (error) {

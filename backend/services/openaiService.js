@@ -2,6 +2,11 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import personalizationService from './personalizationService.js';
 import TherapeuticRecord from '../models/TherapeuticRecord.js';
+import { memoryService } from './memoryService.js';
+import { contextAnalyzer } from './contextAnalyzer.js';
+import { goalTracker } from './goalTracker.js';
+import UserInsight from '../models/UserInsight.js';
+import UserGoals from '../models/UserGoals.js';
 
 dotenv.config();
 
@@ -176,29 +181,25 @@ const analyzeConversationState = async (conversationHistory) => {
 };
 
 const determineResponseLength = (emotionalAnalysis, conversationState) => {
-  // Base tokens para diferentes tipos de respuestas
+  // Aumentamos los tokens base para asegurar respuestas completas
   const tokenLengths = {
-    SHORT: 75,    // Respuestas breves
-    MEDIUM: 150,  // Respuestas estándar
-    LONG: 250     // Respuestas elaboradas
+    SHORT: 150,    // Mínimo para asegurar respuestas completas
+    MEDIUM: 250,   // Respuestas estándar
+    LONG: 400     // Respuestas elaboradas
   };
 
-  // Si requiere atención urgente, usar respuesta media
-  if (emotionalAnalysis.requiresUrgentCare) {
+  // Si el mensaje es sobre temas importantes (carrera, decisiones vitales)
+  if (conversationState.recurringThemes.includes('ocupacional') || 
+      conversationState.recurringThemes.includes('educación')) {
     return tokenLengths.MEDIUM;
   }
 
-  // Si está en fase inicial o necesita estabilización, usar respuestas más largas
-  if (conversationState.phase === 'inicial' || conversationState.needsStabilization) {
-    return tokenLengths.LONG;
-  }
-
-  // Si está aprendiendo herramientas o necesita reencuadre, usar respuesta media
-  if (conversationState.phase === 'aprendizaje' || conversationState.needsReframing) {
+  // Si requiere atención urgente o emocional
+  if (emotionalAnalysis.requiresUrgentCare || 
+      emotionalAnalysis.primaryEmotion) {
     return tokenLengths.MEDIUM;
   }
 
-  // Para seguimiento general, usar respuestas cortas
   return tokenLengths.SHORT;
 };
 
@@ -275,92 +276,34 @@ const sanitizeJsonString = (str) => {
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
-    const emotionalAnalysis = analyzeEmotionalContent(message);
-    const conversationState = await analyzeConversationState(conversationHistory);
-    
-    const therapeuticPrompt = {
-      role: 'system',
-      content: `Eres Anto, asistente terapéutico empático y profesional.
+    // Obtener contexto y análisis
+    const userContext = await memoryService.getRelevantContext(userId, message.content);
+    const messageIntent = await contextAnalyzer.analyzeMessageIntent(message, conversationHistory);
+    const responseStrategy = contextAnalyzer.generateResponseStrategy(messageIntent.intent, userContext);
 
-      ANÁLISIS ACTUAL:
-      - Emoción principal: ${emotionalAnalysis.primaryEmotion || 'neutral'}
-      - Intensidad: ${emotionalAnalysis.intensity}/10
-      - Requiere urgencia: ${emotionalAnalysis.requiresUrgentCare ? 'Sí' : 'No'}
-      - Herramientas sugeridas: ${emotionalAnalysis.suggestedTools.join(', ')}
+    // Generar respuesta mejorada
+    const response = await generateEnhancedResponse(message, userContext, responseStrategy);
 
-      ESTADO DE LA CONVERSACIÓN:
-      - Fase: ${conversationState.phase}
-      - Temas recurrentes: ${conversationState.recurringThemes.join(', ')}
-      - Progreso: ${conversationState.progress}
-
-      DIRECTRICES DE RESPUESTA:
-      1. PRIORIDAD TERAPÉUTICA:
-         ${emotionalAnalysis.requiresUrgentCare ? '- Contención inmediata y evaluación de riesgo' : ''}
-         ${emotionalAnalysis.primaryEmotion ? '- Validación emocional y herramientas específicas' : ''}
-         - Mantener continuidad terapéutica
-         - Promover autonomía y autorregulación
-
-      2. ESTRUCTURA DE RESPUESTA:
-         - Validación: Reconocer y normalizar la experiencia
-         - Exploración: Preguntas que promuevan el insight
-         - Herramientas: Sugerir técnicas específicas
-         - Seguimiento: Establecer continuidad
-
-      3. ESTILO COMUNICATIVO:
-         - Empático pero profesional
-         - Claro y directo
-         - Orientado a soluciones
-         - Promover la reflexión
-
-      4. CONSIDERACIONES ESPECIALES:
-         ${conversationState.needsReframing ? '- Ofrecer perspectivas alternativas' : ''}
-         ${conversationState.needsStabilization ? '- Priorizar estabilización emocional' : ''}
-         ${conversationState.needsResourceBuilding ? '- Fortalecer recursos de afrontamiento' : ''}`
-    };
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [
-        therapeuticPrompt,
-        ...conversationHistory.slice(-5).map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
-        {
-          role: 'user',
-          content: message.content
-        }
-      ],
-      temperature: emotionalAnalysis.requiresUrgentCare ? 0.3 : 0.7,
-      max_tokens: determineResponseLength(emotionalAnalysis, conversationState),
-      presence_penalty: 0.6
-    });
-
-    const response = await completion.choices[0].message.content;
-
-    // Intentar actualizar el registro terapéutico, pero no bloquear si falla
-    try {
-      await updateTherapeuticRecord(userId, {
-        emotion: emotionalAnalysis.primaryEmotion,
-        tools: emotionalAnalysis.suggestedTools,
-        progress: conversationState.progress,
-        emotionalStability: emotionalAnalysis.intensity ? (10 - emotionalAnalysis.intensity) : undefined,
-        toolMastery: emotionalAnalysis.suggestedTools.length ? 5 : undefined,
-        engagementLevel: conversationHistory.length > 5 ? 7 : 5
-      });
-    } catch (recordError) {
-      console.error('Error en registro terapéutico:', recordError);
-      // Continuamos con la respuesta aunque falle el registro
-    }
+    // Actualizar registros y seguimiento
+    await Promise.all([
+      memoryService.updateUserInsights(userId, message, userContext),
+      goalTracker.updateGoalProgress(userId, message, userContext),
+      updateTherapeuticRecord(userId, {
+        emotion: userContext?.emotionalTrend?.latest,
+        tools: responseStrategy.includeTechniques ? ['emotional_support', 'coping_strategies'] : [],
+        progress: messageIntent.intent
+      })
+    ]);
 
     return {
       content: response,
-      analysis: emotionalAnalysis,
-      state: conversationState
+      context: userContext,
+      intent: messageIntent,
+      strategy: responseStrategy
     };
 
   } catch (error) {
-    console.error('Error generando respuesta:', error);
+    console.error('Error en generateAIResponse:', error);
     throw error;
   }
 };
@@ -410,6 +353,59 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
     // No lanzamos el error para no interrumpir la conversación
     return null;
   }
+};
+
+const generateEnhancedResponse = async (message, context, strategy) => {
+  const promptTemplate = {
+    supportive: `Eres Anto, un asistente empático y profesional.
+    El usuario necesita ayuda con: ${message.content}
+    Contexto emocional: ${context.emotionalTrend}
+    Objetivos actuales: ${context.goals.join(', ')}
+    
+    Proporciona:
+    1. Validación empática
+    2. Una sugerencia práctica específica
+    3. Una pregunta de seguimiento enfocada
+    
+    Mantén un tono cálido pero profesional.`,
+
+    empathetic: `Eres Anto, centrándote en el apoyo emocional.
+    Estado emocional actual: ${context.emotionalContext.mainEmotion}
+    Historial relevante: ${context.patterns.join(', ')}
+    
+    Ofrece:
+    1. Reconocimiento de la emoción
+    2. Normalización de la experiencia
+    3. Una técnica de regulación emocional específica`,
+
+    encouraging: `Eres Anto, celebrando el progreso.
+    Logro actual: ${message.content}
+    Objetivos relacionados: ${context.goals.join(', ')}
+    
+    Proporciona:
+    1. Reconocimiento específico del logro
+    2. Conexión con objetivos mayores
+    3. Sugerencia para el siguiente paso`
+  };
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4-turbo-preview',
+    messages: [
+      {
+        role: 'system',
+        content: promptTemplate[strategy.approach]
+      },
+      {
+        role: 'user',
+        content: message.content
+      }
+    ],
+    temperature: 0.7,
+    max_tokens: strategy.responseLength === 'SHORT' ? 150 : 250,
+    presence_penalty: 0.6
+  });
+
+  return completion.choices[0].message.content;
 };
 
 export default {
