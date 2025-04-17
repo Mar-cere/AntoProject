@@ -276,35 +276,49 @@ const sanitizeJsonString = (str) => {
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
-    // Obtener contexto y análisis
-    const userContext = await memoryService.getRelevantContext(userId, message.content);
+    // Obtener contexto con valor por defecto
+    const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
     const messageIntent = await contextAnalyzer.analyzeMessageIntent(message, conversationHistory);
     const responseStrategy = contextAnalyzer.generateResponseStrategy(messageIntent.intent, userContext);
 
     // Generar respuesta mejorada
     const response = await generateEnhancedResponse(message, userContext, responseStrategy);
 
-    // Actualizar registros y seguimiento
+    // Actualizar registros y seguimiento con manejo seguro de nulos
     await Promise.all([
-      memoryService.updateUserInsights(userId, message, userContext),
+      memoryService.updateUserInsights(userId, message, {
+        emotionalContext: {
+          mainEmotion: userContext?.emotionalTrend?.latest || 'neutral',
+          intensity: 5
+        }
+      }),
       goalTracker.updateGoalProgress(userId, message, userContext),
       updateTherapeuticRecord(userId, {
-        emotion: userContext?.emotionalTrend?.latest,
-        tools: responseStrategy.includeTechniques ? ['emotional_support', 'coping_strategies'] : [],
-        progress: messageIntent.intent
+        emotion: userContext?.emotionalTrend?.latest || 'neutral',
+        tools: responseStrategy?.includeTechniques ? ['emotional_support', 'coping_strategies'] : [],
+        progress: messageIntent?.intent || 'GENERAL_CHAT'
       })
     ]);
 
     return {
       content: response,
-      context: userContext,
+      context: {
+        ...userContext,
+        emotionalTrend: userContext.emotionalTrend || { latest: 'neutral', history: [] }
+      },
       intent: messageIntent,
       strategy: responseStrategy
     };
 
   } catch (error) {
     console.error('Error en generateAIResponse:', error);
-    throw error;
+    // Retornar una respuesta por defecto en caso de error
+    return {
+      content: "Disculpa, ¿podrías repetir eso? 😊",
+      context: DEFAULT_CONTEXT,
+      intent: { intent: 'GENERAL_CHAT', priority: 1 },
+      strategy: { approach: 'casual', responseLength: 'SHORT' }
+    };
   }
 };
 
@@ -406,6 +420,17 @@ const generateEnhancedResponse = async (message, context, strategy) => {
   });
 
   return completion.choices[0].message.content;
+};
+
+// Constantes por defecto
+const DEFAULT_CONTEXT = {
+  emotionalTrend: {
+    latest: 'neutral',
+    history: []
+  },
+  patterns: [],
+  goals: [],
+  lastInteraction: new Date()
 };
 
 export default {

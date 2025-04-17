@@ -1,5 +1,15 @@
 import UserInsight from '../models/UserInsight.js';
 
+const DEFAULT_CONTEXT = {
+  emotionalTrend: {
+    latest: 'neutral',
+    history: []
+  },
+  patterns: [],
+  goals: [],
+  lastInteraction: new Date()
+};
+
 const memoryService = {
   async updateUserInsights(userId, message, analysis) {
     try {
@@ -42,8 +52,8 @@ const memoryService = {
               timestamp: new Date(),
               patterns: detectedPatterns,
               goals: detectedGoals,
-              emotion: analysis.emotionalContext.mainEmotion,
-              intensity: analysis.emotionalContext.intensity
+              emotion: analysis?.emotionalContext?.mainEmotion || 'neutral',
+              intensity: analysis?.emotionalContext?.intensity || 5
             }
           },
           $set: {
@@ -54,7 +64,7 @@ const memoryService = {
             activeGoals: Object.keys(detectedGoals)
           }
         },
-        { upsert: true }
+        { upsert: true, new: true }
       );
     } catch (error) {
       console.error('Error actualizando insights:', error);
@@ -63,34 +73,33 @@ const memoryService = {
 
   async getRelevantContext(userId, currentMessage) {
     try {
-      const userInsights = await UserInsight.findOne({ userId });
-      if (!userInsights) return null;
+      const userInsight = await UserInsight.findOne({ userId });
+      
+      if (!userInsight) {
+        return DEFAULT_CONTEXT;
+      }
 
-      // Obtener patrones relevantes para el mensaje actual
-      const relevantPatterns = userInsights.recurringPatterns.filter(pattern => 
-        new RegExp(pattern, 'i').test(currentMessage)
-      );
-
-      // Obtener objetivos activos
-      const activeGoals = userInsights.activeGoals;
-
-      // Obtener el estado emocional predominante
-      const emotionalTrend = userInsights.interactions
-        .slice(-5)
-        .reduce((acc, interaction) => {
-          acc[interaction.emotion] = (acc[interaction.emotion] || 0) + 1;
-          return acc;
-        }, {});
+      // Obtener las últimas 5 interacciones
+      const recentInteractions = userInsight.interactions.slice(-5);
+      
+      // Calcular tendencia emocional
+      const emotionalTrend = {
+        latest: recentInteractions.length > 0 
+          ? recentInteractions[recentInteractions.length - 1].emotion 
+          : 'neutral',
+        history: recentInteractions.map(i => i.emotion)
+      };
 
       return {
-        patterns: relevantPatterns,
-        goals: activeGoals,
         emotionalTrend,
-        lastInteraction: userInsights.lastUpdate
+        patterns: userInsight.recurringPatterns || [],
+        goals: userInsight.activeGoals || [],
+        lastInteraction: userInsight.lastUpdate || new Date()
       };
+
     } catch (error) {
       console.error('Error obteniendo contexto:', error);
-      return null;
+      return DEFAULT_CONTEXT;
     }
   }
 };
