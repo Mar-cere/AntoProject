@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken as protect } from '../middleware/auth.js';
 import Message from '../models/Message.js';
 import mongoose from 'mongoose';
+import openaiService from '../services/openaiService.js';
 
 const router = express.Router();
 
@@ -92,19 +93,14 @@ router.post('/messages', protect, async (req, res) => {
   try {
     const { conversationId, content, role = 'user', type = 'text' } = req.body;
 
-    if (!conversationId) {
+    if (!conversationId || !content) {
       return res.status(400).json({
-        message: 'Se requiere conversationId'
+        message: 'Se requiere conversationId y contenido del mensaje'
       });
     }
 
-    if (!content) {
-      return res.status(400).json({
-        message: 'Se requiere contenido del mensaje'
-      });
-    }
-
-    const message = new Message({
+    // Crear y guardar mensaje del usuario
+    const userMessage = new Message({
       userId: req.user._id,
       content,
       role,
@@ -118,37 +114,80 @@ router.post('/messages', protect, async (req, res) => {
       }
     });
 
-    await message.save();
+    await userMessage.save();
 
     // Si el mensaje es del usuario, generar respuesta del asistente
     if (role === 'user') {
-      // Aquí iría la lógica para generar la respuesta del asistente
-      const assistantMessage = new Message({
-        userId: req.user._id,
-        content: 'Esta es una respuesta temporal del asistente',
-        role: 'assistant',
-        conversationId,
-        type: 'text',
-        timestamp: new Date(),
-        status: 'sent',
-        metadata: {
-          timestamp: new Date()
-        }
-      });
+      try {
+        // Obtener historial reciente de la conversación (últimos 5 mensajes)
+        const conversationHistory = await Message.find({ conversationId })
+          .sort({ timestamp: -1 })
+          .limit(5)
+          .lean();
 
-      await assistantMessage.save();
+        // Generar respuesta con OpenAI
+        const aiResponse = await openaiService.generateAIResponse(
+          content,
+          conversationHistory.reverse()
+        );
 
-      res.status(201).json({
-        userMessage: message,
-        assistantMessage
-      });
+        // Analizar emociones del mensaje del usuario
+        const emotionAnalysis = await openaiService.analyzeEmotions(content);
+
+        // Crear mensaje del asistente
+        const assistantMessage = new Message({
+          userId: req.user._id,
+          content: aiResponse.content,
+          role: 'assistant',
+          conversationId,
+          type: 'text',
+          timestamp: new Date(),
+          status: 'sent',
+          metadata: {
+            ...aiResponse.metadata,
+            emotionAnalysis,
+            timestamp: new Date()
+          }
+        });
+
+        await assistantMessage.save();
+
+        res.status(201).json({
+          userMessage,
+          assistantMessage
+        });
+      } catch (error) {
+        console.error('Error al generar respuesta:', error);
+        
+        // Si hay error en la generación de la respuesta, enviar mensaje de error
+        const errorMessage = new Message({
+          userId: req.user._id,
+          content: 'Lo siento, tuve un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?',
+          role: 'assistant',
+          conversationId,
+          type: 'error',
+          timestamp: new Date(),
+          status: 'error',
+          metadata: {
+            error: error.message,
+            timestamp: new Date()
+          }
+        });
+
+        await errorMessage.save();
+
+        res.status(201).json({
+          userMessage,
+          assistantMessage: errorMessage
+        });
+      }
     } else {
-      res.status(201).json({ message });
+      res.status(201).json({ message: userMessage });
     }
   } catch (error) {
-    console.error('Error al crear mensaje:', error);
-    res.status(400).json({
-      message: 'Error al crear el mensaje',
+    console.error('Error en POST /messages:', error);
+    res.status(500).json({
+      message: 'Error al procesar el mensaje',
       error: error.message
     });
   }

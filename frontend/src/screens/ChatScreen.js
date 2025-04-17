@@ -31,6 +31,8 @@ const ChatScreen = () => {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   
   // Referencias
   const flatListRef = useRef(null);
@@ -117,8 +119,8 @@ const ChatScreen = () => {
 
     const messageText = inputText.trim();
     setInputText('');
+    setIsTyping(true);
 
-    // Mensaje temporal
     const tempUserMessage = {
       id: `temp-${Date.now()}`,
       content: messageText,
@@ -131,12 +133,19 @@ const ChatScreen = () => {
     };
 
     try {
+      // Mostrar mensaje del usuario inmediatamente
       setMessages(prev => [...prev, tempUserMessage]);
+      scrollToBottom(true);
+
+      const response = await chatService.sendMessage(messageText);
       
-      const success = await chatService.sendMessage(messageText);
-      
-      if (!success) {
-        throw new Error('Error al enviar el mensaje');
+      if (response?.userMessage && response?.assistantMessage) {
+        // Actualizar con los mensajes reales del servidor
+        setMessages(prev => {
+          const filtered = prev.filter(msg => msg.id !== tempUserMessage.id);
+          return [...filtered, response.userMessage, response.assistantMessage];
+        });
+        scrollToBottom(true);
       }
 
     } catch (error) {
@@ -154,7 +163,9 @@ const ChatScreen = () => {
       };
 
       setMessages(prev => [...prev, errorMessage]);
-      await chatService.saveMessages([...messages, errorMessage]);
+      scrollToBottom(true);
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -176,24 +187,52 @@ const ChatScreen = () => {
     }
   };
 
+  // Función para recargar mensajes
+  const refreshMessages = async () => {
+    try {
+      setRefreshing(true);
+      const conversationId = await AsyncStorage.getItem('currentConversationId');
+      if (conversationId) {
+        const serverMessages = await chatService.getMessages(conversationId);
+        if (serverMessages && serverMessages.length > 0) {
+          setMessages(serverMessages);
+        }
+      }
+    } catch (error) {
+      console.error('Error al recargar mensajes:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Renderizar mensaje
   const renderMessage = ({ item }) => {
-    const isUser = item.role === 'user';
+    // Si el item es un objeto de respuesta, extraer el mensaje correcto
+    const message = item.userMessage || item.assistantMessage || item;
+    const isUser = message.role === 'user';
     
     return (
       <View style={[
         styles.messageContainer,
         isUser ? styles.userMessageContainer : styles.botMessageContainer
       ]}>
+        {!isUser && (
+          <Image 
+            source={require('../images/Anto.png')} 
+            style={styles.messageAvatar}
+          />
+        )}
         <View style={[
           styles.messageBubble,
-          isUser ? styles.userBubble : styles.botBubble
+          isUser ? styles.userBubble : styles.botBubble,
+          message.type === 'error' && styles.errorBubble
         ]}>
           <Text style={[
             styles.messageText,
-            isUser ? styles.userMessageText : styles.botMessageText
+            isUser ? styles.userMessageText : styles.botMessageText,
+            message.type === 'error' && styles.errorText
           ]}>
-            {item.content}
+            {message.content}
           </Text>
         </View>
       </View>
@@ -214,6 +253,81 @@ const ChatScreen = () => {
     if (flatListRef.current && messages.length > 0) {
       flatListRef.current.scrollToEnd({ animated });
     }
+  };
+
+  // Componente de indicador de escritura
+  const TypingIndicator = () => {
+    if (!isTyping) return null;
+
+    return (
+      <View style={styles.typingContainer}>
+        <Image 
+          source={require('../images/Anto.png')} 
+          style={styles.typingAvatar} 
+        />
+        <View style={styles.typingBubble}>
+          <View style={styles.typingDotsContainer}>
+            <Animated.View style={[styles.typingDot, useTypingAnimation(0)]} />
+            <Animated.View style={[styles.typingDot, useTypingAnimation(300)]} />
+            <Animated.View style={[styles.typingDot, useTypingAnimation(600)]} />
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // Animación para los puntos
+  const useTypingAnimation = (delay) => {
+    const animation = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(animation, {
+            toValue: 1,
+            duration: 500,
+            delay,
+            useNativeDriver: true,
+          }),
+          Animated.timing(animation, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      return () => animation.stopAnimation();
+    }, []);
+
+    return {
+      opacity: animation,
+      transform: [{
+        translateY: animation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -4],
+        }),
+      }],
+    };
+  };
+
+  // Animación para nuevos mensajes
+  const FadeInView = ({ children }) => {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }, []);
+
+    return (
+      <Animated.View style={{ opacity: fadeAnim }}>
+        {children}
+      </Animated.View>
+    );
   };
 
   return (
@@ -262,12 +376,25 @@ const ChatScreen = () => {
             ref={flatListRef}
             data={messages}
             renderItem={renderMessage}
-            keyExtractor={(item) => item.id || item._id || `${item.role}-${item.metadata.timestamp}`}
+            keyExtractor={(item) => {
+              const message = item.userMessage || item.assistantMessage || item;
+              return message._id || message.id || `msg-${Date.now()}-${Math.random()}`;
+            }}
             contentContainerStyle={styles.messagesList}
             onContentSizeChange={() => scrollToBottom(false)}
             onLayout={() => scrollToBottom(false)}
             onScroll={handleScroll}
             scrollEventThrottle={16}
+            refreshing={refreshing}
+            onRefresh={refreshMessages}
+            inverted={false} // Asegura que los mensajes más nuevos estén abajo
+            ListEmptyComponent={() => (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No hay mensajes aún</Text>
+              </View>
+            )}
+            ListFooterComponent={TypingIndicator}
+            ListFooterComponentStyle={styles.typingIndicatorContainer}
           />
         )}
       </Animated.View>
@@ -419,18 +546,20 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   messageBubble: {
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     maxWidth: '80%',
+    padding: 12,
+    borderRadius: 20,
+    marginBottom: 8,
   },
   userBubble: {
     backgroundColor: '#1ADDDB',
     borderBottomRightRadius: 4,
+    marginLeft: 'auto',
   },
   botBubble: {
     backgroundColor: '#1D2B5F',
     borderBottomLeftRadius: 4,
+    marginRight: 'auto',
   },
   messageText: {
     fontSize: 16,
@@ -539,6 +668,73 @@ const styles = StyleSheet.create({
   },
   modalConfirmButtonText: {
     color: '#FF6464',
+  },
+  messageAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    alignSelf: 'flex-end',
+  },
+  timestampText: {
+    fontSize: 10,
+    color: '#A3B8E8',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    opacity: 0.7,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    color: '#A3B8E8',
+    fontSize: 16,
+  },
+  errorBubble: {
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+    borderColor: '#FF6464',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#FF6464',
+  },
+  typingIndicatorContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+  },
+  typingContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  typingAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+  },
+  typingBubble: {
+    backgroundColor: '#1D2B5F',
+    borderRadius: 20,
+    borderBottomLeftRadius: 4,
+    padding: 12,
+    maxWidth: '60%',
+  },
+  typingDotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 20,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#1ADDDB',
+    marginHorizontal: 2,
   },
 });
 

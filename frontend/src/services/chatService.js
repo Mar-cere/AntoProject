@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../config/api';
-import { Platform } from 'react';
+import { Platform } from 'react-native';
 
 const API_BASE_URL = 'https://antobackend.onrender.com';
 
@@ -47,10 +47,11 @@ export const sendMessage = async (text) => {
   try {
     console.log('Enviando mensaje:', text);
     
-    // No necesitamos obtener userId porque el backend lo obtiene del token
-    const conversationId = await AsyncStorage.getItem('currentConversationId') || 'default';
+    const conversationId = await AsyncStorage.getItem('currentConversationId');
+    if (!conversationId) {
+      throw new Error('No hay conversación activa');
+    }
 
-    // Crear mensaje con el formato correcto según el modelo y la ruta
     const userMessage = {
       content: text,
       role: 'user',
@@ -62,22 +63,14 @@ export const sendMessage = async (text) => {
       }
     };
 
-    console.log('Enviando mensaje al servidor:', userMessage);
-
-    // Enviar mensaje al servidor
     const response = await api.post('/api/chat/messages', userMessage);
     console.log('Respuesta del servidor:', response);
 
-    if (response) {
-      handleMessage(response);
-      return true;
-    }
-
-    return false;
+    // La respuesta ya incluye userMessage y assistantMessage
+    return response;
   } catch (error) {
     console.error('Error detallado al enviar mensaje:', error);
-    handleError(error);
-    return false;
+    throw error;
   }
 };
 
