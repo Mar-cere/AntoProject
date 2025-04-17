@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import personalizationService from './personalizationService.js';
+import TherapeuticRecord from '../models/TherapeuticRecord.js';
 
 dotenv.config();
 
@@ -335,48 +336,79 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
       presence_penalty: 0.6
     });
 
-    // Actualizar el registro terapéutico
-    await updateTherapeuticRecord(userId, {
-      emotion: emotionalAnalysis.primaryEmotion,
-      tools: emotionalAnalysis.suggestedTools,
-      progress: conversationState.progress
-    });
+    const response = await completion.choices[0].message.content;
+
+    // Intentar actualizar el registro terapéutico, pero no bloquear si falla
+    try {
+      await updateTherapeuticRecord(userId, {
+        emotion: emotionalAnalysis.primaryEmotion,
+        tools: emotionalAnalysis.suggestedTools,
+        progress: conversationState.progress,
+        emotionalStability: emotionalAnalysis.intensity ? (10 - emotionalAnalysis.intensity) : undefined,
+        toolMastery: emotionalAnalysis.suggestedTools.length ? 5 : undefined,
+        engagementLevel: conversationHistory.length > 5 ? 7 : 5
+      });
+    } catch (recordError) {
+      console.error('Error en registro terapéutico:', recordError);
+      // Continuamos con la respuesta aunque falle el registro
+    }
 
     return {
-      content: completion.choices[0].message.content,
+      content: response,
       analysis: emotionalAnalysis,
       state: conversationState
     };
 
   } catch (error) {
-    console.error('Error en respuesta terapéutica:', error);
+    console.error('Error generando respuesta:', error);
     throw error;
   }
 };
 
 const updateTherapeuticRecord = async (userId, sessionData) => {
   try {
-    await TherapeuticRecord.findOneAndUpdate(
-      { userId },
-      {
-        $push: {
-          sessions: {
-            timestamp: new Date(),
-            emotion: sessionData.emotion,
-            toolsUsed: sessionData.tools,
-            progress: sessionData.progress
-          }
-        },
-        $set: {
-          lastInteraction: new Date(),
-          currentStatus: sessionData.emotion,
-          activeTools: sessionData.tools
+    const update = {
+      $push: {
+        sessions: {
+          timestamp: new Date(),
+          emotion: sessionData.emotion || 'neutral',
+          toolsUsed: sessionData.tools || [],
+          progress: sessionData.progress || 'en curso'
         }
       },
-      { upsert: true }
+      $set: {
+        lastInteraction: new Date(),
+        currentStatus: sessionData.emotion || 'neutral',
+        activeTools: sessionData.tools || []
+      }
+    };
+
+    // Si hay métricas de progreso, actualizarlas
+    if (sessionData.emotionalStability) {
+      update.$set['progressMetrics.emotionalStability'] = sessionData.emotionalStability;
+    }
+    if (sessionData.toolMastery) {
+      update.$set['progressMetrics.toolMastery'] = sessionData.toolMastery;
+    }
+    if (sessionData.engagementLevel) {
+      update.$set['progressMetrics.engagementLevel'] = sessionData.engagementLevel;
+    }
+
+    const record = await TherapeuticRecord.findOneAndUpdate(
+      { userId },
+      update,
+      { 
+        upsert: true, 
+        new: true,
+        setDefaultsOnInsert: true
+      }
     );
+
+    return record;
   } catch (error) {
     console.error('Error actualizando registro terapéutico:', error);
+    // No lanzamos el error para no interrumpir la conversación
+    return null;
   }
 };
 
