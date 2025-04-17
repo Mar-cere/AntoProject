@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import personalizationService from './personalizationService.js';
 
 dotenv.config();
 
@@ -75,38 +76,63 @@ const analyzeMessageContext = async (message, conversationHistory) => {
   }
 };
 
-const generateAIResponse = async (message, conversationHistory) => {
+const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
-    // Analizar contexto del mensaje actual
+    const personalizedPrompt = await personalizationService.getPersonalizedPrompt(userId);
     const context = await analyzeMessageContext(message, conversationHistory);
     
-    // Crear prompt enriquecido con el contexto
+    const timeBasedSuggestions = {
+      morning: [
+        "¿Has planificado tus objetivos para hoy?",
+        "¿Qué te gustaría lograr esta mañana?",
+        "Empecemos el día con energía positiva"
+      ],
+      afternoon: [
+        "¿Cómo va tu día hasta ahora?",
+        "Tomemos un momento para reflexionar sobre tu progreso",
+        "¿Necesitas ayuda para manejar el estrés del día?"
+      ],
+      evening: [
+        "¿Cómo te sientes después de tu día?",
+        "Hablemos sobre lo que te preocupa antes de dormir",
+        "Practiquemos algo de relajación"
+      ],
+      night: [
+        "Es importante cuidar tu descanso",
+        "Podemos hablar de lo que te mantiene despierto",
+        "Practiquemos técnicas de relajación para dormir mejor"
+      ]
+    };
+
     const enrichedPrompt = {
       role: 'system',
       content: `Eres Anto, un asistente terapéutico empático y profesional.
       
-      CONTEXTO ACTUAL:
-      - Emoción principal: ${context.emotionalContext.mainEmotion}
-      - Intensidad emocional: ${context.emotionalContext.intensity}/10
-      - Valencia emocional: ${context.emotionalContext.valence}
-      - Temas actuales: ${context.topics.join(', ')}
-      - Temas relacionados previos: ${context.contextualMemory.relatedTopics.join(', ')}
+      CONTEXTO TEMPORAL:
+      - Momento del día: ${personalizedPrompt.timeContext}
+      - Saludo apropiado: ${personalizedPrompt.greeting}
       
       PREFERENCIAS DEL USUARIO:
-      - Estilo de comunicación: ${context.userPreferences.communicationStyle}
-      - Longitud de respuesta: ${context.userPreferences.responseLength}
-      - Temas de interés: ${context.userPreferences.topicsOfInterest.join(', ')}
+      - Estilo de comunicación: ${personalizedPrompt.style}
+      - Longitud de respuesta: ${personalizedPrompt.responseLength}
+      - Temas preferidos: ${personalizedPrompt.preferredTopics.join(', ')}
+      
+      CONTEXTO EMOCIONAL:
+      - Emoción actual: ${context.emotionalContext.mainEmotion}
+      - Intensidad: ${context.emotionalContext.intensity}/10
+      
+      SUGERENCIAS CONTEXTUALES:
+      ${timeBasedSuggestions[personalizedPrompt.timeContext].join('\n')}
       
       INSTRUCCIONES:
-      1. Adapta tu respuesta según estas preferencias y el contexto emocional
-      2. Si el usuario muestra signos de angustia elevada, ofrece técnicas de regulación emocional
-      3. Mantén un tono empático pero profesional
-      4. Responde siempre en español
-      5. Sé conciso pero completo
-      6. Valida las emociones antes de ofrecer sugerencias`
+      1. Usa el saludo apropiado para la hora del día
+      2. Adapta tu tono al estilo preferido del usuario
+      3. Mantén la longitud de respuesta preferida
+      4. Considera el contexto temporal para tus sugerencias
+      5. Responde siempre en español
+      6. Prioriza temas relevantes para este momento del día`
     };
 
-    // Generar respuesta con contexto
     const completion = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
@@ -121,8 +147,16 @@ const generateAIResponse = async (message, conversationHistory) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 500
+      max_tokens: personalizedPrompt.responseLength === 'corto' ? 150 :
+                 personalizedPrompt.responseLength === 'medio' ? 300 : 500
     });
+
+    // Actualizar el patrón de interacción
+    await personalizationService.updateInteractionPattern(
+      userId,
+      context.emotionalContext.mainEmotion,
+      context.topics[0]
+    );
 
     return {
       content: completion.choices[0].message.content,

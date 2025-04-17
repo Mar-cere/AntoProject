@@ -3,6 +3,8 @@ import { authenticateToken as protect } from '../middleware/auth.js';
 import Message from '../models/Message.js';
 import mongoose from 'mongoose';
 import openaiService from '../services/openaiService.js';
+import UserProfile from '../models/UserProfile.js';
+import userProfileService from '../services/userProfileService.js';
 
 const router = express.Router();
 
@@ -93,18 +95,7 @@ router.post('/messages', protect, async (req, res) => {
   try {
     const { conversationId, content, role = 'user' } = req.body;
 
-    // Obtener historial reciente
-    const conversationHistory = await Message.find({ 
-      conversationId,
-      timestamp: { 
-        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Últimas 24 horas
-      }
-    })
-    .sort({ timestamp: -1 })
-    .limit(10)
-    .lean();
-
-    // Crear mensaje del usuario con contexto
+    // Crear mensaje del usuario
     const userMessage = new Message({
       userId: req.user._id,
       content,
@@ -121,59 +112,44 @@ router.post('/messages', protect, async (req, res) => {
     await userMessage.save();
 
     if (role === 'user') {
-      try {
-        // Generar respuesta con contexto mejorado
-        const response = await openaiService.generateAIResponse(
-          userMessage,
-          conversationHistory
-        );
+      // Obtener historial reciente
+      const conversationHistory = await Message.find({ 
+        conversationId,
+        timestamp: { 
+          $gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
+        }
+      })
+      .sort({ timestamp: -1 })
+      .limit(10)
+      .lean();
 
-        // Crear mensaje del asistente con el contexto
-        const assistantMessage = new Message({
-          userId: req.user._id,
-          content: response.content,
-          role: 'assistant',
-          conversationId,
+      // Generar respuesta personalizada
+      const response = await openaiService.generateAIResponse(
+        userMessage,
+        conversationHistory,
+        req.user._id
+      );
+
+      const assistantMessage = new Message({
+        userId: req.user._id,
+        content: response.content,
+        role: 'assistant',
+        conversationId,
+        timestamp: new Date(),
+        metadata: {
+          ...response.context,
           timestamp: new Date(),
-          metadata: {
-            ...response.context,
-            timestamp: new Date(),
-            type: 'text',
-            status: 'sent'
-          }
-        });
+          type: 'text',
+          status: 'sent'
+        }
+      });
 
-        await assistantMessage.save();
+      await assistantMessage.save();
 
-        res.status(201).json({
-          userMessage,
-          assistantMessage
-        });
-      } catch (error) {
-        console.error('Error generando respuesta:', error);
-        
-        // Si hay error en la generación, crear mensaje de error
-        const errorMessage = new Message({
-          userId: req.user._id,
-          content: 'Lo siento, tuve un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?',
-          role: 'assistant',
-          conversationId,
-          timestamp: new Date(),
-          metadata: {
-            timestamp: new Date(),
-            type: 'error',
-            status: 'error',
-            error: error.message
-          }
-        });
-
-        await errorMessage.save();
-
-        res.status(201).json({
-          userMessage,
-          assistantMessage: errorMessage
-        });
-      }
+      res.status(201).json({
+        userMessage,
+        assistantMessage
+      });
     } else {
       res.status(201).json({ message: userMessage });
     }
