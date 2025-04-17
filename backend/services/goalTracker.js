@@ -43,4 +43,6 @@ const goalTracker = {
       console.error('Error actualizando progreso de objetivos:', error);
     }
   }
-}; 
+};
+
+export default goalTracker; 

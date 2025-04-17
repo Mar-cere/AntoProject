@@ -76,4 +76,6 @@ const contextAnalyzer = {
 
     return strategies[intent] || strategies.GENERAL_CHAT;
   }
-}; 
+};
+
+export default contextAnalyzer; 
