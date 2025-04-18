@@ -274,155 +274,7 @@ const sanitizeJsonString = (str) => {
     .trim();                   // Eliminar espacios al inicio y final
 };
 
-const generateAIResponse = async (message, conversationHistory, userId) => {
-  try {
-    // Obtener contexto con valor por defecto
-    const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
-    const messageIntent = await contextAnalyzer.analyzeMessageIntent(message, conversationHistory);
-    const responseStrategy = contextAnalyzer.generateResponseStrategy(messageIntent.intent, userContext);
-
-    // Generar respuesta mejorada
-    const response = await generateEnhancedResponse(message, userContext, responseStrategy);
-
-    // Actualizar registros y seguimiento con manejo seguro de nulos
-    await Promise.all([
-      memoryService.updateUserInsights(userId, message, {
-        emotionalContext: {
-          mainEmotion: userContext?.emotionalTrend?.latest || 'neutral',
-          intensity: 5
-        }
-      }),
-      goalTracker.updateGoalProgress(userId, message, userContext),
-      updateTherapeuticRecord(userId, {
-        emotion: userContext?.emotionalTrend?.latest || 'neutral',
-        tools: responseStrategy?.includeTechniques ? ['emotional_support', 'coping_strategies'] : [],
-        progress: messageIntent?.intent || 'GENERAL_CHAT'
-      })
-    ]);
-
-    return {
-      content: response,
-      context: {
-        ...userContext,
-        emotionalTrend: userContext.emotionalTrend || { latest: 'neutral', history: [] }
-      },
-      intent: messageIntent,
-      strategy: responseStrategy
-    };
-
-  } catch (error) {
-    console.error('Error en generateAIResponse:', error);
-    // Retornar una respuesta por defecto en caso de error
-    return {
-      content: "Disculpa, ¿podrías repetir eso? 😊",
-      context: DEFAULT_CONTEXT,
-      intent: { intent: 'GENERAL_CHAT', priority: 1 },
-      strategy: { approach: 'casual', responseLength: 'SHORT' }
-    };
-  }
-};
-
-const updateTherapeuticRecord = async (userId, sessionData) => {
-  try {
-    const update = {
-      $push: {
-        sessions: {
-          timestamp: new Date(),
-          emotion: sessionData.emotion || 'neutral',
-          toolsUsed: sessionData.tools || [],
-          progress: sessionData.progress || 'en curso'
-        }
-      },
-      $set: {
-        lastInteraction: new Date(),
-        currentStatus: sessionData.emotion || 'neutral',
-        activeTools: sessionData.tools || []
-      }
-    };
-
-    // Si hay métricas de progreso, actualizarlas
-    if (sessionData.emotionalStability) {
-      update.$set['progressMetrics.emotionalStability'] = sessionData.emotionalStability;
-    }
-    if (sessionData.toolMastery) {
-      update.$set['progressMetrics.toolMastery'] = sessionData.toolMastery;
-    }
-    if (sessionData.engagementLevel) {
-      update.$set['progressMetrics.engagementLevel'] = sessionData.engagementLevel;
-    }
-
-    const record = await TherapeuticRecord.findOneAndUpdate(
-      { userId },
-      update,
-      { 
-        upsert: true, 
-        new: true,
-        setDefaultsOnInsert: true
-      }
-    );
-
-    return record;
-  } catch (error) {
-    console.error('Error actualizando registro terapéutico:', error);
-    // No lanzamos el error para no interrumpir la conversación
-    return null;
-  }
-};
-
-const generateEnhancedResponse = async (message, context, strategy) => {
-  const promptTemplate = {
-    supportive: `Eres Anto, un asistente empático y profesional.
-    El usuario necesita ayuda con: ${message.content}
-    Contexto emocional: ${context.emotionalTrend}
-    Objetivos actuales: ${context.goals.join(', ')}
-    
-    Proporciona:
-    1. Validación empática
-    2. Una sugerencia práctica específica
-    3. Una pregunta de seguimiento enfocada
-    
-    Mantén un tono cálido pero profesional.`,
-
-    empathetic: `Eres Anto, centrándote en el apoyo emocional.
-    Estado emocional actual: ${context.emotionalContext.mainEmotion}
-    Historial relevante: ${context.patterns.join(', ')}
-    
-    Ofrece:
-    1. Reconocimiento de la emoción
-    2. Normalización de la experiencia
-    3. Una técnica de regulación emocional específica`,
-
-    encouraging: `Eres Anto, celebrando el progreso.
-    Logro actual: ${message.content}
-    Objetivos relacionados: ${context.goals.join(', ')}
-    
-    Proporciona:
-    1. Reconocimiento específico del logro
-    2. Conexión con objetivos mayores
-    3. Sugerencia para el siguiente paso`
-  };
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4-turbo-preview',
-    messages: [
-      {
-        role: 'system',
-        content: promptTemplate[strategy.approach]
-      },
-      {
-        role: 'user',
-        content: message.content
-      }
-    ],
-    temperature: 0.7,
-    max_tokens: strategy.responseLength === 'SHORT' ? 150 : 250,
-    presence_penalty: 0.6
-  });
-
-  return completion.choices[0].message.content;
-};
-
-// Constantes por defecto
+// Constantes y valores por defecto
 const DEFAULT_CONTEXT = {
   emotionalTrend: {
     latest: 'neutral',
@@ -433,7 +285,154 @@ const DEFAULT_CONTEXT = {
   lastInteraction: new Date()
 };
 
+const DEFAULT_EMOTIONAL_CONTEXT = {
+  mainEmotion: 'neutral',
+  intensity: 5,
+  sentiment: 'neutral'
+};
+
+const generateEnhancedResponse = async (message, context, strategy) => {
+  try {
+    const promptTemplate = {
+      supportive: `Eres Anto, un asistente empático y profesional.
+      El usuario dice: ${message.content}
+      Contexto emocional: ${context.emotionalTrend.latest || 'neutral'}
+      Objetivos actuales: ${context.goals.join(', ') || 'ninguno específico'}
+      
+      Proporciona:
+      1. Validación empática
+      2. Una sugerencia práctica específica
+      3. Una pregunta de seguimiento enfocada
+      
+      Mantén un tono cálido pero profesional.`,
+
+      empathetic: `Eres Anto, centrándote en el apoyo emocional.
+      Estado emocional actual: ${context.emotionalTrend.latest || 'neutral'}
+      Patrones relevantes: ${context.patterns.join(', ') || 'ninguno específico'}
+      
+      Ofrece:
+      1. Reconocimiento de la emoción
+      2. Normalización de la experiencia
+      3. Una técnica de regulación emocional específica`,
+
+      casual: `Eres Anto, manteniendo una conversación amigable.
+      Mantén un tono casual y cercano.
+      Responde de manera concisa pero empática.`
+    };
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        {
+          role: 'system',
+          content: promptTemplate[strategy.approach] || promptTemplate.casual
+        },
+        {
+          role: 'user',
+          content: message.content
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: strategy.responseLength === 'SHORT' ? 150 : 250,
+      presence_penalty: 0.6
+    });
+
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error('Error en generateEnhancedResponse:', error);
+    return "Disculpa, ¿podrías repetir eso? 😊";
+  }
+};
+
+const generateAIResponse = async (message, conversationHistory, userId) => {
+  try {
+    // Obtener contexto con valores por defecto seguros
+    const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
+    const messageIntent = await contextAnalyzer.analyzeMessageIntent(message, conversationHistory);
+    const responseStrategy = contextAnalyzer.generateResponseStrategy(messageIntent.intent, userContext);
+
+    // Asegurar que el contexto emocional esté definido
+    const emotionalContext = {
+      ...DEFAULT_EMOTIONAL_CONTEXT,
+      mainEmotion: userContext.emotionalTrend?.latest || 'neutral'
+    };
+
+    // Generar respuesta mejorada
+    const response = await generateEnhancedResponse(message, userContext, responseStrategy);
+
+    // Actualizar registros y seguimiento con manejo seguro de nulos
+    await Promise.all([
+      memoryService.updateUserInsights(userId, message, { emotionalContext }),
+      goalTracker.updateGoalProgress(userId, message, { 
+        ...userContext,
+        emotionalContext 
+      }),
+      updateTherapeuticRecord(userId, {
+        emotion: emotionalContext.mainEmotion,
+        tools: responseStrategy?.includeTechniques ? ['emotional_support', 'coping_strategies'] : [],
+        progress: messageIntent?.intent || 'GENERAL_CHAT'
+      })
+    ]).catch(error => {
+      console.error('Error en actualizaciones:', error);
+      // Continuar con la respuesta aunque fallen las actualizaciones
+    });
+
+    return {
+      content: response,
+      context: {
+        ...userContext,
+        emotionalContext
+      },
+      intent: messageIntent || { intent: 'GENERAL_CHAT', priority: 1 },
+      strategy: responseStrategy || { 
+        approach: 'casual', 
+        responseLength: 'SHORT',
+        includeEngagement: true
+      }
+    };
+
+  } catch (error) {
+    console.error('Error en generateAIResponse:', error);
+    return {
+      content: "Disculpa, ¿podrías repetir eso? 😊",
+      context: {
+        ...DEFAULT_CONTEXT,
+        emotionalContext: DEFAULT_EMOTIONAL_CONTEXT
+      },
+      intent: { intent: 'GENERAL_CHAT', priority: 1 },
+      strategy: { approach: 'casual', responseLength: 'SHORT' }
+    };
+  }
+};
+
+const updateTherapeuticRecord = async (userId, sessionData) => {
+  try {
+    await TherapeuticRecord.findOneAndUpdate(
+      { userId },
+      {
+        $push: {
+          sessions: {
+            timestamp: new Date(),
+            emotion: sessionData.emotion || 'neutral',
+            tools: sessionData.tools || [],
+            progress: sessionData.progress || 'en_curso'
+          }
+        },
+        $set: {
+          lastInteraction: new Date(),
+          currentStatus: sessionData.emotion || 'neutral',
+          activeTools: sessionData.tools || []
+        }
+      },
+      { upsert: true, new: true }
+    );
+  } catch (error) {
+    console.error('Error actualizando registro terapéutico:', error);
+    // No lanzar el error para no interrumpir el flujo
+  }
+};
+
 export default {
-  analyzeMessageContext,
-  generateAIResponse
+  generateAIResponse,
+  updateTherapeuticRecord
 }; 
