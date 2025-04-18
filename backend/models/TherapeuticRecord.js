@@ -80,6 +80,13 @@ const therapeuticRecordSchema = new mongoose.Schema({
 });
 
 // Verificar si el modelo ya existe antes de crearlo
-const TherapeuticRecord = mongoose.models.TherapeuticRecord || mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
+let TherapeuticRecord;
+try {
+  // Intentar obtener el modelo existente
+  TherapeuticRecord = mongoose.model('TherapeuticRecord');
+} catch (error) {
+  // Si no existe, crear el modelo
+  TherapeuticRecord = mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
+}
 
 export default TherapeuticRecord;

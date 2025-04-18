@@ -434,57 +434,6 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
   }
 };
 
-// Actualizar el modelo TherapeuticRecord
-const therapeuticRecordSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  sessions: [{
-    timestamp: {
-      type: Date,
-      default: Date.now
-    },
-    emotion: {
-      name: {
-        type: String,
-        default: 'neutral'
-      },
-      intensity: {
-        type: Number,
-        default: 5,
-        min: 1,
-        max: 10
-      }
-    },
-    tools: [{
-      type: String
-    }],
-    progress: {
-      type: String,
-      default: 'en_curso'
-    }
-  }],
-  currentStatus: {
-    emotion: {
-      type: String,
-      default: 'neutral'
-    },
-    lastUpdate: {
-      type: Date,
-      default: Date.now
-    }
-  },
-  activeTools: [{
-    type: String
-  }]
-});
-
-// Asegurar que el modelo se actualiza
-mongoose.deleteModel('TherapeuticRecord');
-const TherapeuticRecord = mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
-
 export default {
   generateAIResponse,
   updateTherapeuticRecord
