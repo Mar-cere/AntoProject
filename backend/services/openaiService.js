@@ -349,61 +349,41 @@ const generateEnhancedResponse = async (message, context, strategy) => {
 
 async function updateTherapeuticRecord(userId, sessionData) {
   try {
-    const sanitizedData = {
+    // Crear un nuevo documento con la estructura correcta
+    const newSession = {
+      timestamp: new Date(),
       emotion: {
-        name: sessionData.emotion?.name || sessionData.emotion || 'neutral',
+        name: sessionData.emotion?.name || 'neutral',
         intensity: sessionData.emotion?.intensity || 5
       },
       tools: Array.isArray(sessionData.tools) ? sessionData.tools : [],
       progress: sessionData.progress || 'en_curso'
     };
 
-    // Primero, intentar obtener el documento existente
-    let record = await TherapeuticRecord.findOne({ userId });
-
-    if (!record) {
-      // Si no existe, crear uno nuevo con la estructura correcta
-      record = new TherapeuticRecord({
-        userId,
-        sessions: [],
-        currentStatus: {
-          emotion: 'neutral',
-          lastUpdate: new Date()
-        },
-        activeTools: []
-      });
-    }
-
-    // Actualizar el documento con la estructura correcta
-    return await TherapeuticRecord.findOneAndUpdate(
+    // Actualizar usando $set para asegurar la estructura correcta
+    const updateResult = await TherapeuticRecord.findOneAndUpdate(
       { userId },
       {
-        $push: {
-          sessions: {
-            timestamp: new Date(),
-            emotion: {
-              name: sanitizedData.emotion.name,
-              intensity: sanitizedData.emotion.intensity
-            },
-            tools: sanitizedData.tools,
-            progress: sanitizedData.progress
-          }
-        },
+        $push: { sessions: newSession },
         $set: {
           currentStatus: {
-            emotion: sanitizedData.emotion.name,
+            emotion: sessionData.emotion?.name || 'neutral',
             lastUpdate: new Date()
-          },
-          activeTools: sanitizedData.tools
+          }
+        },
+        $setOnInsert: {
+          userId,
+          activeTools: []
         }
       },
-      { 
-        upsert: true, 
+      {
         new: true,
-        runValidators: true,
-        setDefaultsOnInsert: true
+        upsert: true,
+        runValidators: true
       }
-    );
+    ).exec();
+
+    return updateResult;
   } catch (error) {
     console.error('Error actualizando registro terapéutico:', error);
     console.error('Datos de sesión:', JSON.stringify(sessionData, null, 2));

@@ -1,49 +1,73 @@
 import mongoose from 'mongoose';
 
+// Definir sub-esquemas para mejor control
+const EmotionSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    default: 'neutral',
+    required: true
+  },
+  intensity: {
+    type: Number,
+    default: 5,
+    min: 1,
+    max: 10
+  }
+}, { _id: false });
+
+const SessionSchema = new mongoose.Schema({
+  timestamp: {
+    type: Date,
+    default: Date.now,
+    required: true
+  },
+  emotion: {
+    type: EmotionSchema,
+    required: true,
+    default: () => ({})
+  },
+  tools: [{
+    type: String
+  }],
+  progress: {
+    type: String,
+    default: 'en_curso'
+  }
+}, { _id: false });
+
+const CurrentStatusSchema = new mongoose.Schema({
+  emotion: {
+    type: String,
+    default: 'neutral',
+    required: true
+  },
+  lastUpdate: {
+    type: Date,
+    default: Date.now,
+    required: true
+  }
+}, { _id: false });
+
 const therapeuticRecordSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
-  sessions: [{
-    timestamp: {
-      type: Date,
-      default: Date.now
-    },
-    emotion: {
-      name: {
-        type: String,
-        default: 'neutral'
-      },
-      intensity: {
-        type: Number,
-        default: 5,
-        min: 1,
-        max: 10
-      }
-    },
-    tools: [{
-      type: String
-    }],
-    progress: {
-      type: String,
-      default: 'en_curso'
-    }
-  }],
+  sessions: {
+    type: [SessionSchema],
+    default: []
+  },
   currentStatus: {
-    emotion: {
-      type: String,
-      default: 'neutral'
-    },
-    lastUpdate: {
-      type: Date,
-      default: Date.now
-    }
+    type: CurrentStatusSchema,
+    required: true,
+    default: () => ({})
   },
-  activeTools: [{
-    type: String
-  }],
+  activeTools: {
+    type: [String],
+    default: []
+  },
   progressMetrics: {
     emotionalStability: {
       type: Number,
@@ -82,9 +106,9 @@ const therapeuticRecordSchema = new mongoose.Schema({
   strict: true
 });
 
-// Middleware para asegurar la estructura correcta antes de guardar
+// Asegurar valores por defecto en la creación
 therapeuticRecordSchema.pre('save', function(next) {
-  if (!this.currentStatus || typeof this.currentStatus === 'string') {
+  if (!this.currentStatus) {
     this.currentStatus = {
       emotion: 'neutral',
       lastUpdate: new Date()
@@ -93,22 +117,27 @@ therapeuticRecordSchema.pre('save', function(next) {
   next();
 });
 
-// Middleware para asegurar la estructura correcta antes de actualizar
+// Asegurar que las actualizaciones mantengan la estructura
 therapeuticRecordSchema.pre('findOneAndUpdate', function(next) {
   const update = this.getUpdate();
-  if (update.$set && typeof update.$set.currentStatus === 'string') {
-    update.$set.currentStatus = {
-      emotion: update.$set.currentStatus,
-      lastUpdate: new Date()
-    };
+  
+  // Asegurar que currentStatus siempre tenga la estructura correcta
+  if (update.$set && update.$set.currentStatus) {
+    if (typeof update.$set.currentStatus === 'string') {
+      update.$set.currentStatus = {
+        emotion: update.$set.currentStatus,
+        lastUpdate: new Date()
+      };
+    }
   }
+  
   next();
 });
 
 let TherapeuticRecord;
 try {
   TherapeuticRecord = mongoose.model('TherapeuticRecord');
-} catch (error) {
+} catch {
   TherapeuticRecord = mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
 }
 
