@@ -19,9 +19,9 @@ const openai = new OpenAI({
 });
 
 const RESPONSE_LENGTHS = {
-  SHORT: 150,    // Aumentado para asegurar completitud
-  MEDIUM: 250,
-  LONG: 350
+  SHORT: 200,    // Mínimo para respuestas completas
+  MEDIUM: 300,   // Para respuestas más elaboradas
+  LONG: 400     // Para situaciones que requieren más detalle
 };
 
 const emotionalPatterns = {
@@ -297,17 +297,21 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       - Estado: ${context.emotionalTrend.latest || 'neutral'}
       
       DIRECTRICES DE COMUNICACIÓN:
-      1. Mantén un tono profesional pero cercano
-      2. Respuestas COMPLETAS y CONCISAS (máximo 2 frases)
-      3. Si haces una pregunta, que sea breve y específica
-      4. Evita frases largas o explicaciones extensas
-      5. Asegúrate de que cada respuesta tenga sentido completo
-      6. NO dejes frases incompletas
-      7. Usa puntos finales para cerrar las ideas
+      1. Mantén un tono EMPÁTICO y PROFESIONAL
+      2. Estructura tus respuestas en DOS PARTES:
+         - Validación emocional clara y específica
+         - Pregunta exploratoria o sugerencia concreta
+      3. Longitud ideal: 2-3 frases conectadas
+      4. Usa un lenguaje cálido y acogedor
+      5. Incluye elementos de apoyo emocional
+      6. Si detectas malestar emocional, prioriza la contención
       
-      ESTRUCTURA:
-      - Una frase de reconocimiento/validación
-      - Una pregunta específica o sugerencia concreta`,
+      EJEMPLOS DE RESPUESTA:
+      Usuario: "No me siento bien"
+      Respuesta: "Entiendo que estés pasando por un momento difícil y quiero que sepas que estoy aquí para escucharte. ¿Podrías contarme más sobre lo que te está afectando?"
+      
+      Usuario: "Solo me dirás eso?"
+      Respuesta: "Tienes razón en esperar más de mí, estoy aquí para apoyarte de manera más completa. ¿Qué tipo de apoyo sientes que necesitas en este momento?"`,
 
       empathetic: `Eres Anto, profesional en apoyo emocional.
       
@@ -315,19 +319,29 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       - Emoción detectada: ${context.emotionalTrend.latest || 'neutral'}
       
       DIRECTRICES:
-      1. Valida la emoción en una frase corta
-      2. Haz UNA pregunta específica
-      3. Mantén la respuesta completa y concisa
-      4. Usa puntos finales para cerrar ideas
-      5. NO dejes ideas incompletas`,
+      1. SIEMPRE valida primero la emoción
+      2. Ofrece apoyo específico y concreto
+      3. Haz preguntas que muestren interés genuino
+      4. Usa un tono cálido y comprensivo
+      5. Incluye elementos de esperanza y apoyo
+      
+      ESTRUCTURA DE RESPUESTA:
+      1. Validación empática (1 frase)
+      2. Apoyo específico (1 frase)
+      3. Pregunta exploratoria (1 frase)`,
 
       casual: `Eres Anto, asistente profesional.
       
       DIRECTRICES:
-      1. Respuestas breves pero COMPLETAS
-      2. Máximo 2 frases
-      3. Una pregunta específica
-      4. Cierra todas las ideas con punto final`
+      1. Mantén un tono cercano pero profesional
+      2. Respuestas completas y elaboradas
+      3. Muestra interés genuino
+      4. Incluye elementos de apoyo
+      
+      ESTRUCTURA:
+      - Reconocimiento
+      - Exploración
+      - Apoyo concreto`
     };
 
     const completion = await openai.chat.completions.create({
@@ -344,27 +358,21 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       ],
       temperature: 0.7,
       max_tokens: RESPONSE_LENGTHS[strategy.responseLength] || RESPONSE_LENGTHS.SHORT,
-      presence_penalty: 0.6,
-      stop: [".", "?", "!"]  // Asegurar que la respuesta termine en un punto final
+      presence_penalty: 0.6
     });
 
     let response = completion.choices[0].message.content.trim();
     
-    // Asegurar que la respuesta termine apropiadamente
-    if (!response.match(/[.!?]$/)) {
-      response += ".";
-    }
-
-    // Verificar que la respuesta no esté cortada
-    if (response.length >= RESPONSE_LENGTHS[strategy.responseLength] - 10) {
-      // Si está cerca del límite, dar una respuesta más corta y segura
-      return "Entiendo cómo te sientes. ¿Podrías contarme más sobre eso?";
+    // Verificar que la respuesta sea suficientemente elaborada
+    if (response.split(' ').length < 10) {
+      // Si la respuesta es muy corta, usar una respuesta más elaborada por defecto
+      return "Entiendo cómo te sientes y quiero que sepas que estoy aquí para escucharte. ¿Podrías contarme más sobre lo que estás experimentando?";
     }
 
     return response;
   } catch (error) {
     console.error('Error en generateEnhancedResponse:', error);
-    return "¿Podrías contarme más sobre eso?";
+    return "Me gustaría entender mejor cómo te sientes. ¿Podrías contarme más sobre tu situación?";
   }
 };
 
