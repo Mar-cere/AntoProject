@@ -1,5 +1,26 @@
 import mongoose from 'mongoose';
 
+const EmotionTimePatternSchema = new mongoose.Schema({
+  morning: { type: Number, default: 0 },
+  afternoon: { type: Number, default: 0 },
+  evening: { type: Number, default: 0 },
+  night: { type: Number, default: 0 }
+}, { _id: false });
+
+const EmotionSchema = new mongoose.Schema({
+  emotion: { type: String, required: true },
+  frequency: { type: Number, default: 0 },
+  timePattern: {
+    type: EmotionTimePatternSchema,
+    default: () => ({})
+  }
+}, { _id: false });
+
+const TimeInteractionSchema = new mongoose.Schema({
+  frequency: { type: Number, default: 0 },
+  averageMood: { type: String, default: 'neutral' }
+}, { _id: false });
+
 const userProfileSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -8,35 +29,17 @@ const userProfileSchema = new mongoose.Schema({
     unique: true
   },
   timePatterns: {
-    morningInteractions: {  // 6-12h
-      frequency: { type: Number, default: 0 },
-      averageMood: { type: String, default: 'neutral' }
-    },
-    afternoonInteractions: {  // 12-18h
-      frequency: { type: Number, default: 0 },
-      averageMood: { type: String, default: 'neutral' }
-    },
-    eveningInteractions: {  // 18-24h
-      frequency: { type: Number, default: 0 },
-      averageMood: { type: String, default: 'neutral' }
-    },
-    nightInteractions: {  // 0-6h
-      frequency: { type: Number, default: 0 },
-      averageMood: { type: String, default: 'neutral' }
-    },
-    lastActive: Date
+    morningInteractions: { type: TimeInteractionSchema, default: () => ({}) },
+    afternoonInteractions: { type: TimeInteractionSchema, default: () => ({}) },
+    eveningInteractions: { type: TimeInteractionSchema, default: () => ({}) },
+    nightInteractions: { type: TimeInteractionSchema, default: () => ({}) },
+    lastActive: { type: Date, default: Date.now }
   },
   emotionalPatterns: {
-    predominantEmotions: [{
-      emotion: String,
-      frequency: Number,
-      timePattern: {
-        morning: Number,    // 6-12h
-        afternoon: Number,  // 12-18h
-        evening: Number,    // 18-24h
-        night: Number      // 0-6h
-      }
-    }],
+    predominantEmotions: {
+      type: [EmotionSchema],
+      default: () => ([])
+    },
     emotionalTriggers: [{
       trigger: String,
       emotion: String,
@@ -95,6 +98,23 @@ const userProfileSchema = new mongoose.Schema({
   }]
 }, {
   timestamps: true
+});
+
+// Middleware para asegurar que la estructura existe
+userProfileSchema.pre('save', function(next) {
+  if (!this.emotionalPatterns) {
+    this.emotionalPatterns = { predominantEmotions: [] };
+  }
+  if (!this.timePatterns) {
+    this.timePatterns = {
+      morningInteractions: { frequency: 0, averageMood: 'neutral' },
+      afternoonInteractions: { frequency: 0, averageMood: 'neutral' },
+      eveningInteractions: { frequency: 0, averageMood: 'neutral' },
+      nightInteractions: { frequency: 0, averageMood: 'neutral' },
+      lastActive: new Date()
+    };
+  }
+  next();
 });
 
 export default mongoose.model('UserProfile', userProfileSchema); 

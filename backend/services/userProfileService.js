@@ -32,25 +32,110 @@ const userProfileService = {
 
       const emotion = analysis?.emotion || 'neutral';
       
+      // Primero, intentamos encontrar el documento
+      let userProfile = await UserProfile.findOne({ userId });
+      
+      if (!userProfile) {
+        // Si no existe, creamos uno nuevo con la estructura inicial
+        userProfile = new UserProfile({
+          userId,
+          timePatterns: {
+            morningInteractions: { frequency: 0, averageMood: 'neutral' },
+            afternoonInteractions: { frequency: 0, averageMood: 'neutral' },
+            eveningInteractions: { frequency: 0, averageMood: 'neutral' },
+            nightInteractions: { frequency: 0, averageMood: 'neutral' },
+            lastActive: new Date()
+          },
+          emotionalPatterns: {
+            predominantEmotions: [{
+              emotion: emotion,
+              frequency: 1,
+              timePattern: {
+                morning: 0,
+                afternoon: 0,
+                evening: 0,
+                night: 0
+              }
+            }]
+          }
+        });
+        
+        await userProfile.save();
+      } else {
+        // Si existe, actualizamos el documento
+        const emotionExists = userProfile.emotionalPatterns?.predominantEmotions?.some(
+          e => e.emotion === emotion
+        );
+
+        if (emotionExists) {
+          // Si la emoción ya existe, actualizamos sus contadores
+          await UserProfile.findOneAndUpdate(
+            { 
+              userId,
+              'emotionalPatterns.predominantEmotions.emotion': emotion 
+            },
+            {
+              $inc: {
+                'emotionalPatterns.predominantEmotions.$.frequency': 1,
+                [`emotionalPatterns.predominantEmotions.$.timePattern.${timeOfDay}`]: 1
+              },
+              $set: {
+                'timePatterns.lastActive': new Date()
+              }
+            },
+            { new: true }
+          );
+        } else {
+          // Si la emoción no existe, la añadimos al array
+          await UserProfile.findOneAndUpdate(
+            { userId },
+            {
+              $push: {
+                'emotionalPatterns.predominantEmotions': {
+                  emotion: emotion,
+                  frequency: 1,
+                  timePattern: {
+                    morning: timeOfDay === 'morning' ? 1 : 0,
+                    afternoon: timeOfDay === 'afternoon' ? 1 : 0,
+                    evening: timeOfDay === 'evening' ? 1 : 0,
+                    night: timeOfDay === 'night' ? 1 : 0
+                  }
+                }
+              },
+              $set: {
+                'timePatterns.lastActive': new Date()
+              }
+            },
+            { new: true }
+          );
+        }
+      }
+
+      // Actualizar el patrón de tiempo
       await UserProfile.findOneAndUpdate(
         { userId },
         {
           $inc: {
-            [`emotionalPatterns.predominantEmotions.$[emotion].frequency`]: 1,
-            [`emotionalPatterns.predominantEmotions.$[emotion].timePattern.${timeOfDay}`]: 1
+            [`timePatterns.${timeOfDay}Interactions.frequency`]: 1
           },
           $set: {
+            [`timePatterns.${timeOfDay}Interactions.averageMood`]: emotion,
             'timePatterns.lastActive': new Date()
           }
         },
-        {
-          arrayFilters: [{ 'emotion.emotion': emotion }],
-          upsert: true,
-          new: true
-        }
+        { new: true }
       );
+
     } catch (error) {
       console.error('Error en updateEmotionalPattern:', error);
+      // Log detallado para debugging
+      console.error('Detalles del error:', {
+        userId: userId,
+        messageContent: message.content,
+        errorName: error.name,
+        errorMessage: error.message,
+        stack: error.stack
+      });
     }
   },
 
