@@ -301,18 +301,7 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       2. Evita exceso de emojis (máximo uno por mensaje)
       3. Usa un lenguaje claro y directo
       4. Mantén un balance entre empatía y profesionalismo
-      5. Evita diminutivos o expresiones demasiado coloquiales
-      
-      ESTRUCTURA DE RESPUESTA:
-      1. Breve validación o reconocimiento
-      2. Una pregunta específica o sugerencia concreta
-      3. Mantén las respuestas concisas (2-3 líneas máximo)
-      
-      NO USAR:
-      - Expresiones demasiado informales
-      - Múltiples signos de exclamación
-      - Lenguaje infantilizado
-      - Frases hechas o clichés`,
+      5. Evita diminutivos o expresiones demasiado coloquiales`,
 
       empathetic: `Eres Anto, profesional en apoyo emocional.
       
@@ -323,12 +312,7 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       1. Valida la emoción de forma profesional
       2. Ofrece una perspectiva constructiva
       3. Mantén un tono empático pero maduro
-      4. Sugiere recursos o técnicas específicas
-      
-      ESTILO:
-      - Profesional sin ser distante
-      - Empático sin ser excesivamente emotivo
-      - Directo sin ser frío`,
+      4. Sugiere recursos o técnicas específicas`,
 
       casual: `Eres Anto, asistente profesional.
       
@@ -365,7 +349,6 @@ const generateEnhancedResponse = async (message, context, strategy) => {
 
 const updateTherapeuticRecord = async (userId, sessionData) => {
   try {
-    // Sanitizar los datos de entrada
     const sanitizedData = {
       emotion: {
         name: sessionData.emotion?.name || sessionData.emotion || 'neutral',
@@ -375,7 +358,6 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
       progress: sessionData.progress || 'en_curso'
     };
 
-    // Actualizar el registro
     const updateResult = await TherapeuticRecord.findOneAndUpdate(
       { userId },
       {
@@ -404,7 +386,6 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
     );
 
     return updateResult;
-
   } catch (error) {
     console.error('Error actualizando registro terapéutico:', error);
     console.error('Datos de sesión:', JSON.stringify(sessionData, null, 2));
@@ -417,7 +398,6 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
     const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(message);
     const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
     
-    // Preparar los datos emocionales
     const emotionalData = {
       name: emotionalAnalysis?.emotion || 'neutral',
       intensity: emotionalAnalysis?.intensity || 5
@@ -428,7 +408,6 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
       responseLength: 'SHORT'
     });
 
-    // Actualizar el registro terapéutico
     await updateTherapeuticRecord(userId, {
       emotion: emotionalData,
       tools: emotionalAnalysis?.responses?.tools || [],
@@ -449,7 +428,7 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
   } catch (error) {
     console.error('Error en generateAIResponse:', error);
     return {
-      content: "¿Podrías decirme más sobre eso? 🤔",
+      content: "¿Podría decirme más sobre eso?",
       context: DEFAULT_CONTEXT
     };
   }
