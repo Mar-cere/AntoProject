@@ -1,6 +1,7 @@
 import UserProfile from '../models/UserProfile.js';
 import Message from '../models/Message.js';
 import openaiService from './openaiService.js';
+import emotionalAnalyzer from './emotionalAnalyzer.js';
 
 const userProfileService = {
   async updateConnectionPattern(userId) {
@@ -22,25 +23,35 @@ const userProfileService = {
   },
 
   async updateEmotionalPattern(userId, message) {
-    const analysis = await openaiService.analyzeMessageContext(message);
-    const hour = new Date().getHours();
-    const timeOfDay = hour >= 6 && hour < 12 ? 'morning' :
-                     hour >= 12 && hour < 18 ? 'afternoon' :
-                     hour >= 18 && hour < 24 ? 'evening' : 'night';
+    try {
+      const analysis = await emotionalAnalyzer.analyzeEmotion(message);
+      const hour = new Date().getHours();
+      const timeOfDay = hour >= 6 && hour < 12 ? 'morning' :
+                       hour >= 12 && hour < 18 ? 'afternoon' :
+                       hour >= 18 && hour < 24 ? 'evening' : 'night';
 
-    await UserProfile.findOneAndUpdate(
-      { userId },
-      {
-        $inc: {
-          [`emotionalPatterns.predominantEmotions.$[emotion].frequency`]: 1,
-          [`emotionalPatterns.predominantEmotions.$[emotion].timePattern.${timeOfDay}`]: 1
+      const emotion = analysis?.emotion || 'neutral';
+      
+      await UserProfile.findOneAndUpdate(
+        { userId },
+        {
+          $inc: {
+            [`emotionalPatterns.predominantEmotions.$[emotion].frequency`]: 1,
+            [`emotionalPatterns.predominantEmotions.$[emotion].timePattern.${timeOfDay}`]: 1
+          },
+          $set: {
+            'timePatterns.lastActive': new Date()
+          }
+        },
+        {
+          arrayFilters: [{ 'emotion.emotion': emotion }],
+          upsert: true,
+          new: true
         }
-      },
-      {
-        arrayFilters: [{ 'emotion.emotion': analysis.emotionalContext.mainEmotion }],
-        upsert: true
-      }
-    );
+      );
+    } catch (error) {
+      console.error('Error en updateEmotionalPattern:', error);
+    }
   },
 
   async generateUserInsights(userId) {

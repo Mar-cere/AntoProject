@@ -115,56 +115,56 @@ router.post('/messages', protect, async (req, res) => {
     });
 
     if (role === 'user') {
-      const conversationHistory = await Message.find({ 
-        conversationId,
-        timestamp: { $gte: new Date(Date.now() - 30 * 60 * 1000) }
-      })
-      .sort({ timestamp: -1 })
-      .limit(10)
-      .lean();
+      try {
+        // Obtener historial de conversación
+        const conversationHistory = await Message.find({ 
+          conversationId,
+          timestamp: { $gte: new Date(Date.now() - 30 * 60 * 1000) }
+        })
+        .sort({ timestamp: -1 })
+        .limit(10)
+        .lean();
 
-      // Análisis emocional y contextual
-      const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(userMessage);
-      const messageIntent = await contextAnalyzer.analyzeMessageIntent(userMessage);
-      
-      // Actualizar perfil y patrones
-      await Promise.all([
-        userProfileService.updateConnectionPattern(req.user._id),
-        userProfileService.updateEmotionalPattern(req.user._id, userMessage),
-        progressTracker.trackProgress(req.user._id, userMessage),
-        goalTracker.updateGoalProgress(req.user._id, userMessage, emotionalAnalysis)
-      ]);
+        // Ejecutar todas las actualizaciones en paralelo
+        const [response] = await Promise.all([
+          openaiService.generateAIResponse(
+            userMessage,
+            conversationHistory,
+            req.user._id
+          ),
+          userProfileService.updateConnectionPattern(req.user._id),
+          userProfileService.updateEmotionalPattern(req.user._id, userMessage)
+        ]);
 
-      // Generar respuesta personalizada
-      const response = await openaiService.generateAIResponse(
-        userMessage,
-        conversationHistory,
-        req.user._id
-      );
+        const assistantMessage = new Message({
+          userId: req.user._id,
+          content: response.content,
+          role: 'assistant',
+          conversationId,
+          metadata: {
+            timestamp: new Date(),
+            type: 'text',
+            status: 'sent',
+            context: response.context
+          }
+        });
 
-      const assistantMessage = new Message({
-        userId: req.user._id,
-        content: response.content,
-        role: 'assistant',
-        conversationId,
-        metadata: {
-          timestamp: new Date(),
-          type: 'text',
-          status: 'sent',
-          context: response.context,
-          intent: response.intent
-        }
-      });
+        await Promise.all([
+          userMessage.save(),
+          assistantMessage.save()
+        ]);
 
-      await Promise.all([
-        userMessage.save(),
-        assistantMessage.save()
-      ]);
-
-      res.status(201).json({
-        userMessage,
-        assistantMessage
-      });
+        res.status(201).json({
+          userMessage,
+          assistantMessage
+        });
+      } catch (error) {
+        console.error('Error procesando mensaje:', error);
+        res.status(500).json({
+          message: 'Error procesando el mensaje',
+          error: error.message
+        });
+      }
     } else {
       await userMessage.save();
       res.status(201).json({ message: userMessage });

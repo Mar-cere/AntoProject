@@ -466,5 +466,6 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
 
 export default {
   generateAIResponse,
-  updateTherapeuticRecord
+  updateTherapeuticRecord,
+  analyzeMessageContext
 }; 
