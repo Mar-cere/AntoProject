@@ -95,7 +95,25 @@ const userProfileSchema = new mongoose.Schema({
     emotion: String,
     topic: String,
     responseEffectiveness: Number  // 1-10
-  }]
+  }],
+  connectionStats: {
+    lastConnection: { type: Date, default: Date.now },
+    frequentTimes: {
+      morning: { type: Number, default: 0 },    // 6-12h
+      afternoon: { type: Number, default: 0 },  // 12-18h
+      evening: { type: Number, default: 0 },    // 18-24h
+      night: { type: Number, default: 0 }       // 0-6h
+    },
+    weekdayPatterns: {
+      monday: { type: Number, default: 0 },
+      tuesday: { type: Number, default: 0 },
+      wednesday: { type: Number, default: 0 },
+      thursday: { type: Number, default: 0 },
+      friday: { type: Number, default: 0 },
+      saturday: { type: Number, default: 0 },
+      sunday: { type: Number, default: 0 }
+    }
+  }
 }, {
   timestamps: true
 });
@@ -112,6 +130,26 @@ userProfileSchema.pre('save', function(next) {
       eveningInteractions: { frequency: 0, averageMood: 'neutral' },
       nightInteractions: { frequency: 0, averageMood: 'neutral' },
       lastActive: new Date()
+    };
+  }
+  if (!this.connectionStats) {
+    this.connectionStats = {
+      lastConnection: new Date(),
+      frequentTimes: {
+        morning: 0,
+        afternoon: 0,
+        evening: 0,
+        night: 0
+      },
+      weekdayPatterns: {
+        monday: 0,
+        tuesday: 0,
+        wednesday: 0,
+        thursday: 0,
+        friday: 0,
+        saturday: 0,
+        sunday: 0
+      }
     };
   }
   next();
