@@ -347,67 +347,88 @@ const generateEnhancedResponse = async (message, context, strategy) => {
   }
 };
 
-const generateAIResponse = async (message, conversationHistory, userId) => {
-  try {
-    const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(message);
-    const userContext = await memoryService.getRelevantContext(userId, message.content);
-    const progress = await progressTracker.trackProgress(userId, message);
-    
-    const response = await responseGenerator.generateResponse(
-      message,
-      userContext,
-      emotionalAnalysis
-    );
-
-    // Actualizar registros
-    await Promise.all([
-      memoryService.updateUserInsights(userId, message, emotionalAnalysis),
-      updateTherapeuticRecord(userId, {
-        emotion: emotionalAnalysis.emotion,
-        progress: Object.keys(progress)
-      })
-    ]);
-
-    return {
-      content: response,
-      analysis: emotionalAnalysis,
-      progress
-    };
-
-  } catch (error) {
-    console.error('Error en generateAIResponse:', error);
-    return {
-      content: "¿Podrías decirme más? 🤔",
-      analysis: null,
-      progress: {}
-    };
-  }
-};
-
 const updateTherapeuticRecord = async (userId, sessionData) => {
   try {
+    // Asegurar que los datos están en el formato correcto
+    const sanitizedData = {
+      emotion: {
+        name: sessionData.emotion?.name || sessionData.emotion || 'neutral',
+        intensity: sessionData.emotion?.intensity || 5
+      },
+      tools: Array.isArray(sessionData.tools) ? sessionData.tools : [],
+      progress: sessionData.progress || 'en_curso'
+    };
+
     await TherapeuticRecord.findOneAndUpdate(
       { userId },
       {
         $push: {
           sessions: {
             timestamp: new Date(),
-            emotion: sessionData.emotion || 'neutral',
-            tools: sessionData.tools || [],
-            progress: sessionData.progress || 'en_curso'
+            emotion: sanitizedData.emotion,
+            tools: sanitizedData.tools,
+            progress: sanitizedData.progress
           }
         },
         $set: {
-          lastInteraction: new Date(),
-          currentStatus: sessionData.emotion || 'neutral',
-          activeTools: sessionData.tools || []
+          'currentStatus.emotion': sanitizedData.emotion.name,
+          'currentStatus.lastUpdate': new Date(),
+          activeTools: sanitizedData.tools
         }
       },
-      { upsert: true, new: true }
+      { 
+        upsert: true, 
+        new: true,
+        runValidators: true
+      }
     );
   } catch (error) {
     console.error('Error actualizando registro terapéutico:', error);
-    // No lanzar el error para no interrumpir el flujo
+    // Log más detallado para debugging
+    console.error('Datos de sesión:', JSON.stringify(sessionData, null, 2));
+  }
+};
+
+const generateAIResponse = async (message, conversationHistory, userId) => {
+  try {
+    const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(message);
+    const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
+    
+    // Asegurar que los datos emocionales estén en el formato correcto
+    const emotionalData = {
+      name: emotionalAnalysis?.emotion || 'neutral',
+      intensity: emotionalAnalysis?.intensity || 5
+    };
+
+    const response = await generateEnhancedResponse(message, userContext, {
+      approach: emotionalAnalysis?.emotion ? 'empathetic' : 'casual',
+      responseLength: 'SHORT'
+    });
+
+    // Actualizar el registro terapéutico con datos sanitizados
+    await updateTherapeuticRecord(userId, {
+      emotion: emotionalData,
+      tools: emotionalAnalysis?.responses?.tools || [],
+      progress: 'en_curso'
+    });
+
+    return {
+      content: response,
+      context: {
+        ...userContext,
+        emotionalContext: {
+          mainEmotion: emotionalData.name,
+          intensity: emotionalData.intensity
+        }
+      }
+    };
+
+  } catch (error) {
+    console.error('Error en generateAIResponse:', error);
+    return {
+      content: "¿Podrías decirme más sobre eso? 🤔",
+      context: DEFAULT_CONTEXT
+    };
   }
 };
 

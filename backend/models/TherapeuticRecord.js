@@ -4,8 +4,7 @@ const therapeuticRecordSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    unique: true
+    required: true
   },
   sessions: [{
     timestamp: {
@@ -13,24 +12,34 @@ const therapeuticRecordSchema = new mongoose.Schema({
       default: Date.now
     },
     emotion: {
-      type: String,
-      default: 'neutral'
+      name: {
+        type: String,
+        default: 'neutral'
+      },
+      intensity: {
+        type: Number,
+        default: 5,
+        min: 1,
+        max: 10
+      }
     },
-    toolsUsed: [{
+    tools: [{
       type: String
     }],
     progress: {
       type: String,
-      default: 'iniciando'
+      default: 'en_curso'
     }
   }],
-  lastInteraction: {
-    type: Date,
-    default: Date.now
-  },
   currentStatus: {
-    type: String,
-    default: 'neutral'
+    emotion: {
+      type: String,
+      default: 'neutral'
+    },
+    lastUpdate: {
+      type: Date,
+      default: Date.now
+    }
   },
   activeTools: [{
     type: String
