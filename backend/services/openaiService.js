@@ -7,6 +7,9 @@ import contextAnalyzer from './contextAnalyzer.js';
 import goalTracker from './goalTracker.js';
 import UserInsight from '../models/UserInsight.js';
 import UserGoals from '../models/UserGoals.js';
+import emotionalAnalyzer from './emotionalAnalyzer.js';
+import progressTracker from './progressTracker.js';
+import responseGenerator from './responseGenerator.js';
 
 dotenv.config();
 
@@ -15,9 +18,9 @@ const openai = new OpenAI({
 });
 
 const RESPONSE_LENGTHS = {
-  corto: 50,    // Respuestas rápidas y conversacionales
-  medio: 150,   // Respuestas con algo más de contexto
-  largo: 300    // Respuestas elaboradas para temas importantes
+  SHORT: 50,    // Para respuestas rápidas y simples
+  MEDIUM: 100,  // Para respuestas con algo más de contexto
+  LONG: 150     // Para situaciones que requieren más elaboración
 };
 
 const emotionalPatterns = {
@@ -180,27 +183,20 @@ const analyzeConversationState = async (conversationHistory) => {
   }
 };
 
-const determineResponseLength = (emotionalAnalysis, conversationState) => {
-  // Aumentamos los tokens base para asegurar respuestas completas
-  const tokenLengths = {
-    SHORT: 150,    // Mínimo para asegurar respuestas completas
-    MEDIUM: 250,   // Respuestas estándar
-    LONG: 400     // Respuestas elaboradas
-  };
-
-  // Si el mensaje es sobre temas importantes (carrera, decisiones vitales)
-  if (conversationState.recurringThemes.includes('ocupacional') || 
-      conversationState.recurringThemes.includes('educación')) {
-    return tokenLengths.MEDIUM;
+const determineResponseLength = (messageIntent, emotionalContext) => {
+  // Mensajes emocionales o de ayuda necesitan un poco más de espacio
+  if (messageIntent.intent === 'EMOTIONAL_SUPPORT' || 
+      messageIntent.intent === 'SEEKING_HELP') {
+    return 'MEDIUM';
+  }
+  
+  // Para crisis o situaciones urgentes
+  if (messageIntent.intent === 'CRISIS') {
+    return 'LONG';
   }
 
-  // Si requiere atención urgente o emocional
-  if (emotionalAnalysis.requiresUrgentCare || 
-      emotionalAnalysis.primaryEmotion) {
-    return tokenLengths.MEDIUM;
-  }
-
-  return tokenLengths.SHORT;
+  // Por defecto, mantener respuestas cortas
+  return 'SHORT';
 };
 
 const analyzeMessageContext = async (message, conversationHistory) => {
@@ -294,30 +290,36 @@ const DEFAULT_EMOTIONAL_CONTEXT = {
 const generateEnhancedResponse = async (message, context, strategy) => {
   try {
     const promptTemplate = {
-      supportive: `Eres Anto, un asistente empático y profesional.
-      El usuario dice: ${message.content}
-      Contexto emocional: ${context.emotionalTrend.latest || 'neutral'}
-      Objetivos actuales: ${context.goals.join(', ') || 'ninguno específico'}
+      supportive: `Eres Anto, un asistente empático y conversacional.
+      CONTEXTO: El usuario se siente ${context.emotionalTrend.latest || 'neutral'}
       
-      Proporciona:
-      1. Validación empática
-      2. Una sugerencia práctica específica
-      3. Una pregunta de seguimiento enfocada
-      
-      Mantén un tono cálido pero profesional.`,
+      INSTRUCCIONES IMPORTANTES:
+      1. Responde de forma BREVE y CONCISA (máximo 2-3 líneas)
+      2. Sé empático pero directo
+      3. Si haces una pregunta, que sea corta y específica
+      4. Usa lenguaje casual, como en WhatsApp
+      5. Evita explicaciones largas o consejos extensos
+      6. NO uses frases como "entiendo que", "siento que", "es normal que"
+      7. NO des más de una sugerencia por mensaje
+      8. Si el tema es complejo, divide la respuesta en varios mensajes cortos`,
 
-      empathetic: `Eres Anto, centrándote en el apoyo emocional.
-      Estado emocional actual: ${context.emotionalTrend.latest || 'neutral'}
-      Patrones relevantes: ${context.patterns.join(', ') || 'ninguno específico'}
+      empathetic: `Eres Anto, respondiendo a una emoción.
+      EMOCIÓN: ${context.emotionalTrend.latest || 'neutral'}
       
-      Ofrece:
-      1. Reconocimiento de la emoción
-      2. Normalización de la experiencia
-      3. Una técnica de regulación emocional específica`,
+      INSTRUCCIONES:
+      1. Valida la emoción en UNA línea
+      2. Haz UNA pregunta específica o da UNA sugerencia breve
+      3. Mantén un tono cercano pero profesional
+      4. NO des largas explicaciones
+      5. NO uses frases hechas o clichés`,
 
-      casual: `Eres Anto, manteniendo una conversación amigable.
-      Mantén un tono casual y cercano.
-      Responde de manera concisa pero empática.`
+      casual: `Eres Anto en modo conversacional.
+      INSTRUCCIONES:
+      1. Responde como en un chat de WhatsApp
+      2. Máximo 2 líneas
+      3. Sé directo y natural
+      4. Usa ocasionalmente emojis
+      5. Mantén la conversación fluida`
     };
 
     const completion = await openai.chat.completions.create({
@@ -333,74 +335,51 @@ const generateEnhancedResponse = async (message, context, strategy) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: strategy.responseLength === 'SHORT' ? 150 : 250,
-      presence_penalty: 0.6
+      max_tokens: RESPONSE_LENGTHS[strategy.responseLength] || RESPONSE_LENGTHS.SHORT,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.3
     });
 
     return completion.choices[0].message.content;
   } catch (error) {
     console.error('Error en generateEnhancedResponse:', error);
-    return "Disculpa, ¿podrías repetir eso? 😊";
+    return "¿Podrías decirme más sobre eso? 🤔";
   }
 };
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
-    // Obtener contexto con valores por defecto seguros
-    const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
-    const messageIntent = await contextAnalyzer.analyzeMessageIntent(message, conversationHistory);
-    const responseStrategy = contextAnalyzer.generateResponseStrategy(messageIntent.intent, userContext);
+    const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(message);
+    const userContext = await memoryService.getRelevantContext(userId, message.content);
+    const progress = await progressTracker.trackProgress(userId, message);
+    
+    const response = await responseGenerator.generateResponse(
+      message,
+      userContext,
+      emotionalAnalysis
+    );
 
-    // Asegurar que el contexto emocional esté definido
-    const emotionalContext = {
-      ...DEFAULT_EMOTIONAL_CONTEXT,
-      mainEmotion: userContext.emotionalTrend?.latest || 'neutral'
-    };
-
-    // Generar respuesta mejorada
-    const response = await generateEnhancedResponse(message, userContext, responseStrategy);
-
-    // Actualizar registros y seguimiento con manejo seguro de nulos
+    // Actualizar registros
     await Promise.all([
-      memoryService.updateUserInsights(userId, message, { emotionalContext }),
-      goalTracker.updateGoalProgress(userId, message, { 
-        ...userContext,
-        emotionalContext 
-      }),
+      memoryService.updateUserInsights(userId, message, emotionalAnalysis),
       updateTherapeuticRecord(userId, {
-        emotion: emotionalContext.mainEmotion,
-        tools: responseStrategy?.includeTechniques ? ['emotional_support', 'coping_strategies'] : [],
-        progress: messageIntent?.intent || 'GENERAL_CHAT'
+        emotion: emotionalAnalysis.emotion,
+        progress: Object.keys(progress)
       })
-    ]).catch(error => {
-      console.error('Error en actualizaciones:', error);
-      // Continuar con la respuesta aunque fallen las actualizaciones
-    });
+    ]);
 
     return {
       content: response,
-      context: {
-        ...userContext,
-        emotionalContext
-      },
-      intent: messageIntent || { intent: 'GENERAL_CHAT', priority: 1 },
-      strategy: responseStrategy || { 
-        approach: 'casual', 
-        responseLength: 'SHORT',
-        includeEngagement: true
-      }
+      analysis: emotionalAnalysis,
+      progress
     };
 
   } catch (error) {
     console.error('Error en generateAIResponse:', error);
     return {
-      content: "Disculpa, ¿podrías repetir eso? 😊",
-      context: {
-        ...DEFAULT_CONTEXT,
-        emotionalContext: DEFAULT_EMOTIONAL_CONTEXT
-      },
-      intent: { intent: 'GENERAL_CHAT', priority: 1 },
-      strategy: { approach: 'casual', responseLength: 'SHORT' }
+      content: "¿Podrías decirme más? 🤔",
+      analysis: null,
+      progress: {}
     };
   }
 };
