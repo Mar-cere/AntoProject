@@ -10,6 +10,7 @@ import UserGoals from '../models/UserGoals.js';
 import emotionalAnalyzer from './emotionalAnalyzer.js';
 import progressTracker from './progressTracker.js';
 import responseGenerator from './responseGenerator.js';
+import mongoose from 'mongoose';
 
 dotenv.config();
 
@@ -18,8 +19,8 @@ const openai = new OpenAI({
 });
 
 const RESPONSE_LENGTHS = {
-  SHORT: 50,    // Para respuestas rápidas y simples
-  MEDIUM: 100,  // Para respuestas con algo más de contexto
+  SHORT: 50,    // Para respuestas simples
+  MEDIUM: 100,  // Para respuestas con contexto
   LONG: 150     // Para situaciones que requieren más elaboración
 };
 
@@ -290,36 +291,52 @@ const DEFAULT_EMOTIONAL_CONTEXT = {
 const generateEnhancedResponse = async (message, context, strategy) => {
   try {
     const promptTemplate = {
-      supportive: `Eres Anto, un asistente empático y conversacional.
-      CONTEXTO: El usuario se siente ${context.emotionalTrend.latest || 'neutral'}
+      supportive: `Eres Anto, un asistente terapéutico profesional y empático.
       
-      INSTRUCCIONES IMPORTANTES:
-      1. Responde de forma BREVE y CONCISA (máximo 2-3 líneas)
-      2. Sé empático pero directo
-      3. Si haces una pregunta, que sea corta y específica
-      4. Usa lenguaje casual, como en WhatsApp
-      5. Evita explicaciones largas o consejos extensos
-      6. NO uses frases como "entiendo que", "siento que", "es normal que"
-      7. NO des más de una sugerencia por mensaje
-      8. Si el tema es complejo, divide la respuesta en varios mensajes cortos`,
-
-      empathetic: `Eres Anto, respondiendo a una emoción.
-      EMOCIÓN: ${context.emotionalTrend.latest || 'neutral'}
+      CONTEXTO EMOCIONAL:
+      - Estado: ${context.emotionalTrend.latest || 'neutral'}
       
-      INSTRUCCIONES:
-      1. Valida la emoción en UNA línea
-      2. Haz UNA pregunta específica o da UNA sugerencia breve
-      3. Mantén un tono cercano pero profesional
-      4. NO des largas explicaciones
-      5. NO uses frases hechas o clichés`,
+      DIRECTRICES DE COMUNICACIÓN:
+      1. Mantén un tono profesional pero cercano
+      2. Evita exceso de emojis (máximo uno por mensaje)
+      3. Usa un lenguaje claro y directo
+      4. Mantén un balance entre empatía y profesionalismo
+      5. Evita diminutivos o expresiones demasiado coloquiales
+      
+      ESTRUCTURA DE RESPUESTA:
+      1. Breve validación o reconocimiento
+      2. Una pregunta específica o sugerencia concreta
+      3. Mantén las respuestas concisas (2-3 líneas máximo)
+      
+      NO USAR:
+      - Expresiones demasiado informales
+      - Múltiples signos de exclamación
+      - Lenguaje infantilizado
+      - Frases hechas o clichés`,
 
-      casual: `Eres Anto en modo conversacional.
-      INSTRUCCIONES:
-      1. Responde como en un chat de WhatsApp
-      2. Máximo 2 líneas
-      3. Sé directo y natural
-      4. Usa ocasionalmente emojis
-      5. Mantén la conversación fluida`
+      empathetic: `Eres Anto, profesional en apoyo emocional.
+      
+      CONTEXTO:
+      - Emoción detectada: ${context.emotionalTrend.latest || 'neutral'}
+      
+      DIRECTRICES:
+      1. Valida la emoción de forma profesional
+      2. Ofrece una perspectiva constructiva
+      3. Mantén un tono empático pero maduro
+      4. Sugiere recursos o técnicas específicas
+      
+      ESTILO:
+      - Profesional sin ser distante
+      - Empático sin ser excesivamente emotivo
+      - Directo sin ser frío`,
+
+      casual: `Eres Anto, asistente profesional.
+      
+      DIRECTRICES:
+      1. Mantén un tono cordial y respetuoso
+      2. Respuestas breves pero completas
+      3. Equilibra cercanía y profesionalismo
+      4. Usa lenguaje accesible pero formal`
     };
 
     const completion = await openai.chat.completions.create({
@@ -336,20 +353,19 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       ],
       temperature: 0.7,
       max_tokens: RESPONSE_LENGTHS[strategy.responseLength] || RESPONSE_LENGTHS.SHORT,
-      presence_penalty: 0.6,
-      frequency_penalty: 0.3
+      presence_penalty: 0.6
     });
 
     return completion.choices[0].message.content;
   } catch (error) {
     console.error('Error en generateEnhancedResponse:', error);
-    return "¿Podrías decirme más sobre eso? 🤔";
+    return "¿Podría compartir más sobre eso?";
   }
 };
 
 const updateTherapeuticRecord = async (userId, sessionData) => {
   try {
-    // Asegurar que los datos están en el formato correcto
+    // Sanitizar los datos de entrada
     const sanitizedData = {
       emotion: {
         name: sessionData.emotion?.name || sessionData.emotion || 'neutral',
@@ -359,13 +375,33 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
       progress: sessionData.progress || 'en_curso'
     };
 
-    await TherapeuticRecord.findOneAndUpdate(
+    // Primero, intentar encontrar el registro existente
+    let therapeuticRecord = await TherapeuticRecord.findOne({ userId });
+
+    if (!therapeuticRecord) {
+      // Si no existe, crear uno nuevo con la estructura correcta
+      therapeuticRecord = new TherapeuticRecord({
+        userId,
+        sessions: [],
+        currentStatus: {
+          emotion: 'neutral',
+          lastUpdate: new Date()
+        },
+        activeTools: []
+      });
+    }
+
+    // Actualizar el registro con los nuevos datos
+    const updateResult = await TherapeuticRecord.findOneAndUpdate(
       { userId },
       {
         $push: {
           sessions: {
             timestamp: new Date(),
-            emotion: sanitizedData.emotion,
+            emotion: {
+              name: sanitizedData.emotion.name,
+              intensity: sanitizedData.emotion.intensity
+            },
             tools: sanitizedData.tools,
             progress: sanitizedData.progress
           }
@@ -379,13 +415,17 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
       { 
         upsert: true, 
         new: true,
-        runValidators: true
+        runValidators: true 
       }
     );
+
+    return updateResult;
+
   } catch (error) {
     console.error('Error actualizando registro terapéutico:', error);
-    // Log más detallado para debugging
     console.error('Datos de sesión:', JSON.stringify(sessionData, null, 2));
+    // No lanzar el error para no interrumpir el flujo
+    return null;
   }
 };
 
@@ -394,7 +434,7 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
     const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(message);
     const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
     
-    // Asegurar que los datos emocionales estén en el formato correcto
+    // Preparar los datos emocionales
     const emotionalData = {
       name: emotionalAnalysis?.emotion || 'neutral',
       intensity: emotionalAnalysis?.intensity || 5
@@ -405,7 +445,7 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
       responseLength: 'SHORT'
     });
 
-    // Actualizar el registro terapéutico con datos sanitizados
+    // Actualizar el registro terapéutico
     await updateTherapeuticRecord(userId, {
       emotion: emotionalData,
       tools: emotionalAnalysis?.responses?.tools || [],
@@ -431,6 +471,57 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
     };
   }
 };
+
+// Actualizar el modelo TherapeuticRecord
+const therapeuticRecordSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  sessions: [{
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    emotion: {
+      name: {
+        type: String,
+        default: 'neutral'
+      },
+      intensity: {
+        type: Number,
+        default: 5,
+        min: 1,
+        max: 10
+      }
+    },
+    tools: [{
+      type: String
+    }],
+    progress: {
+      type: String,
+      default: 'en_curso'
+    }
+  }],
+  currentStatus: {
+    emotion: {
+      type: String,
+      default: 'neutral'
+    },
+    lastUpdate: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  activeTools: [{
+    type: String
+  }]
+});
+
+// Asegurar que el modelo se actualiza
+mongoose.deleteModel('TherapeuticRecord');
+const TherapeuticRecord = mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
 
 export default {
   generateAIResponse,
