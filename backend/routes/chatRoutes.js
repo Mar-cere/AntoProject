@@ -2,16 +2,16 @@ import express from 'express';
 import { authenticateToken as protect } from '../middleware/auth.js';
 import Message from '../models/Message.js';
 import mongoose from 'mongoose';
-import { 
-  openaiService, 
-  memoryService, 
-  contextAnalyzer, 
-  goalTracker,
-  emotionalAnalyzer,
-  progressTracker
-} from '../services/index.js';
 import UserProfile from '../models/UserProfile.js';
+
+// Importar servicios individualmente para mejor control de errores
+import openaiService from '../services/openaiService.js';
+import emotionalAnalyzer from '../services/emotionalAnalyzer.js';
+import contextAnalyzer from '../services/contextAnalyzer.js';
+import goalTracker from '../services/goalTracker.js';
+import memoryService from '../services/memoryService.js';
 import userProfileService from '../services/userProfileService.js';
+import progressTracker from '../services/progressTracker.js';
 
 const router = express.Router();
 
