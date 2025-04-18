@@ -19,9 +19,9 @@ const openai = new OpenAI({
 });
 
 const RESPONSE_LENGTHS = {
-  SHORT: 50,    // Para respuestas simples
-  MEDIUM: 100,  // Para respuestas con contexto
-  LONG: 150     // Para situaciones que requieren más elaboración
+  SHORT: 150,    // Aumentado para asegurar completitud
+  MEDIUM: 250,
+  LONG: 350
 };
 
 const emotionalPatterns = {
@@ -298,10 +298,16 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       
       DIRECTRICES DE COMUNICACIÓN:
       1. Mantén un tono profesional pero cercano
-      2. Evita exceso de emojis (máximo uno por mensaje)
-      3. Usa un lenguaje claro y directo
-      4. Mantén un balance entre empatía y profesionalismo
-      5. Evita diminutivos o expresiones demasiado coloquiales`,
+      2. Respuestas COMPLETAS y CONCISAS (máximo 2 frases)
+      3. Si haces una pregunta, que sea breve y específica
+      4. Evita frases largas o explicaciones extensas
+      5. Asegúrate de que cada respuesta tenga sentido completo
+      6. NO dejes frases incompletas
+      7. Usa puntos finales para cerrar las ideas
+      
+      ESTRUCTURA:
+      - Una frase de reconocimiento/validación
+      - Una pregunta específica o sugerencia concreta`,
 
       empathetic: `Eres Anto, profesional en apoyo emocional.
       
@@ -309,18 +315,19 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       - Emoción detectada: ${context.emotionalTrend.latest || 'neutral'}
       
       DIRECTRICES:
-      1. Valida la emoción de forma profesional
-      2. Ofrece una perspectiva constructiva
-      3. Mantén un tono empático pero maduro
-      4. Sugiere recursos o técnicas específicas`,
+      1. Valida la emoción en una frase corta
+      2. Haz UNA pregunta específica
+      3. Mantén la respuesta completa y concisa
+      4. Usa puntos finales para cerrar ideas
+      5. NO dejes ideas incompletas`,
 
       casual: `Eres Anto, asistente profesional.
       
       DIRECTRICES:
-      1. Mantén un tono cordial y respetuoso
-      2. Respuestas breves pero completas
-      3. Equilibra cercanía y profesionalismo
-      4. Usa lenguaje accesible pero formal`
+      1. Respuestas breves pero COMPLETAS
+      2. Máximo 2 frases
+      3. Una pregunta específica
+      4. Cierra todas las ideas con punto final`
     };
 
     const completion = await openai.chat.completions.create({
@@ -337,43 +344,59 @@ const generateEnhancedResponse = async (message, context, strategy) => {
       ],
       temperature: 0.7,
       max_tokens: RESPONSE_LENGTHS[strategy.responseLength] || RESPONSE_LENGTHS.SHORT,
-      presence_penalty: 0.6
+      presence_penalty: 0.6,
+      stop: [".", "?", "!"]  // Asegurar que la respuesta termine en un punto final
     });
 
-    return completion.choices[0].message.content;
+    let response = completion.choices[0].message.content.trim();
+    
+    // Asegurar que la respuesta termine apropiadamente
+    if (!response.match(/[.!?]$/)) {
+      response += ".";
+    }
+
+    // Verificar que la respuesta no esté cortada
+    if (response.length >= RESPONSE_LENGTHS[strategy.responseLength] - 10) {
+      // Si está cerca del límite, dar una respuesta más corta y segura
+      return "Entiendo cómo te sientes. ¿Podrías contarme más sobre eso?";
+    }
+
+    return response;
   } catch (error) {
     console.error('Error en generateEnhancedResponse:', error);
-    return "¿Podría compartir más sobre eso?";
+    return "¿Podrías contarme más sobre eso?";
   }
 };
 
-async function updateTherapeuticRecord(userId, sessionData) {
+const updateTherapeuticRecord = async (userId, sessionData) => {
   try {
-    // Crear un nuevo documento con la estructura correcta
     const newSession = {
       timestamp: new Date(),
       emotion: {
         name: sessionData.emotion?.name || 'neutral',
         intensity: sessionData.emotion?.intensity || 5
       },
-      tools: Array.isArray(sessionData.tools) ? sessionData.tools : [],
-      progress: sessionData.progress || 'en_curso'
+      tools: [],
+      progress: 'en_curso'
     };
 
-    // Actualizar usando $set para asegurar la estructura correcta
+    // Solución: Usar $setOnInsert para valores iniciales
     const updateResult = await TherapeuticRecord.findOneAndUpdate(
       { userId },
       {
         $push: { sessions: newSession },
         $set: {
-          currentStatus: {
-            emotion: sessionData.emotion?.name || 'neutral',
-            lastUpdate: new Date()
-          }
+          'currentStatus.emotion': sessionData.emotion?.name || 'neutral',
+          'currentStatus.lastUpdate': new Date()
         },
         $setOnInsert: {
           userId,
-          activeTools: []
+          activeTools: [],
+          progressMetrics: {
+            emotionalStability: 5,
+            toolMastery: 1,
+            engagementLevel: 5
+          }
         }
       },
       {
@@ -381,30 +404,39 @@ async function updateTherapeuticRecord(userId, sessionData) {
         upsert: true,
         runValidators: true
       }
-    ).exec();
-
+    );
     return updateResult;
   } catch (error) {
-    console.error('Error actualizando registro terapéutico:', error);
-    console.error('Datos de sesión:', JSON.stringify(sessionData, null, 2));
+    console.error('Error en updateTherapeuticRecord:', error);
     return null;
   }
-}
+};
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
     const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(message);
     const userContext = await memoryService.getRelevantContext(userId, message.content) || DEFAULT_CONTEXT;
     
+    // Determinar la longitud apropiada basada en el contenido
+    const responseLength = message.content.length < 50 ? 'SHORT' : 'MEDIUM';
+
+    const response = await generateEnhancedResponse(message, userContext, {
+      approach: emotionalAnalysis?.emotion ? 'empathetic' : 'casual',
+      responseLength
+    });
+
+    // Verificar que la respuesta sea válida
+    if (!response || response.length < 10) {
+      return {
+        content: "¿Podrías contarme más sobre eso?",
+        context: DEFAULT_CONTEXT
+      };
+    }
+
     const emotionalData = {
       name: emotionalAnalysis?.emotion || 'neutral',
       intensity: emotionalAnalysis?.intensity || 5
     };
-
-    const response = await generateEnhancedResponse(message, userContext, {
-      approach: emotionalAnalysis?.emotion ? 'empathetic' : 'casual',
-      responseLength: 'SHORT'
-    });
 
     await updateTherapeuticRecord(userId, {
       emotion: emotionalData,
@@ -426,7 +458,7 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
   } catch (error) {
     console.error('Error en generateAIResponse:', error);
     return {
-      content: "¿Podría decirme más sobre eso?",
+      content: "¿Podrías contarme más sobre eso?",
       context: DEFAULT_CONTEXT
     };
   }

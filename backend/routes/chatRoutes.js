@@ -6,7 +6,9 @@ import {
   openaiService, 
   memoryService, 
   contextAnalyzer, 
-  goalTracker 
+  goalTracker,
+  emotionalAnalyzer,
+  progressTracker
 } from '../services/index.js';
 import UserProfile from '../models/UserProfile.js';
 import userProfileService from '../services/userProfileService.js';
@@ -121,6 +123,19 @@ router.post('/messages', protect, async (req, res) => {
       .limit(10)
       .lean();
 
+      // Análisis emocional y contextual
+      const emotionalAnalysis = await emotionalAnalyzer.analyzeEmotion(userMessage);
+      const messageIntent = await contextAnalyzer.analyzeMessageIntent(userMessage);
+      
+      // Actualizar perfil y patrones
+      await Promise.all([
+        userProfileService.updateConnectionPattern(req.user._id),
+        userProfileService.updateEmotionalPattern(req.user._id, userMessage),
+        progressTracker.trackProgress(req.user._id, userMessage),
+        goalTracker.updateGoalProgress(req.user._id, userMessage, emotionalAnalysis)
+      ]);
+
+      // Generar respuesta personalizada
       const response = await openaiService.generateAIResponse(
         userMessage,
         conversationHistory,

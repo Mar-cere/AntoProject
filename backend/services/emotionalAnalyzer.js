@@ -43,8 +43,12 @@ const emotionalAnalyzer = {
       if (data.patterns.test(message.content)) {
         detectedEmotion = emotion;
         // Calcular intensidad basada en palabras intensificadoras
-        intensity = message.content.match(/(?:muy|mucho|demasiado|super|tanto)/gi)?.length || 0;
-        intensity = Math.min(intensity + 3, 5); // Base 3, máximo 5
+        intensity = Math.min(
+          ((message.content.match(/(?:muy|mucho|demasiado|super|tanto)/gi)?.length || 0) * 2) +
+          ((message.content.match(/[!?¡¿]{2,}/g)?.length || 0) * 1.5) +
+          3, // base
+          10 // máximo
+        );
         break;
       }
     }

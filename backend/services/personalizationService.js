@@ -44,12 +44,17 @@ const personalizationService = {
         night: 'Buenas noches'
       };
 
+      const timePatterns = userProfile?.timePatterns || {};
+      const currentTimePattern = timePatterns[`${timeOfDay}Interactions`] || {};
+      const isPreferredTime = currentTimePattern.frequency > 5;
+
       return {
         greeting: greetings[timeOfDay],
-        style: userProfile.preferences.communicationStyle,
-        responseLength: userProfile.preferences.responseLength,
+        style: isPreferredTime ? 'detailed' : 'concise',
+        responseLength: isPreferredTime ? 'MEDIUM' : 'SHORT',
         preferredTopics: userProfile.preferences.topics.preferred,
-        timeContext: timeOfDay
+        timeContext: timeOfDay,
+        tone: currentTimePattern.averageMood || 'neutral'
       };
     } catch (error) {
       console.error('Error obteniendo perfil personalizado:', error);
