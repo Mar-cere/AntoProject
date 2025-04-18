@@ -77,15 +77,38 @@ const therapeuticRecordSchema = new mongoose.Schema({
     },
     dateAchieved: Date
   }]
+}, {
+  timestamps: true,
+  strict: true
 });
 
-// Verificar si el modelo ya existe antes de crearlo
+// Middleware para asegurar la estructura correcta antes de guardar
+therapeuticRecordSchema.pre('save', function(next) {
+  if (!this.currentStatus || typeof this.currentStatus === 'string') {
+    this.currentStatus = {
+      emotion: 'neutral',
+      lastUpdate: new Date()
+    };
+  }
+  next();
+});
+
+// Middleware para asegurar la estructura correcta antes de actualizar
+therapeuticRecordSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate();
+  if (update.$set && typeof update.$set.currentStatus === 'string') {
+    update.$set.currentStatus = {
+      emotion: update.$set.currentStatus,
+      lastUpdate: new Date()
+    };
+  }
+  next();
+});
+
 let TherapeuticRecord;
 try {
-  // Intentar obtener el modelo existente
   TherapeuticRecord = mongoose.model('TherapeuticRecord');
 } catch (error) {
-  // Si no existe, crear el modelo
   TherapeuticRecord = mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
 }
 

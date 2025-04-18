@@ -347,7 +347,7 @@ const generateEnhancedResponse = async (message, context, strategy) => {
   }
 };
 
-const updateTherapeuticRecord = async (userId, sessionData) => {
+async function updateTherapeuticRecord(userId, sessionData) {
   try {
     const sanitizedData = {
       emotion: {
@@ -358,7 +358,24 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
       progress: sessionData.progress || 'en_curso'
     };
 
-    const updateResult = await TherapeuticRecord.findOneAndUpdate(
+    // Primero, intentar obtener el documento existente
+    let record = await TherapeuticRecord.findOne({ userId });
+
+    if (!record) {
+      // Si no existe, crear uno nuevo con la estructura correcta
+      record = new TherapeuticRecord({
+        userId,
+        sessions: [],
+        currentStatus: {
+          emotion: 'neutral',
+          lastUpdate: new Date()
+        },
+        activeTools: []
+      });
+    }
+
+    // Actualizar el documento con la estructura correcta
+    return await TherapeuticRecord.findOneAndUpdate(
       { userId },
       {
         $push: {
@@ -373,25 +390,26 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
           }
         },
         $set: {
-          'currentStatus.emotion': sanitizedData.emotion.name,
-          'currentStatus.lastUpdate': new Date(),
+          currentStatus: {
+            emotion: sanitizedData.emotion.name,
+            lastUpdate: new Date()
+          },
           activeTools: sanitizedData.tools
         }
       },
       { 
         upsert: true, 
         new: true,
-        runValidators: true 
+        runValidators: true,
+        setDefaultsOnInsert: true
       }
     );
-
-    return updateResult;
   } catch (error) {
     console.error('Error actualizando registro terapéutico:', error);
     console.error('Datos de sesión:', JSON.stringify(sessionData, null, 2));
     return null;
   }
-};
+}
 
 const generateAIResponse = async (message, conversationHistory, userId) => {
   try {
