@@ -375,23 +375,7 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
       progress: sessionData.progress || 'en_curso'
     };
 
-    // Primero, intentar encontrar el registro existente
-    let therapeuticRecord = await TherapeuticRecord.findOne({ userId });
-
-    if (!therapeuticRecord) {
-      // Si no existe, crear uno nuevo con la estructura correcta
-      therapeuticRecord = new TherapeuticRecord({
-        userId,
-        sessions: [],
-        currentStatus: {
-          emotion: 'neutral',
-          lastUpdate: new Date()
-        },
-        activeTools: []
-      });
-    }
-
-    // Actualizar el registro con los nuevos datos
+    // Actualizar el registro
     const updateResult = await TherapeuticRecord.findOneAndUpdate(
       { userId },
       {
@@ -424,7 +408,6 @@ const updateTherapeuticRecord = async (userId, sessionData) => {
   } catch (error) {
     console.error('Error actualizando registro terapéutico:', error);
     console.error('Datos de sesión:', JSON.stringify(sessionData, null, 2));
-    // No lanzar el error para no interrumpir el flujo
     return null;
   }
 };

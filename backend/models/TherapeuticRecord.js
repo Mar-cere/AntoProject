@@ -79,4 +79,12 @@ const therapeuticRecordSchema = new mongoose.Schema({
   }]
 });
 
-export default mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
+// Eliminar el modelo si existe para evitar errores de redefinición
+let TherapeuticRecord;
+try {
+  TherapeuticRecord = mongoose.model('TherapeuticRecord');
+} catch {
+  TherapeuticRecord = mongoose.model('TherapeuticRecord', therapeuticRecordSchema);
+}
+
+export default TherapeuticRecord;
