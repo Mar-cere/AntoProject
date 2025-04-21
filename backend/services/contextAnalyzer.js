@@ -1,3 +1,4 @@
+import { PATRONES_INTENCION, PATRONES_TEMA } from '../config/patrones.js';
 const contextAnalyzer = {
   // Patrones de intención más detallados y organizados
   patronesIntencion: {

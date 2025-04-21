@@ -1,4 +1,5 @@
 import UserGoals from '../models/UserGoals.js';
+import UserProgress from '../models/UserProgress.js';
 
 const goalTracker = {
   goalCategories: {
@@ -145,6 +146,40 @@ const goalTracker = {
       return progress;
     } catch (error) {
       console.error('Error actualizando progreso:', error);
+      return null;
+    }
+  },
+
+  async trackProgress(userId, mensaje) {
+    try {
+      let userProgress = await UserProgress.findOne({ userId });
+      
+      if (!userProgress) {
+        userProgress = new UserProgress({ userId });
+      }
+
+      const progressEntry = {
+        timestamp: new Date(),
+        emotionalState: mensaje.metadata?.context?.emotional || {
+          mainEmotion: 'neutral',
+          intensity: 5
+        },
+        context: {
+          topic: mensaje.metadata?.context?.contextual?.tema?.categoria || 'GENERAL',
+          triggers: [],
+          copingStrategies: []
+        },
+        sessionMetrics: {
+          duration: 0,
+          messageCount: 1,
+          responseQuality: 3
+        }
+      };
+
+      await userProgress.addProgressEntry(progressEntry);
+      return userProgress;
+    } catch (error) {
+      console.error('Error tracking progress:', error);
       return null;
     }
   }
