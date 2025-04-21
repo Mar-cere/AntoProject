@@ -557,6 +557,19 @@ class OpenAIService {
         suggestions: []
       }
     };
+
+    this.respuestasIniciales = {
+      'hola': [
+        "¡Hola! ¿Cómo estás hoy?",
+        "¡Hola! Me alegro de verte. ¿Cómo puedo ayudarte?",
+        "¡Bienvenido/a! ¿Qué tal tu día?"
+      ],
+      'que_sabes': [
+        "Soy Anto, tu asistente virtual. Estoy aquí para escucharte y ayudarte. ¿Hay algo específico de lo que quieras hablar?",
+        "Me especializo en brindar apoyo emocional y acompañamiento. ¿Te gustaría contarme más sobre ti?",
+        "Puedo ayudarte a explorar tus pensamientos y emociones. ¿Hay algo particular que te preocupe?"
+      ]
+    };
   }
 
   async analizarContexto(mensaje) {
@@ -570,18 +583,23 @@ class OpenAIService {
         };
       }
 
-      // Asegurarnos de que tenemos un objeto válido para analizar
-      const contexto = {
-        mensaje: mensaje.content,
-        timestamp: mensaje.metadata?.timestamp || new Date(),
-        tipo: mensaje.metadata?.type || 'text',
-        metadata: mensaje.metadata || {}
-      };
+      const contenido = mensaje.content.toLowerCase();
+      let intent = "CONVERSATION";
+      
+      if (contenido.includes('hola')) {
+        intent = "GREETING";
+      } else if (contenido.includes('que sabes') || contenido.includes('quien eres')) {
+        intent = "IDENTITY_QUERY";
+      }
 
       return {
-        intent: "CONVERSATION",
+        intent,
         confidence: 0.8,
-        context: contexto,
+        context: {
+          mensaje: mensaje.content,
+          timestamp: mensaje.metadata?.timestamp || new Date(),
+          tipo: mensaje.metadata?.type || 'text'
+        },
         suggestions: []
       };
     } catch (error) {
@@ -602,29 +620,59 @@ class OpenAIService {
       }
 
       const analisisContextual = await this.analizarContexto(mensaje);
+      const contenido = mensaje.content.toLowerCase();
       
-      // Asegurarnos de tener una respuesta válida
-      const respuesta = {
-        content: await this.generarContenidoRespuesta(mensaje, analisisContextual),
+      let respuesta = '';
+      
+      switch (analisisContextual.intent) {
+        case "GREETING":
+          respuesta = this.seleccionarRespuestaAleatoria(this.respuestasIniciales.hola);
+          break;
+        case "IDENTITY_QUERY":
+          respuesta = this.seleccionarRespuestaAleatoria(this.respuestasIniciales.que_sabes);
+          break;
+        default:
+          respuesta = await this.generarRespuestaContextual(mensaje, analisisContextual);
+      }
+
+      return {
+        content: respuesta,
         context: {
           ...analisisContextual,
           timestamp: new Date(),
           messageId: mensaje._id
         }
       };
-
-      return respuesta;
     } catch (error) {
       console.error('Error generando respuesta:', error);
       return this.defaultResponse;
     }
   }
 
-  async generarContenidoRespuesta(mensaje, contexto) {
+  seleccionarRespuestaAleatoria(respuestas) {
+    return respuestas[Math.floor(Math.random() * respuestas.length)];
+  }
+
+  async generarRespuestaContextual(mensaje, contexto) {
     try {
+      const contenido = mensaje.content.toLowerCase();
+      
+      // Si el mensaje es muy corto o poco claro
+      if (contenido.length < 3 || contenido === 'uh') {
+        return "No estoy segura de entender. ¿Podrías explicarme un poco más lo que quieres decir?";
+      }
+
       // Aquí iría la lógica de generación con OpenAI
-      // Por ahora, retornamos una respuesta simple
-      return "Entiendo lo que me dices. ¿Podrías contarme más sobre eso?";
+      // Por ahora, usamos respuestas más variadas
+      const respuestasContextuales = [
+        "¿Podrías contarme más sobre eso?",
+        "¿Cómo te hace sentir esa situación?",
+        "Entiendo. ¿Qué te gustaría explorar sobre ese tema?",
+        "¿Hay algo específico que te preocupe sobre eso?",
+        "Cuéntame más, ¿qué pensamientos tienes al respecto?"
+      ];
+
+      return this.seleccionarRespuestaAleatoria(respuestasContextuales);
     } catch (error) {
       console.error('Error generando contenido de respuesta:', error);
       return this.defaultResponse.content;
