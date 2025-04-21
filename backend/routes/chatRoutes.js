@@ -1,6 +1,13 @@
 import express from 'express';
 import { authenticateToken as protect } from '../middleware/auth.js';
 import {
+  Message,
+  UserProfile,
+  TherapeuticRecord,
+  UserProgress,
+  UserInsight
+} from '../models/index.js';
+import {
   openaiService,
   emotionalAnalyzer,
   contextAnalyzer,
@@ -11,15 +18,6 @@ import {
   responseGenerator,
   userProfileService
 } from '../services/index.js';
-
-import {
-  Message,
-  UserProfile,
-  TherapeuticRecord,
-  UserProgress,
-  UserInsight,
-  Journal
-} from '../models/index.js';
 
 const router = express.Router();
 
