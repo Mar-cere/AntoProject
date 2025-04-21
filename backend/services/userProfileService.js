@@ -30,22 +30,33 @@ const DIMENSIONES_ANALISIS = {
   }
 };
 
-const userProfileService = {
-  async actualizarPerfil(userId, mensaje, contexto = {}) {
+class UserProfileService {
+  async actualizarPerfil(userId, mensaje, analisis) {
     try {
-      const actualizaciones = await Promise.all([
-        this.actualizarPatronesConexion(userId),
-        this.actualizarPatronesEmocionales(userId, mensaje),
-        this.actualizarPatronesCognitivos(userId, mensaje),
-        this.actualizarEstrategiasAfrontamiento(userId, mensaje, contexto)
-      ]);
+      const actualizacion = {
+        $push: {
+          'patrones.emocionales': {
+            emocion: analisis?.emotional?.mainEmotion || 'neutral',
+            intensidad: analisis?.emotional?.intensity || 5,
+            timestamp: new Date()
+          }
+        },
+        $set: {
+          'ultimaInteraccion': new Date(),
+          'metadata.ultimoContexto': analisis?.contextual || {}
+        }
+      };
 
-      return this.integrarActualizaciones(actualizaciones);
+      return await UserProfile.findOneAndUpdate(
+        { userId },
+        actualizacion,
+        { new: true, upsert: true }
+      );
     } catch (error) {
       console.error('Error actualizando perfil:', error);
       return null;
     }
-  },
+  }
 
   async actualizarPatronesConexion(userId) {
     try {
@@ -78,7 +89,7 @@ const userProfileService = {
       console.error('Error en patrones de conexión:', error);
       return null;
     }
-  },
+  }
 
   async actualizarPatronesEmocionales(userId, mensaje) {
     try {
@@ -120,7 +131,7 @@ const userProfileService = {
       console.error('Error en patrones emocionales:', error);
       return null;
     }
-  },
+  }
 
   async actualizarPatronesCognitivos(userId, mensaje) {
     try {
@@ -154,7 +165,7 @@ const userProfileService = {
       console.error('Error en patrones cognitivos:', error);
       return null;
     }
-  },
+  }
 
   async actualizarEstrategiasAfrontamiento(userId, mensaje, contexto) {
     try {
@@ -188,7 +199,7 @@ const userProfileService = {
       console.error('Error en estrategias de afrontamiento:', error);
       return null;
     }
-  },
+  }
 
   async generarInsights(userId) {
     try {
@@ -231,25 +242,25 @@ const userProfileService = {
       console.error('Error generando insights:', error);
       return null;
     }
-  },
+  }
 
   determinarPeriodo() {
     const hora = new Date().getHours();
     return Object.values(PERIODOS).find(
       periodo => hora >= periodo.inicio && hora <= periodo.fin
     ) || PERIODOS.TARDE;
-  },
+  }
 
   obtenerDiaSemana() {
     const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     return dias[new Date().getDay()];
-  },
+  }
 
   categorizarIntensidad(intensidad) {
     if (intensidad >= 8) return 'alta';
     if (intensidad >= 4) return 'media';
     return 'baja';
-  },
+  }
 
   async analizarPatronesCognitivos(mensaje) {
     const patrones = {
@@ -263,7 +274,7 @@ const userProfileService = {
       acc[tipo] = patron.test(mensaje.content);
       return acc;
     }, {});
-  },
+  }
 
   async identificarEstrategiasAfrontamiento(mensaje) {
     const estrategias = {
@@ -279,7 +290,7 @@ const userProfileService = {
         tipo,
         timestamp: new Date()
       }));
-  },
+  }
 
   prepararPerfilParaAnalisis(perfil) {
     if (!perfil) return null;
@@ -294,6 +305,6 @@ const userProfileService = {
       progreso: this.evaluarProgreso(perfil)
     };
   }
-};
+}
 
-export default userProfileService; 
+export default new UserProfileService(); 

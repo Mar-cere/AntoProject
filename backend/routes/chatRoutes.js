@@ -137,39 +137,20 @@ router.post('/messages', protect, async (req, res) => {
 
     if (role === 'user') {
       try {
-        // Análisis inicial del mensaje
-        const [conversationHistory, emotionalAnalysis, contextualAnalysis] = await Promise.all([
-          Message.find({ 
-            conversationId,
-            timestamp: { $gte: new Date(Date.now() - VENTANA_CONTEXTO) }
-          })
-          .sort({ timestamp: -1 })
-          .limit(10)
-          .lean(),
-          emotionalAnalyzer.analyzeEmotion(userMessage),
-          contextAnalyzer.analizarMensaje(userMessage)
+        // Análisis y actualizaciones en paralelo
+        const [
+          contextualAnalysis,
+          savedUserMessage
+        ] = await Promise.all([
+          contextAnalyzer.analizarMensaje({ content }),
+          userMessage.save()
         ]);
 
-        // Actualizar perfil y generar respuesta
-        const [response, profileUpdates] = await Promise.all([
-          openaiService.generarRespuesta(
-            userMessage,
-            {
-              history: conversationHistory,
-              emotional: emotionalAnalysis,
-              contextual: contextualAnalysis
-            }
-          ),
-          Promise.all([
-            userProfileService.actualizarPerfil(req.user._id, userMessage, {
-              emotional: emotionalAnalysis,
-              contextual: contextualAnalysis
-            }),
-            memoryService.updateUserInsights(req.user._id, userMessage, emotionalAnalysis),
-            goalTracker.trackProgress(req.user._id, userMessage),
-            progressTracker.trackProgress(req.user._id, userMessage)
-          ])
-        ]);
+        // Generar respuesta del asistente
+        const response = await openaiService.generarRespuesta(
+          savedUserMessage,
+          { contextual: contextualAnalysis }
+        );
 
         const assistantMessage = new Message({
           userId: req.user._id,
@@ -181,56 +162,37 @@ router.post('/messages', protect, async (req, res) => {
             type: 'text',
             status: 'sent',
             context: {
-              emotional: emotionalAnalysis,
               contextual: contextualAnalysis,
               response: response.context
             }
           }
         });
 
-        await Promise.all([
-          userMessage.save(),
-          assistantMessage.save()
+        // Guardar mensaje del asistente y actualizar perfiles
+        const [
+          savedAssistantMessage
+        ] = await Promise.all([
+          assistantMessage.save(),
+          userProfileService.actualizarPerfil(req.user._id, savedUserMessage, {
+            contextual: contextualAnalysis
+          }),
+          progressTracker.trackProgress(req.user._id, savedUserMessage)
         ]);
 
         res.status(201).json({
-          userMessage,
-          assistantMessage,
-          context: {
-            emotional: emotionalAnalysis,
-            contextual: contextualAnalysis
-          }
+          userMessage: savedUserMessage,
+          assistantMessage: savedAssistantMessage
         });
       } catch (error) {
         console.error('Error procesando mensaje:', error);
-        const errorMessage = new Message({
-          userId: req.user._id,
-          content: "Lo siento, ha ocurrido un error al procesar tu mensaje. ¿Podrías intentarlo de nuevo?",
-          role: 'assistant',
-          conversationId,
-          metadata: {
-            timestamp: new Date(),
-            type: 'error',
-            status: 'sent',
-            error: error.message
-          }
-        });
-
-        await Promise.all([
-          userMessage.save(),
-          errorMessage.save()
-        ]);
-
         res.status(500).json({
           message: 'Error procesando el mensaje',
-          error: error.message,
-          userMessage,
-          errorMessage
+          error: error.message
         });
       }
     } else {
-      await userMessage.save();
-      res.status(201).json({ message: userMessage });
+      const savedMessage = await userMessage.save();
+      res.status(201).json({ message: savedMessage });
     }
   } catch (error) {
     console.error('Error en POST /messages:', error);
