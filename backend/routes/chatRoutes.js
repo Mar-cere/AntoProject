@@ -117,15 +117,23 @@ router.post('/messages', protect, async (req, res) => {
   try {
     const { conversationId, content, role = 'user' } = req.body;
 
-    if (!content?.trim()) {
+    // Validación inicial de los datos
+    if (!content || typeof content !== 'string' || !content.trim()) {
       return res.status(400).json({
-        message: 'El contenido del mensaje no puede estar vacío'
+        message: 'El contenido del mensaje es requerido y no puede estar vacío'
       });
     }
 
+    if (!conversationId) {
+      return res.status(400).json({
+        message: 'El ID de conversación es requerido'
+      });
+    }
+
+    // Crear mensaje del usuario
     const userMessage = new Message({
       userId: req.user._id,
-      content,
+      content: content.trim(),
       role,
       conversationId,
       metadata: {
@@ -137,21 +145,18 @@ router.post('/messages', protect, async (req, res) => {
 
     if (role === 'user') {
       try {
-        // Análisis y actualizaciones en paralelo
-        const [
-          contextualAnalysis,
-          savedUserMessage
-        ] = await Promise.all([
-          contextAnalyzer.analizarMensaje({ content }),
-          userMessage.save()
-        ]);
+        // Guardar mensaje del usuario
+        const savedUserMessage = await userMessage.save();
 
-        // Generar respuesta del asistente
-        const response = await openaiService.generarRespuesta(
-          savedUserMessage,
-          { contextual: contextualAnalysis }
-        );
+        // Generar respuesta
+        const response = await openaiService.generarRespuesta(savedUserMessage);
 
+        // Validar que tenemos una respuesta válida
+        if (!response?.content) {
+          throw new Error('Respuesta inválida del servicio OpenAI');
+        }
+
+        // Crear mensaje del asistente
         const assistantMessage = new Message({
           userId: req.user._id,
           content: response.content,
@@ -161,42 +166,69 @@ router.post('/messages', protect, async (req, res) => {
             timestamp: new Date(),
             type: 'text',
             status: 'sent',
-            context: {
-              contextual: contextualAnalysis,
-              response: response.context
-            }
+            context: response.context
           }
         });
 
-        // Guardar mensaje del asistente y actualizar perfiles
-        const [
-          savedAssistantMessage
-        ] = await Promise.all([
-          assistantMessage.save(),
-          userProfileService.actualizarPerfil(req.user._id, savedUserMessage, {
-            contextual: contextualAnalysis
-          }),
-          progressTracker.trackProgress(req.user._id, savedUserMessage)
-        ]);
+        // Guardar mensaje del asistente
+        const savedAssistantMessage = await assistantMessage.save();
 
-        res.status(201).json({
+        // Actualizar perfiles y progreso
+        await Promise.all([
+          userProfileService.actualizarPerfil(req.user._id, savedUserMessage, response.context),
+          progressTracker.trackProgress(req.user._id, savedUserMessage)
+        ]).catch(error => {
+          console.warn('Error en actualizaciones secundarias:', error);
+          // No fallamos la respuesta principal por errores en actualizaciones secundarias
+        });
+
+        return res.status(201).json({
           userMessage: savedUserMessage,
           assistantMessage: savedAssistantMessage
         });
+
       } catch (error) {
         console.error('Error procesando mensaje:', error);
-        res.status(500).json({
+        
+        // Si ya guardamos el mensaje del usuario, intentamos enviar una respuesta de error
+        if (userMessage._id) {
+          const errorMessage = new Message({
+            userId: req.user._id,
+            content: "Lo siento, ha ocurrido un error al procesar tu mensaje. ¿Podrías intentarlo de nuevo?",
+            role: 'assistant',
+            conversationId,
+            metadata: {
+              timestamp: new Date(),
+              type: 'error',
+              status: 'sent',
+              error: error.message
+            }
+          });
+
+          await errorMessage.save();
+
+          return res.status(500).json({
+            message: 'Error procesando el mensaje',
+            error: error.message,
+            userMessage,
+            errorMessage
+          });
+        }
+
+        return res.status(500).json({
           message: 'Error procesando el mensaje',
           error: error.message
         });
       }
     } else {
+      // Para mensajes que no son del usuario
       const savedMessage = await userMessage.save();
-      res.status(201).json({ message: savedMessage });
+      return res.status(201).json({ message: savedMessage });
     }
+
   } catch (error) {
     console.error('Error en POST /messages:', error);
-    res.status(500).json({
+    return res.status(500).json({
       message: 'Error al procesar el mensaje',
       error: error.message
     });

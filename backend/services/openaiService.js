@@ -547,276 +547,89 @@ const DIMENSIONES_ANALISIS = {
   }
 };
 
-const openaiService = {
-  async generarRespuesta(mensaje, contexto, configuracion = {}) {
-    try {
-      const analisisContextual = await this.analizarContexto(mensaje, contexto);
-      const estrategiaRespuesta = await this.determinarEstrategia(analisisContextual);
-      return await this.generarRespuestaOptimizada(mensaje, estrategiaRespuesta, analisisContextual);
-    } catch (error) {
-      console.error('Error en generación de respuesta:', error);
-      return this.generarRespuestaSegura();
-    }
-  },
-
-  async analizarContexto(mensaje, contexto) {
-    try {
-      const promptAnalisis = this.construirPromptAnalisis(mensaje, contexto);
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: promptAnalisis
-          },
-          {
-            role: 'user',
-            content: mensaje.content
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 150,
-        response_format: { type: "json_object" }
-      });
-
-      return this.procesarAnalisisContextual(
-        JSON.parse(completion.choices[0].message.content)
-      );
-    } catch (error) {
-      console.error('Error en análisis contextual:', error);
-      return this.getAnalisisContextualPorDefecto();
-    }
-  },
-
-  construirPromptAnalisis(mensaje, contexto) {
-    return `Analiza el mensaje y genera un objeto JSON con:
-      {
-        "dimensiones": {
-          "emocional": {
-            "emocionPrimaria": string,
-            "intensidad": number (1-10),
-            "regulacion": string,
-            "patrones": array
-          },
-          "cognitiva": {
-            "pensamientosPredominantes": array,
-            "creenciasIdentificadas": array,
-            "sesgos": array
-          },
-          "conductual": {
-            "patronesIdentificados": array,
-            "estrategiasUtilizadas": array,
-            "tendenciasAccion": array
-          },
-          "relacional": {
-            "estiloVinculacion": string,
-            "patronesComunicacion": array,
-            "temasInterpersonales": array
-          }
-        },
-        "urgencia": boolean,
-        "necesidadesIdentificadas": array,
-        "recursosActivos": array
-      }`;
-  },
-
-  async determinarEstrategia(analisisContextual) {
-    const { dimensiones, urgencia } = analisisContextual;
-    
-    return {
-      enfoque: this.seleccionarEnfoque(dimensiones),
-      profundidad: this.determinarProfundidad(dimensiones),
-      estructura: this.definirEstructura(dimensiones, urgencia),
-      estilo: this.ajustarEstilo(dimensiones)
-    };
-  },
-
-  async generarRespuestaOptimizada(mensaje, estrategia, analisis) {
-    try {
-      const promptRespuesta = this.construirPromptRespuesta(estrategia, analisis);
-      
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: promptRespuesta
-          },
-          {
-            role: 'user',
-            content: mensaje.content
-          }
-        ],
-        temperature: this.determinarTemperatura(estrategia),
-        max_tokens: this.calcularTokens(estrategia),
-        presence_penalty: 0.6,
-        frequency_penalty: 0.7
-      });
-
-      return this.procesarRespuesta(
-        completion.choices[0].message.content,
-        estrategia
-      );
-    } catch (error) {
-      console.error('Error en generación de respuesta optimizada:', error);
-      return this.generarRespuestaSegura();
-    }
-  },
-
-  construirPromptRespuesta(estrategia, analisis) {
-    return `Eres Anto, un asistente terapéutico profesional especializado en apoyo psicológico.
-
-    ENFOQUE ACTUAL:
-    - Estilo: ${estrategia.estilo}
-    - Profundidad: ${estrategia.profundidad}
-    - Estructura: ${JSON.stringify(estrategia.estructura)}
-
-    CONTEXTO EMOCIONAL:
-    ${JSON.stringify(analisis.dimensiones.emocional, null, 2)}
-
-    DIRECTRICES:
-    1. Mantén un tono profesional pero cálido
-    2. Prioriza la exploración y comprensión
-    3. Evita consejos directivos
-    4. Fomenta la reflexión
-    5. Valida experiencias y emociones
-    6. Usa preguntas abiertas estratégicamente
-
-    ESTRUCTURA REQUERIDA:
-    1. Reconocimiento específico
-    2. Validación empática
-    3. Exploración o reflexión
-    4. Cierre que invite al diálogo
-
-    NO INCLUIR:
-    - Consejos no solicitados
-    - Juicios de valor
-    - Interpretaciones prematuras
-    - Técnicas de respiración o meditación sin contexto
-
-    RESPONDE en español, manteniendo un tono conversacional pero profesional.`;
-  },
-
-  seleccionarEnfoque(dimensiones) {
-    const { emocional, cognitiva, conductual } = dimensiones;
-    
-    if (emocional.intensidad > 7) {
-      return 'ESTABILIZACION';
-    }
-    if (cognitiva.pensamientosPredominantes.length > 0) {
-      return 'EXPLORACION';
-    }
-    return 'ACOMPAÑAMIENTO';
-  },
-
-  determinarProfundidad(dimensiones) {
-    const { emocional, cognitiva } = dimensiones;
-    
-    if (emocional.intensidad > 8 || cognitiva.sesgos.length > 2) {
-      return 'SUPERFICIAL';
-    }
-    if (cognitiva.creenciasIdentificadas.length > 0) {
-      return 'PROFUNDA';
-    }
-    return 'MODERADA';
-  },
-
-  definirEstructura(dimensiones, urgencia) {
-    if (urgencia) {
-      return ['validacion', 'estabilizacion', 'recursos'];
-    }
-    
-    return ['reconocimiento', 'exploracion', 'integracion'];
-  },
-
-  ajustarEstilo(dimensiones) {
-    const { emocional, relacional } = dimensiones;
-    
-    if (emocional.regulacion === 'baja') {
-      return 'CONTENEDOR';
-    }
-    if (relacional.estiloVinculacion === 'evitativo') {
-      return 'EXPLORATORIO';
-    }
-    return 'REFLEXIVO';
-  },
-
-  determinarTemperatura(estrategia) {
-    const temperaturas = {
-      ESTABILIZACION: 0.3,
-      EXPLORACION: 0.6,
-      ACOMPAÑAMIENTO: 0.5
-    };
-    
-    return temperaturas[estrategia.enfoque] || 0.5;
-  },
-
-  calcularTokens(estrategia) {
-    const { profundidad } = estrategia;
-    const configuracion = CONFIGURACION_RESPUESTA[profundidad] || CONFIGURACION_RESPUESTA.MEDIA;
-    return configuracion.tokens;
-  },
-
-  procesarRespuesta(respuesta, estrategia) {
-    // Verificar calidad y coherencia
-    if (this.verificarCalidadRespuesta(respuesta)) {
-      return respuesta;
-    }
-    return this.generarRespuestaSegura();
-  },
-
-  verificarCalidadRespuesta(respuesta) {
-    const criteriosCalidad = {
-      longitudMinima: 50,
-      patronesEvitar: [
-        /^(Lo siento|Entiendo|Comprendo) mucho\.?$/i,
-        /^¿Podrías contarme más\??$/i,
-        /^¿Cómo te sientes\??$/i
-      ],
-      requisitosPresentes: [
-        respuesta.includes('?'),
-        respuesta.split(' ').length >= 20
-      ]
-    };
-
-    return !criteriosCalidad.patronesEvitar.some(patron => patron.test(respuesta)) &&
-           criteriosCalidad.requisitosPresentes.every(req => req);
-  },
-
-  generarRespuestaSegura() {
-    return "Me gustaría entender mejor tu experiencia. ¿Podrías contarme más sobre lo que estás viviendo?";
-  },
-
-  getAnalisisContextualPorDefecto() {
-    return {
-      dimensiones: {
-        emocional: {
-          emocionPrimaria: 'neutral',
-          intensidad: 5,
-          regulacion: 'moderada',
-          patrones: []
-        },
-        cognitiva: {
-          pensamientosPredominantes: [],
-          creenciasIdentificadas: [],
-          sesgos: []
-        },
-        conductual: {
-          patronesIdentificados: [],
-          estrategiasUtilizadas: [],
-          tendenciasAccion: []
-        },
-        relacional: {
-          estiloVinculacion: 'neutral',
-          patronesComunicacion: [],
-          temasInterpersonales: []
-        }
-      },
-      urgencia: false,
-      necesidadesIdentificadas: [],
-      recursosActivos: []
+class OpenAIService {
+  constructor() {
+    this.defaultResponse = {
+      content: "Lo siento, hubo un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?",
+      context: {
+        intent: "ERROR",
+        confidence: 0,
+        suggestions: []
+      }
     };
   }
-};
 
-export default openaiService; 
+  async analizarContexto(mensaje) {
+    try {
+      if (!mensaje || !mensaje.content) {
+        return {
+          intent: "UNKNOWN",
+          confidence: 0,
+          context: {},
+          suggestions: []
+        };
+      }
+
+      // Asegurarnos de que tenemos un objeto válido para analizar
+      const contexto = {
+        mensaje: mensaje.content,
+        timestamp: mensaje.metadata?.timestamp || new Date(),
+        tipo: mensaje.metadata?.type || 'text',
+        metadata: mensaje.metadata || {}
+      };
+
+      return {
+        intent: "CONVERSATION",
+        confidence: 0.8,
+        context: contexto,
+        suggestions: []
+      };
+    } catch (error) {
+      console.error('Error en análisis contextual:', error);
+      return {
+        intent: "ERROR",
+        confidence: 0,
+        context: {},
+        suggestions: []
+      };
+    }
+  }
+
+  async generarRespuesta(mensaje, contexto = {}) {
+    try {
+      if (!mensaje || !mensaje.content) {
+        throw new Error('Mensaje inválido o vacío');
+      }
+
+      const analisisContextual = await this.analizarContexto(mensaje);
+      
+      // Asegurarnos de tener una respuesta válida
+      const respuesta = {
+        content: await this.generarContenidoRespuesta(mensaje, analisisContextual),
+        context: {
+          ...analisisContextual,
+          timestamp: new Date(),
+          messageId: mensaje._id
+        }
+      };
+
+      return respuesta;
+    } catch (error) {
+      console.error('Error generando respuesta:', error);
+      return this.defaultResponse;
+    }
+  }
+
+  async generarContenidoRespuesta(mensaje, contexto) {
+    try {
+      // Aquí iría la lógica de generación con OpenAI
+      // Por ahora, retornamos una respuesta simple
+      return "Entiendo lo que me dices. ¿Podrías contarme más sobre eso?";
+    } catch (error) {
+      console.error('Error generando contenido de respuesta:', error);
+      return this.defaultResponse.content;
+    }
+  }
+}
+
+export default new OpenAIService(); 
