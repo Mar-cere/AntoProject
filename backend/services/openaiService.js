@@ -549,6 +549,19 @@ const DIMENSIONES_ANALISIS = {
 
 class OpenAIService {
   constructor() {
+    this.RESPONSE_LENGTHS = {
+      SHORT: 200,
+      MEDIUM: 300,
+      LONG: 400
+    };
+
+    this.ANALYSIS_DIMENSIONS = {
+      EMOTIONAL: ['reconocimiento', 'regulación', 'expresión'],
+      COGNITIVE: ['pensamientos', 'creencias', 'sesgos'],
+      BEHAVIORAL: ['patrones', 'estrategias', 'cambios'],
+      RELATIONAL: ['vínculos', 'comunicación', 'límites']
+    };
+
     this.defaultResponse = {
       content: "Lo siento, hubo un problema al procesar tu mensaje. ¿Podrías intentarlo de nuevo?",
       context: {
@@ -558,125 +571,298 @@ class OpenAIService {
       }
     };
 
-    this.respuestasIniciales = {
+    // Mapeo de preguntas y respuestas comunes
+    this.respuestas = {
       'hola': [
         "¡Hola! ¿Cómo estás hoy?",
-        "¡Hola! Me alegro de verte. ¿Cómo puedo ayudarte?",
+        "¡Hola! Me alegro de verte. ¿En qué puedo ayudarte?",
         "¡Bienvenido/a! ¿Qué tal tu día?"
       ],
-      'que_sabes': [
-        "Soy Anto, tu asistente virtual. Estoy aquí para escucharte y ayudarte. ¿Hay algo específico de lo que quieras hablar?",
-        "Me especializo en brindar apoyo emocional y acompañamiento. ¿Te gustaría contarme más sobre ti?",
-        "Puedo ayudarte a explorar tus pensamientos y emociones. ¿Hay algo particular que te preocupe?"
+      'que_haces': [
+        "Estoy aquí para conversar contigo y ayudarte en lo que necesites. ¿Hay algo específico de lo que quieras hablar?",
+        "En este momento estoy disponible para escucharte y apoyarte. ¿Qué te gustaría compartir?",
+        "Mi función es acompañarte y brindarte apoyo. ¿Hay algo en particular que te preocupe?"
+      ],
+      'no_respuesta': [
+        "Tienes razón, no respondí tu pregunta. Me preguntaste '{{pregunta}}'. ",
+        "Disculpa, me desvié del tema. Volviendo a tu pregunta sobre '{{pregunta}}'. ",
+        "Es cierto, no abordé tu pregunta sobre '{{pregunta}}'. "
       ]
     };
   }
 
-  async analizarContexto(mensaje) {
-    try {
-      if (!mensaje || !mensaje.content) {
-        return {
-          intent: "UNKNOWN",
-          confidence: 0,
-          context: {},
-          suggestions: []
-        };
-      }
-
-      const contenido = mensaje.content.toLowerCase();
-      let intent = "CONVERSATION";
-      
-      if (contenido.includes('hola')) {
-        intent = "GREETING";
-      } else if (contenido.includes('que sabes') || contenido.includes('quien eres')) {
-        intent = "IDENTITY_QUERY";
-      }
-
-      return {
-        intent,
-        confidence: 0.8,
-        context: {
-          mensaje: mensaje.content,
-          timestamp: mensaje.metadata?.timestamp || new Date(),
-          tipo: mensaje.metadata?.type || 'text'
-        },
-        suggestions: []
-      };
-    } catch (error) {
-      console.error('Error en análisis contextual:', error);
-      return {
-        intent: "ERROR",
-        confidence: 0,
-        context: {},
-        suggestions: []
-      };
-    }
-  }
-
   async generarRespuesta(mensaje, contexto = {}) {
     try {
-      if (!mensaje || !mensaje.content) {
+      if (!mensaje?.content) {
         throw new Error('Mensaje inválido o vacío');
       }
 
-      const analisisContextual = await this.analizarContexto(mensaje);
-      const contenido = mensaje.content.toLowerCase();
-      
-      let respuesta = '';
-      
-      switch (analisisContextual.intent) {
-        case "GREETING":
-          respuesta = this.seleccionarRespuestaAleatoria(this.respuestasIniciales.hola);
-          break;
-        case "IDENTITY_QUERY":
-          respuesta = this.seleccionarRespuestaAleatoria(this.respuestasIniciales.que_sabes);
-          break;
-        default:
-          respuesta = await this.generarRespuestaContextual(mensaje, analisisContextual);
-      }
+      // 1. Análisis Completo
+      const [
+        analisisEmocional,
+        analisisContextual,
+        perfilUsuario,
+        registroTerapeutico
+      ] = await Promise.all([
+        emotionalAnalyzer.analyzeEmotion(mensaje.content),
+        contextAnalyzer.analizarMensaje(mensaje),
+        personalizationService.getUserProfile(mensaje.userId),
+        TherapeuticRecord.findOne({ userId: mensaje.userId })
+      ]);
+
+      // 2. Obtener Memoria y Contexto
+      const memoriaContextual = await memoryService.getRelevantContext(
+        mensaje.userId,
+        mensaje.content,
+        {
+          emotional: analisisEmocional,
+          contextual: analisisContextual
+        }
+      );
+
+      // 3. Construir Prompt Contextualizado
+      const prompt = await this.construirPromptContextualizado(
+        mensaje,
+        {
+          emotional: analisisEmocional,
+          contextual: analisisContextual,
+          profile: perfilUsuario,
+          therapeutic: registroTerapeutico,
+          memory: memoriaContextual
+        }
+      );
+
+      // 4. Generar Respuesta con OpenAI
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: prompt.systemMessage
+          },
+          ...prompt.contextMessages,
+          {
+            role: 'user',
+            content: mensaje.content
+          }
+        ],
+        temperature: this.determinarTemperatura(analisisContextual),
+        max_tokens: this.determinarLongitudRespuesta(analisisContextual),
+        presence_penalty: 0.6,
+        frequency_penalty: 0.6
+      });
+
+      const respuestaGenerada = completion.choices[0].message.content;
+
+      // 5. Validar y Mejorar Respuesta
+      const respuestaValidada = await this.validarYMejorarRespuesta(
+        respuestaGenerada,
+        {
+          emotional: analisisEmocional,
+          contextual: analisisContextual,
+          profile: perfilUsuario
+        }
+      );
+
+      // 6. Actualizar Registros
+      await Promise.all([
+        this.actualizarRegistros(mensaje.userId, {
+          mensaje,
+          respuesta: respuestaValidada,
+          analisis: {
+            emotional: analisisEmocional,
+            contextual: analisisContextual
+          }
+        }),
+        progressTracker.trackProgress(mensaje.userId, {
+          message: mensaje,
+          response: respuestaValidada,
+          analysis: analisisEmocional
+        }),
+        goalTracker.updateProgress(mensaje.userId, {
+          message: mensaje,
+          response: respuestaValidada,
+          context: analisisContextual
+        })
+      ]);
 
       return {
-        content: respuesta,
+        content: respuestaValidada,
         context: {
-          ...analisisContextual,
-          timestamp: new Date(),
-          messageId: mensaje._id
+          emotional: analisisEmocional,
+          contextual: analisisContextual,
+          timestamp: new Date()
         }
       };
+
     } catch (error) {
       console.error('Error generando respuesta:', error);
-      return this.defaultResponse;
+      return await this.manejarError(error, mensaje);
     }
   }
 
-  seleccionarRespuestaAleatoria(respuestas) {
-    return respuestas[Math.floor(Math.random() * respuestas.length)];
+  async construirPromptContextualizado(mensaje, contexto) {
+    const timeOfDay = this.getTimeOfDay();
+    const userStyle = contexto.profile?.communicationPreferences || 'neutral';
+
+    const systemMessage = `Eres Anto, un asistente terapéutico profesional y empático.
+
+CONTEXTO ACTUAL:
+- Momento del día: ${timeOfDay}
+- Estado emocional: ${contexto.emotional?.mainEmotion || 'neutral'} (intensidad: ${contexto.emotional?.intensity || 5})
+- Temas recurrentes: ${contexto.memory?.recurringThemes?.join(', ') || 'ninguno'}
+- Estilo comunicativo preferido: ${userStyle}
+- Fase terapéutica: ${contexto.therapeutic?.currentPhase || 'inicial'}
+
+DIRECTRICES:
+1. Mantén un tono ${userStyle} y profesional
+2. Adapta la respuesta al estado emocional actual
+3. Considera el historial y contexto previo
+4. Evita repeticiones exactas de respuestas anteriores
+5. Prioriza la validación emocional cuando sea apropiado
+
+ESTRUCTURA DE RESPUESTA:
+1. Reconocimiento específico de la situación/emoción
+2. Validación o normalización cuando sea apropiado
+3. Elemento de apoyo o sugerencia concreta
+4. Pregunta exploratoria o invitación a profundizar`;
+
+    const contextMessages = await this.generarMensajesContexto(contexto);
+
+    return {
+      systemMessage,
+      contextMessages
+    };
   }
 
-  async generarRespuestaContextual(mensaje, contexto) {
+  async generarMensajesContexto(contexto) {
+    const messages = [];
+
+    if (contexto.memory?.lastInteraction) {
+      messages.push({
+        role: 'assistant',
+        content: contexto.memory.lastInteraction
+      });
+    }
+
+    if (contexto.emotional?.requiresUrgentCare) {
+      messages.push({
+        role: 'system',
+        content: 'IMPORTANTE: Usuario en posible estado de crisis. Priorizar contención y seguridad.'
+      });
+    }
+
+    return messages;
+  }
+
+  determinarTemperatura(contexto) {
+    if (contexto.urgent) return 0.3; // Más preciso para situaciones urgentes
+    if (contexto.intent === 'EMOTIONAL_SUPPORT') return 0.7; // Más empático
+    return 0.5; // Valor por defecto
+  }
+
+  determinarLongitudRespuesta(contexto) {
+    if (contexto.urgent) return this.RESPONSE_LENGTHS.LONG;
+    if (contexto.intent === 'GREETING') return this.RESPONSE_LENGTHS.SHORT;
+    return this.RESPONSE_LENGTHS.MEDIUM;
+  }
+
+  async validarYMejorarRespuesta(respuesta, contexto) {
+    // Verificar calidad de la respuesta
+    if (this.esRespuestaGenerica(respuesta)) {
+      return await responseGenerator.generateResponse(contexto);
+    }
+
+    // Verificar coherencia emocional
+    if (!this.esCoherenteConEmocion(respuesta, contexto.emotional)) {
+      return await this.ajustarCoherenciaEmocional(respuesta, contexto.emotional);
+    }
+
+    return respuesta;
+  }
+
+  esRespuestaGenerica(respuesta) {
+    const patronesGenericos = [
+      /^(Entiendo|Comprendo) (como|cómo) te sientes\.?$/i,
+      /^¿Podrías contarme más\??$/i,
+      /^Me gustaría saber más\.?$/i
+    ];
+
+    return patronesGenericos.some(patron => patron.test(respuesta));
+  }
+
+  esCoherenteConEmocion(respuesta, contextoEmocional) {
+    const emocion = contextoEmocional?.mainEmotion?.toLowerCase();
+    if (!emocion || emocion === 'neutral') return true;
+
+    const patronesEmocion = {
+      tristeza: /(acompaño|entiendo tu tristeza|momento difícil)/i,
+      ansiedad: /(respira|un paso a la vez|manejar esta ansiedad)/i,
+      enojo: /(frustración|válido sentirse así|entiendo tu molestia)/i
+    };
+
+    return patronesEmocion[emocion]?.test(respuesta) ?? true;
+  }
+
+  async actualizarRegistros(userId, data) {
     try {
-      const contenido = mensaje.content.toLowerCase();
-      
-      // Si el mensaje es muy corto o poco claro
-      if (contenido.length < 3 || contenido === 'uh') {
-        return "No estoy segura de entender. ¿Podrías explicarme un poco más lo que quieres decir?";
-      }
-
-      // Aquí iría la lógica de generación con OpenAI
-      // Por ahora, usamos respuestas más variadas
-      const respuestasContextuales = [
-        "¿Podrías contarme más sobre eso?",
-        "¿Cómo te hace sentir esa situación?",
-        "Entiendo. ¿Qué te gustaría explorar sobre ese tema?",
-        "¿Hay algo específico que te preocupe sobre eso?",
-        "Cuéntame más, ¿qué pensamientos tienes al respecto?"
-      ];
-
-      return this.seleccionarRespuestaAleatoria(respuestasContextuales);
+      await TherapeuticRecord.findOneAndUpdate(
+        { userId },
+        {
+          $push: {
+            sessions: {
+              timestamp: new Date(),
+              emotion: data.analisis.emotional,
+              content: {
+                message: data.mensaje.content,
+                response: data.respuesta
+              },
+              analysis: data.analisis
+            }
+          },
+          $set: {
+            'currentStatus.lastInteraction': new Date(),
+            'currentStatus.emotion': data.analisis.emotional.mainEmotion
+          }
+        },
+        { upsert: true }
+      );
     } catch (error) {
-      console.error('Error generando contenido de respuesta:', error);
-      return this.defaultResponse.content;
+      console.error('Error actualizando registros:', error);
     }
+  }
+
+  async manejarError(error, mensaje) {
+    console.error('Error en OpenAI Service:', error);
+    
+    // Intentar generar una respuesta de fallback contextualizada
+    try {
+      return {
+        content: await responseGenerator.generateFallbackResponse(mensaje),
+        context: {
+          error: true,
+          errorType: error.name,
+          timestamp: new Date()
+        }
+      };
+    } catch (fallbackError) {
+      return {
+        content: "Lo siento, ha ocurrido un error. ¿Podrías intentarlo de nuevo?",
+        context: {
+          error: true,
+          errorType: 'CRITICAL',
+          timestamp: new Date()
+        }
+      };
+    }
+  }
+
+  getTimeOfDay() {
+    const hora = new Date().getHours();
+    if (hora >= 5 && hora < 12) return 'mañana';
+    if (hora >= 12 && hora < 18) return 'tarde';
+    if (hora >= 18 && hora < 22) return 'noche';
+    return 'noche';
   }
 }
 

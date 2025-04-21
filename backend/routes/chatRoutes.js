@@ -1,17 +1,25 @@
 import express from 'express';
 import { authenticateToken as protect } from '../middleware/auth.js';
-import Message from '../models/Message.js';
-import mongoose from 'mongoose';
-import UserProfile from '../models/UserProfile.js';
+import {
+  openaiService,
+  emotionalAnalyzer,
+  contextAnalyzer,
+  memoryService,
+  personalizationService,
+  progressTracker,
+  goalTracker,
+  responseGenerator,
+  userProfileService
+} from '../services/index.js';
 
-// Importar servicios individualmente para mejor control de errores
-import openaiService from '../services/openaiService.js';
-import emotionalAnalyzer from '../services/emotionalAnalyzer.js';
-import contextAnalyzer from '../services/contextAnalyzer.js';
-import goalTracker from '../services/goalTracker.js';
-import memoryService from '../services/memoryService.js';
-import userProfileService from '../services/userProfileService.js';
-import progressTracker from '../services/progressTracker.js';
+import {
+  Message,
+  UserProfile,
+  TherapeuticRecord,
+  UserProgress,
+  UserInsight,
+  Journal
+} from '../models/index.js';
 
 const router = express.Router();
 
@@ -114,13 +122,16 @@ router.post('/conversations', protect, async (req, res) => {
 
 // Crear nuevo mensaje
 router.post('/messages', protect, async (req, res) => {
+  const startTime = Date.now();
+  const logs = [];
+  
   try {
     const { conversationId, content, role = 'user' } = req.body;
 
-    // Validación inicial de los datos
-    if (!content || typeof content !== 'string' || !content.trim()) {
+    // Validación inicial
+    if (!content?.trim()) {
       return res.status(400).json({
-        message: 'El contenido del mensaje es requerido y no puede estar vacío'
+        message: 'El contenido del mensaje es requerido'
       });
     }
 
@@ -129,6 +140,8 @@ router.post('/messages', protect, async (req, res) => {
         message: 'El ID de conversación es requerido'
       });
     }
+
+    logs.push(`[${Date.now() - startTime}ms] Iniciando procesamiento de mensaje`);
 
     // Crear mensaje del usuario
     const userMessage = new Message({
@@ -145,18 +158,46 @@ router.post('/messages', protect, async (req, res) => {
 
     if (role === 'user') {
       try {
-        // Guardar mensaje del usuario
-        const savedUserMessage = await userMessage.save();
+        // 1. Obtener contexto e historial
+        logs.push(`[${Date.now() - startTime}ms] Obteniendo contexto e historial`);
+        const [conversationHistory, userProfile, therapeuticRecord] = await Promise.all([
+          Message.find({ 
+            conversationId,
+            timestamp: { $gte: new Date(Date.now() - 30 * 60 * 1000) }
+          })
+          .sort({ timestamp: -1 })
+          .limit(10)
+          .lean(),
+          userProfileService.getOrCreateProfile(req.user._id),
+          TherapeuticRecord.findOne({ userId: req.user._id })
+        ]);
 
-        // Generar respuesta
-        const response = await openaiService.generarRespuesta(savedUserMessage);
+        // 2. Análisis del mensaje
+        logs.push(`[${Date.now() - startTime}ms] Realizando análisis del mensaje`);
+        const [emotionalAnalysis, contextualAnalysis] = await Promise.all([
+          emotionalAnalyzer.analyzeEmotion(content),
+          contextAnalyzer.analizarMensaje(userMessage, conversationHistory)
+        ]);
 
-        // Validar que tenemos una respuesta válida
+        // 3. Generar respuesta
+        logs.push(`[${Date.now() - startTime}ms] Generando respuesta`);
+        const response = await openaiService.generarRespuesta(
+          userMessage,
+          {
+            history: conversationHistory,
+            emotional: emotionalAnalysis,
+            contextual: contextualAnalysis,
+            profile: userProfile,
+            therapeutic: therapeuticRecord
+          }
+        );
+
+        // 4. Validar respuesta
         if (!response?.content) {
-          throw new Error('Respuesta inválida del servicio OpenAI');
+          throw new Error('Respuesta inválida generada');
         }
 
-        // Crear mensaje del asistente
+        // 5. Crear mensaje del asistente
         const assistantMessage = new Message({
           userId: req.user._id,
           content: response.content,
@@ -166,71 +207,102 @@ router.post('/messages', protect, async (req, res) => {
             timestamp: new Date(),
             type: 'text',
             status: 'sent',
-            context: response.context
+            context: {
+              emotional: emotionalAnalysis,
+              contextual: contextualAnalysis,
+              response: response.context
+            }
           }
         });
 
-        // Guardar mensaje del asistente
-        const savedAssistantMessage = await assistantMessage.save();
-
-        // Actualizar perfiles y progreso
+        // 6. Guardar y actualizar
+        logs.push(`[${Date.now() - startTime}ms] Guardando mensajes y actualizando registros`);
         await Promise.all([
-          userProfileService.actualizarPerfil(req.user._id, savedUserMessage, response.context),
-          progressTracker.trackProgress(req.user._id, savedUserMessage)
-        ]).catch(error => {
-          console.warn('Error en actualizaciones secundarias:', error);
-          // No fallamos la respuesta principal por errores en actualizaciones secundarias
-        });
+          userMessage.save(),
+          assistantMessage.save(),
+          progressTracker.trackProgress(req.user._id, {
+            userMessage,
+            assistantMessage,
+            analysis: {
+              emotional: emotionalAnalysis,
+              contextual: contextualAnalysis
+            }
+          }),
+          memoryService.updateConversationMemory(req.user._id, {
+            message: userMessage,
+            response: assistantMessage,
+            analysis: {
+              emotional: emotionalAnalysis,
+              contextual: contextualAnalysis
+            }
+          })
+        ]);
 
+        logs.push(`[${Date.now() - startTime}ms] Proceso completado exitosamente`);
+        
         return res.status(201).json({
-          userMessage: savedUserMessage,
-          assistantMessage: savedAssistantMessage
+          userMessage,
+          assistantMessage,
+          context: {
+            emotional: emotionalAnalysis,
+            contextual: contextualAnalysis
+          },
+          processingTime: Date.now() - startTime
         });
 
       } catch (error) {
-        console.error('Error procesando mensaje:', error);
-        
-        // Si ya guardamos el mensaje del usuario, intentamos enviar una respuesta de error
-        if (userMessage._id) {
-          const errorMessage = new Message({
-            userId: req.user._id,
-            content: "Lo siento, ha ocurrido un error al procesar tu mensaje. ¿Podrías intentarlo de nuevo?",
-            role: 'assistant',
-            conversationId,
-            metadata: {
-              timestamp: new Date(),
-              type: 'error',
-              status: 'sent',
-              error: error.message
-            }
-          });
+        logs.push(`[${Date.now() - startTime}ms] Error: ${error.message}`);
+        console.error('Error procesando mensaje:', {
+          error,
+          logs,
+          userId: req.user._id,
+          messageContent: content
+        });
 
-          await errorMessage.save();
+        // Intentar generar respuesta de fallback
+        const errorMessage = new Message({
+          userId: req.user._id,
+          content: await responseGenerator.generateFallbackResponse(userMessage),
+          role: 'assistant',
+          conversationId,
+          metadata: {
+            timestamp: new Date(),
+            type: 'error',
+            status: 'sent',
+            error: error.message
+          }
+        });
 
-          return res.status(500).json({
-            message: 'Error procesando el mensaje',
-            error: error.message,
-            userMessage,
-            errorMessage
-          });
-        }
+        await Promise.all([
+          userMessage.save(),
+          errorMessage.save()
+        ]);
 
         return res.status(500).json({
           message: 'Error procesando el mensaje',
-          error: error.message
+          error: error.message,
+          userMessage,
+          errorMessage,
+          logs
         });
       }
     } else {
-      // Para mensajes que no son del usuario
       const savedMessage = await userMessage.save();
       return res.status(201).json({ message: savedMessage });
     }
 
   } catch (error) {
-    console.error('Error en POST /messages:', error);
+    logs.push(`[${Date.now() - startTime}ms] Error crítico: ${error.message}`);
+    console.error('Error crítico en POST /messages:', {
+      error,
+      logs,
+      userId: req?.user?._id
+    });
+
     return res.status(500).json({
-      message: 'Error al procesar el mensaje',
-      error: error.message
+      message: 'Error crítico al procesar el mensaje',
+      error: error.message,
+      logs
     });
   }
 });

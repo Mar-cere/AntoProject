@@ -4,8 +4,11 @@ const messageSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    required: true
+  },
+  conversationId: {
+    type: String,
+    required: true
   },
   content: {
     type: String,
@@ -14,65 +17,50 @@ const messageSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: ['user', 'assistant', 'system'],
-    required: true
-  },
-  conversationId: {
-    type: String,
-    required: true,
-    index: true
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now,
-    index: true
+    default: 'user'
   },
   metadata: {
-    type: Object,  // Cambiado de String a Object
-    default: () => ({
-      timestamp: new Date(),
-      type: 'text',
-      status: 'sent'
-    })
-  },
-  status: {
-    type: String,
-    enum: ['sent', 'delivered', 'read', 'failed'],
-    default: 'sent'
-  },
-  isSystemMessage: {
-    type: Boolean,
-    default: false
-  },
-  replyTo: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Message'
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    type: {
+      type: String,
+      enum: ['text', 'error', 'system'],
+      default: 'text'
+    },
+    status: {
+      type: String,
+      enum: ['sent', 'delivered', 'read', 'failed'],
+      default: 'sent'
+    },
+    context: {
+      emotional: {
+        mainEmotion: String,
+        intensity: Number,
+        secondary: [String]
+      },
+      contextual: {
+        intent: String,
+        topics: [String],
+        urgent: Boolean
+      },
+      response: {
+        type: String,
+        confidence: Number
+      }
+    },
+    error: String
   }
 }, {
   timestamps: true
 });
 
-// Índices para búsqueda eficiente
-messageSchema.index({ 'metadata.topics': 1 });
-messageSchema.index({ 'metadata.emotionalContext.mainEmotion': 1 });
-messageSchema.index({ 'metadata.contextualMemory.relatedTopics': 1 });
-
 // Índices para mejorar el rendimiento de las consultas
-messageSchema.index({ conversationId: 1, timestamp: -1 });
-messageSchema.index({ userId: 1, timestamp: -1 });
+messageSchema.index({ userId: 1, conversationId: 1 });
+messageSchema.index({ 'metadata.timestamp': -1 });
+messageSchema.index({ conversationId: 1, 'metadata.timestamp': -1 });
 
-// Método para sanitizar el mensaje antes de enviarlo
-messageSchema.methods.toJSON = function() {
-  const obj = this.toObject();
-  delete obj.__v;
-  return obj;
-};
-
-// Método para marcar como leído
-messageSchema.methods.markAsRead = async function() {
-  this.status = 'read';
-  return this.save();
-};
-
-const Message = mongoose.model('Message', messageSchema);
+const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
 
 export default Message;
