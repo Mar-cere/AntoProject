@@ -288,60 +288,100 @@ const DEFAULT_EMOTIONAL_CONTEXT = {
   sentiment: 'neutral'
 };
 
+const GREETING_VARIATIONS = {
+  morning: [
+    "¡Buenos días! ¿Cómo puedo ayudarte hoy?",
+    "¡Hola! ¿Cómo amaneciste hoy?",
+    "Buenos días, ¿cómo te sientes hoy?"
+  ],
+  afternoon: [
+    "¡Hola! ¿Cómo va tu día?",
+    "¡Buenas tardes! ¿En qué puedo ayudarte?",
+    "¡Hola! ¿Cómo te sientes en este momento?"
+  ],
+  evening: [
+    "¡Buenas tardes! ¿Cómo ha ido tu día?",
+    "¡Hola! ¿Cómo te encuentras esta tarde?",
+    "¡Hola! ¿Qué tal va todo?"
+  ],
+  night: [
+    "¡Buenas noches! ¿Cómo te sientes?",
+    "¡Hola! ¿Cómo ha ido tu día?",
+    "¡Buenas noches! ¿En qué puedo ayudarte?"
+  ]
+};
+
 const generateEnhancedResponse = async (message, context, strategy) => {
   try {
+    // Detectar si es un saludo simple
+    const isGreeting = /^(hola|hi|hey|buenos días|buenas tardes|buenas noches)$/i.test(message.content.trim());
+    
+    if (isGreeting) {
+      const hour = new Date().getHours();
+      const timeOfDay = 
+        hour >= 5 && hour < 12 ? 'morning' :
+        hour >= 12 && hour < 18 ? 'afternoon' :
+        hour >= 18 && hour < 22 ? 'evening' : 'night';
+      
+      // Obtener variaciones para el momento del día
+      const variations = GREETING_VARIATIONS[timeOfDay];
+      // Seleccionar una variación aleatoria
+      return variations[Math.floor(Math.random() * variations.length)];
+    }
+
     const promptTemplate = {
       supportive: `Eres Anto, un asistente terapéutico profesional y empático.
       
-      CONTEXTO EMOCIONAL:
-      - Estado: ${context.emotionalTrend.latest || 'neutral'}
+      CONTEXTO ACTUAL:
+      - Momento del día: ${getTimeOfDay()}
+      - Estado emocional previo: ${context.emotionalTrend?.latest || 'neutral'}
+      - Últimos temas tratados: ${context.topics?.join(', ') || 'ninguno'}
       
-      DIRECTRICES DE COMUNICACIÓN:
-      1. Mantén un tono EMPÁTICO y PROFESIONAL
-      2. Estructura tus respuestas en DOS PARTES:
-         - Validación emocional clara y específica
-         - Pregunta exploratoria o sugerencia concreta
-      3. Longitud ideal: 2-3 frases conectadas
-      4. Usa un lenguaje cálido y acogedor
-      5. Incluye elementos de apoyo emocional
-      6. Si detectas malestar emocional, prioriza la contención
+      DIRECTRICES DE RESPUESTA:
+      1. NUNCA repitas exactamente la misma respuesta
+      2. Adapta el tono según el contexto emocional
+      3. Personaliza la respuesta según el momento del día
+      4. Mantén continuidad con conversaciones previas
+      5. Usa variedad en expresiones y estructura
       
-      EJEMPLOS DE RESPUESTA:
-      Usuario: "No me siento bien"
-      Respuesta: "Entiendo que estés pasando por un momento difícil y quiero que sepas que estoy aquí para escucharte. ¿Podrías contarme más sobre lo que te está afectando?"
+      ESTRUCTURA REQUERIDA:
+      1. Reconocimiento específico de la situación
+      2. Elemento de apoyo o validación
+      3. Pregunta exploratoria O sugerencia concreta
       
-      Usuario: "Solo me dirás eso?"
-      Respuesta: "Tienes razón en esperar más de mí, estoy aquí para apoyarte de manera más completa. ¿Qué tipo de apoyo sientes que necesitas en este momento?"`,
+      EJEMPLOS DE VARIACIÓN:
+      - "Veo que esto te está afectando profundamente. Es normal sentirse así y quiero que sepas que estoy aquí para escucharte. ¿Qué te ayudaría en este momento?"
+      - "Entiendo tu frustración y es completamente válida. Me gustaría ayudarte a explorar esto con más profundidad. ¿Podrías contarme qué te llevó a sentirte así?"
+      - "Gracias por compartir esto conmigo. Es importante expresar cómo nos sentimos y estoy aquí para escucharte. ¿Qué necesitas en este momento?"`,
 
       empathetic: `Eres Anto, profesional en apoyo emocional.
       
       CONTEXTO:
-      - Emoción detectada: ${context.emotionalTrend.latest || 'neutral'}
+      - Hora del día: ${new Date().getHours()}
+      - Emoción detectada: ${context.emotionalTrend?.latest || 'neutral'}
       
-      DIRECTRICES:
-      1. SIEMPRE valida primero la emoción
-      2. Ofrece apoyo específico y concreto
-      3. Haz preguntas que muestren interés genuino
-      4. Usa un tono cálido y comprensivo
-      5. Incluye elementos de esperanza y apoyo
+      REQUISITOS:
+      1. Cada respuesta debe ser única
+      2. Adaptar el lenguaje al estado emocional
+      3. Incluir elementos de apoyo concretos
+      4. Mantener un tono cálido pero profesional
       
-      ESTRUCTURA DE RESPUESTA:
-      1. Validación empática (1 frase)
-      2. Apoyo específico (1 frase)
-      3. Pregunta exploratoria (1 frase)`,
+      NO PERMITIDO:
+      - Respuestas genéricas
+      - Repetir exactamente frases anteriores
+      - Ignorar el contexto emocional`,
 
       casual: `Eres Anto, asistente profesional.
       
-      DIRECTRICES:
-      1. Mantén un tono cercano pero profesional
-      2. Respuestas completas y elaboradas
-      3. Muestra interés genuino
-      4. Incluye elementos de apoyo
+      CONTEXTO:
+      - Momento: ${getTimeOfDay()}
+      - Interacción: ${context.lastInteraction ? 'seguimiento' : 'nueva'}
       
-      ESTRUCTURA:
-      - Reconocimiento
-      - Exploración
-      - Apoyo concreto`
+      ENFOQUE:
+      1. Respuestas naturales y variadas
+      2. Mantener profesionalismo
+      3. Adaptar al contexto temporal
+      4. Evitar repeticiones`
     };
 
     const completion = await openai.chat.completions.create({
@@ -356,24 +396,58 @@ const generateEnhancedResponse = async (message, context, strategy) => {
           content: message.content
         }
       ],
-      temperature: 0.7,
+      temperature: 0.8, // Aumentado para más variabilidad
       max_tokens: RESPONSE_LENGTHS[strategy.responseLength] || RESPONSE_LENGTHS.SHORT,
-      presence_penalty: 0.6
+      presence_penalty: 0.8, // Aumentado para evitar repeticiones
+      frequency_penalty: 0.8 // Aumentado para favorecer variedad en el lenguaje
     });
 
     let response = completion.choices[0].message.content.trim();
     
-    // Verificar que la respuesta sea suficientemente elaborada
-    if (response.split(' ').length < 10) {
-      // Si la respuesta es muy corta, usar una respuesta más elaborada por defecto
-      return "Entiendo cómo te sientes y quiero que sepas que estoy aquí para escucharte. ¿Podrías contarme más sobre lo que estás experimentando?";
+    // Verificación de calidad de respuesta
+    if (response.split(' ').length < 10 || 
+        response === context.lastResponse || 
+        isGenericResponse(response)) {
+      return generateFallbackResponse(context);
     }
 
     return response;
   } catch (error) {
     console.error('Error en generateEnhancedResponse:', error);
-    return "Me gustaría entender mejor cómo te sientes. ¿Podrías contarme más sobre tu situación?";
+    return generateFallbackResponse(context);
   }
+};
+
+// Función auxiliar para verificar si una respuesta es demasiado genérica
+const isGenericResponse = (response) => {
+  const genericPatterns = [
+    /^(Entiendo|Comprendo) (como|cómo) te sientes/i,
+    /^(Me gustaría|Quisiera) (saber|entender) más/i,
+    /^¿Podrías contarme más\??$/i
+  ];
+  
+  return genericPatterns.some(pattern => pattern.test(response));
+};
+
+// Función para generar respuestas de respaldo variadas
+const generateFallbackResponse = (context) => {
+  const fallbackResponses = [
+    "Me interesa mucho entender mejor tu situación. ¿Podrías compartir más detalles sobre lo que estás experimentando?",
+    "Quisiera ayudarte de la mejor manera posible. ¿Qué te gustaría explorar en este momento?",
+    "Estoy aquí para escucharte y apoyarte. ¿Qué necesitas en este momento?",
+    "Tu bienestar es importante para mí. ¿Cómo podría ayudarte mejor ahora?",
+    "Cada experiencia es única y válida. ¿Te gustaría contarme más sobre la tuya?"
+  ];
+  
+  return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+};
+
+const getTimeOfDay = () => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'mañana';
+  if (hour >= 12 && hour < 18) return 'tarde';
+  if (hour >= 18 && hour < 22) return 'noche';
+  return 'noche tarde';
 };
 
 const updateTherapeuticRecord = async (userId, sessionData) => {
