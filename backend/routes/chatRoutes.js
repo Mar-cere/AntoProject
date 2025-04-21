@@ -15,13 +15,27 @@ import progressTracker from '../services/progressTracker.js';
 
 const router = express.Router();
 
+const LIMITE_MENSAJES = 50;
+const VENTANA_CONTEXTO = 30 * 60 * 1000; // 30 minutos en milisegundos
+
+// Middleware para validar conversationId
+const validarConversationId = (req, res, next) => {
+  const { conversationId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return res.status(400).json({
+      message: 'ID de conversación inválido'
+    });
+  }
+  next();
+};
+
 // Obtener mensajes de una conversación con filtros
-router.get('/conversations/:conversationId', protect, async (req, res) => {
+router.get('/conversations/:conversationId', protect, validarConversationId, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { 
       page = 1, 
-      limit = 50, 
+      limit = LIMITE_MENSAJES, 
       status, 
       type,
       role 
@@ -29,21 +43,20 @@ router.get('/conversations/:conversationId', protect, async (req, res) => {
 
     const query = {
       conversationId,
-      userId: req.user._id
+      userId: req.user._id,
+      ...(status && { status }),
+      ...(type && { type }),
+      ...(role && { role })
     };
 
-    // Aplicar filtros opcionales
-    if (status) query.status = status;
-    if (type) query.type = type;
-    if (role) query.role = role;
-
-    const messages = await Message.find(query)
-      .sort({ timestamp: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .exec();
-
-    const total = await Message.countDocuments(query);
+    const [messages, total] = await Promise.all([
+      Message.find(query)
+        .sort({ timestamp: -1 })
+        .skip((page - 1) * limit)
+        .limit(parseInt(limit))
+        .lean(),
+      Message.countDocuments(query)
+    ]);
 
     res.json({
       messages: messages.reverse(),
@@ -65,20 +78,22 @@ router.get('/conversations/:conversationId', protect, async (req, res) => {
 // Crear nueva conversación
 router.post('/conversations', protect, async (req, res) => {
   try {
-    // Generar un conversationId único
     const conversationId = new mongoose.Types.ObjectId().toString();
+    const userPreferences = await userProfileService.getPersonalizedPrompt(req.user._id);
     
-    // Crear mensaje inicial del sistema
     const welcomeMessage = new Message({
       userId: req.user._id,
-      content: '¡Hola! Soy Anto, tu asistente personal. ¿En qué puedo ayudarte hoy?',
+      content: await openaiService.generarSaludoPersonalizado(userPreferences),
       role: 'assistant',
       conversationId,
       type: 'system',
       isSystemMessage: true,
       metadata: {
         type: 'welcome',
-        timestamp: new Date()
+        timestamp: new Date(),
+        context: {
+          preferences: userPreferences
+        }
       }
     });
 
@@ -102,6 +117,12 @@ router.post('/messages', protect, async (req, res) => {
   try {
     const { conversationId, content, role = 'user' } = req.body;
 
+    if (!content?.trim()) {
+      return res.status(400).json({
+        message: 'El contenido del mensaje no puede estar vacío'
+      });
+    }
+
     const userMessage = new Message({
       userId: req.user._id,
       content,
@@ -116,24 +137,38 @@ router.post('/messages', protect, async (req, res) => {
 
     if (role === 'user') {
       try {
-        // Obtener historial de conversación
-        const conversationHistory = await Message.find({ 
-          conversationId,
-          timestamp: { $gte: new Date(Date.now() - 30 * 60 * 1000) }
-        })
-        .sort({ timestamp: -1 })
-        .limit(10)
-        .lean();
+        // Análisis inicial del mensaje
+        const [conversationHistory, emotionalAnalysis, contextualAnalysis] = await Promise.all([
+          Message.find({ 
+            conversationId,
+            timestamp: { $gte: new Date(Date.now() - VENTANA_CONTEXTO) }
+          })
+          .sort({ timestamp: -1 })
+          .limit(10)
+          .lean(),
+          emotionalAnalyzer.analyzeEmotion(userMessage),
+          contextAnalyzer.analizarMensaje(userMessage)
+        ]);
 
-        // Ejecutar todas las actualizaciones en paralelo
-        const [response] = await Promise.all([
-          openaiService.generateAIResponse(
+        // Actualizar perfil y generar respuesta
+        const [response, profileUpdates] = await Promise.all([
+          openaiService.generarRespuesta(
             userMessage,
-            conversationHistory,
-            req.user._id
+            {
+              history: conversationHistory,
+              emotional: emotionalAnalysis,
+              contextual: contextualAnalysis
+            }
           ),
-          userProfileService.updateConnectionPattern(req.user._id),
-          userProfileService.updateEmotionalPattern(req.user._id, userMessage)
+          Promise.all([
+            userProfileService.actualizarPerfil(req.user._id, userMessage, {
+              emotional: emotionalAnalysis,
+              contextual: contextualAnalysis
+            }),
+            memoryService.updateUserInsights(req.user._id, userMessage, emotionalAnalysis),
+            goalTracker.trackProgress(req.user._id, userMessage),
+            progressTracker.trackProgress(req.user._id, userMessage)
+          ])
         ]);
 
         const assistantMessage = new Message({
@@ -145,7 +180,11 @@ router.post('/messages', protect, async (req, res) => {
             timestamp: new Date(),
             type: 'text',
             status: 'sent',
-            context: response.context
+            context: {
+              emotional: emotionalAnalysis,
+              contextual: contextualAnalysis,
+              response: response.context
+            }
           }
         });
 
@@ -156,13 +195,37 @@ router.post('/messages', protect, async (req, res) => {
 
         res.status(201).json({
           userMessage,
-          assistantMessage
+          assistantMessage,
+          context: {
+            emotional: emotionalAnalysis,
+            contextual: contextualAnalysis
+          }
         });
       } catch (error) {
         console.error('Error procesando mensaje:', error);
+        const errorMessage = new Message({
+          userId: req.user._id,
+          content: "Lo siento, ha ocurrido un error al procesar tu mensaje. ¿Podrías intentarlo de nuevo?",
+          role: 'assistant',
+          conversationId,
+          metadata: {
+            timestamp: new Date(),
+            type: 'error',
+            status: 'sent',
+            error: error.message
+          }
+        });
+
+        await Promise.all([
+          userMessage.save(),
+          errorMessage.save()
+        ]);
+
         res.status(500).json({
           message: 'Error procesando el mensaje',
-          error: error.message
+          error: error.message,
+          userMessage,
+          errorMessage
         });
       }
     } else {
@@ -182,10 +245,8 @@ router.post('/messages', protect, async (req, res) => {
 router.get('/conversations', protect, async (req, res) => {
   try {
     const conversations = await Message.aggregate([
-      {
-        $match: { userId: req.user._id }
-      },
-      {
+      { $match: { userId: req.user._id } },
+      { 
         $group: {
           _id: '$conversationId',
           lastMessage: { $last: '$content' },
@@ -194,18 +255,20 @@ router.get('/conversations', protect, async (req, res) => {
           updatedAt: { $max: '$timestamp' },
           messageCount: { $sum: 1 },
           unreadCount: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'sent'] }, 1, 0]
-            }
+            $sum: { $cond: [{ $eq: ['$status', 'sent'] }, 1, 0] }
+          },
+          emotionalContext: {
+            $last: '$metadata.context.emotional'
           }
         }
       },
-      {
-        $sort: { updatedAt: -1 }
-      }
+      { $sort: { updatedAt: -1 } }
     ]);
 
-    res.json({ conversations });
+    res.json({ 
+      conversations,
+      stats: await userProfileService.getConversationStats(req.user._id)
+    });
   } catch (error) {
     console.error('Error al obtener conversaciones:', error);
     res.status(500).json({
@@ -220,6 +283,12 @@ router.patch('/messages/status', protect, async (req, res) => {
   try {
     const { messageIds, status } = req.body;
 
+    if (!Array.isArray(messageIds) || !messageIds.length) {
+      return res.status(400).json({
+        message: 'Se requiere al menos un ID de mensaje'
+      });
+    }
+
     if (!['sent', 'delivered', 'read', 'failed'].includes(status)) {
       return res.status(400).json({
         message: 'Estado de mensaje inválido'
@@ -228,17 +297,21 @@ router.patch('/messages/status', protect, async (req, res) => {
 
     const result = await Message.updateMany(
       {
-        _id: { $in: messageIds },
+        _id: { $in: messageIds.filter(id => mongoose.Types.ObjectId.isValid(id)) },
         userId: req.user._id
       },
       {
-        $set: { status }
+        $set: { 
+          status,
+          'metadata.lastStatusUpdate': new Date()
+        }
       }
     );
 
     res.json({
       message: `${result.modifiedCount} mensajes actualizados`,
-      status
+      status,
+      timestamp: new Date()
     });
   } catch (error) {
     console.error('Error al actualizar estado de mensajes:', error);
@@ -277,7 +350,7 @@ router.delete('/conversations/:conversationId', protect, async (req, res) => {
   }
 });
 
-// Buscar mensajes con filtros avanzados
+// Búsqueda avanzada de mensajes
 router.get('/messages/search', protect, async (req, res) => {
   try {
     const { 
@@ -286,32 +359,37 @@ router.get('/messages/search', protect, async (req, res) => {
       role,
       status,
       startDate,
-      endDate
+      endDate,
+      emotion,
+      intensity
     } = req.query;
 
     const searchQuery = {
-      userId: req.user._id
+      userId: req.user._id,
+      ...(query && { content: { $regex: query, $options: 'i' } }),
+      ...(type && { type }),
+      ...(role && { role }),
+      ...(status && { status }),
+      ...(emotion && { 'metadata.context.emotional.mainEmotion': emotion }),
+      ...(intensity && { 'metadata.context.emotional.intensity': parseInt(intensity) })
     };
 
-    if (query) {
-      searchQuery.content = { $regex: query, $options: 'i' };
-    }
-    if (type) searchQuery.type = type;
-    if (role) searchQuery.role = role;
-    if (status) searchQuery.status = status;
     if (startDate || endDate) {
-      searchQuery.timestamp = {};
-      if (startDate) searchQuery.timestamp.$gte = new Date(startDate);
-      if (endDate) searchQuery.timestamp.$lte = new Date(endDate);
+      searchQuery.timestamp = {
+        ...(startDate && { $gte: new Date(startDate) }),
+        ...(endDate && { $lte: new Date(endDate) })
+      };
     }
 
     const messages = await Message.find(searchQuery)
       .sort({ timestamp: -1 })
-      .limit(20);
+      .limit(LIMITE_MENSAJES)
+      .lean();
 
     res.json({ 
       messages,
-      count: messages.length
+      count: messages.length,
+      query: searchQuery
     });
   } catch (error) {
     console.error('Error en búsqueda de mensajes:', error);
