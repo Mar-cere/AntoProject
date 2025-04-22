@@ -19,32 +19,187 @@ const DEFAULT_CONTEXT = {
   lastInteraction: new Date()
 };
 
-const memoryService = {
-  patternAnalyzers: {
-    pensamientos: {
-      catastrofización: /(?:siempre|nunca|todo|nada|terrible|horrible|desastre)/i,
-      generalización: /(?:todos|nadie|siempre|jamás|cada vez|típico)/i,
-      personalización: /(?:mi culpa|por mi|debería|tengo que|debo)/i,
-      dicotómico: /(?:o|sino|perfecto|fracaso|éxito|todo o nada)/i
-    },
-    creencias: {
-      autoestima: /(?:no puedo|no sirvo|soy un|no valgo|incapaz)/i,
-      expectativas: /(?:debería|tengo que|necesito ser|debo ser)/i,
-      relaciones: /(?:nadie me|todos son|siempre me|nunca me)/i
-    },
-    comportamientos: {
-      evitación: /(?:mejor no|evito|prefiero no|no quiero|me da miedo)/i,
-      búsquedaApoyo: /(?:necesito ayuda|quiero hablar|busco consejo|alguien que)/i,
-      afrontamiento: /(?:intentaré|probaré|buscaré|trataré|voy a)/i
-    }
-  },
+class MemoryService {
+  constructor() {
+    this.interactionPeriods = {
+      MORNING: { start: 5, end: 11 },
+      AFTERNOON: { start: 12, end: 17 },
+      EVENING: { start: 18, end: 21 },
+      NIGHT: { start: 22, end: 4 }
+    };
+  }
 
-  contextPatterns: {
-    académico: /(?:estudios|universidad|carrera|materias|exámenes|clases)/i,
-    relacional: /(?:amigos|familia|pareja|relaciones|social)/i,
-    personal: /(?:futuro|metas|objetivos|desarrollo|crecimiento)/i,
-    emocional: /(?:sentimientos|emociones|estado|ánimo|humor)/i
-  },
+  async getRelevantContext(userId, content, currentAnalysis = {}) {
+    try {
+      const recentInteractions = await this.getRecentInteractions(userId);
+      const interactionContext = this.analyzeInteractionContext(recentInteractions);
+      const currentPeriod = this.getCurrentPeriod();
+
+      return {
+        patterns: {
+          timing: interactionContext.timing || {},
+          frequency: interactionContext.frequency || {},
+          topics: interactionContext.topics || []
+        },
+        currentContext: {
+          period: currentPeriod,
+          analysis: currentAnalysis,
+          recentTopics: this.extractRecentTopics(recentInteractions)
+        },
+        history: {
+          lastInteraction: recentInteractions[0] || null,
+          commonPatterns: this.findCommonPatterns(recentInteractions)
+        }
+      };
+    } catch (error) {
+      console.error('Error obteniendo contexto:', error);
+      return this.getDefaultContext();
+    }
+  }
+
+  getCurrentPeriod() {
+    const hour = new Date().getHours();
+    
+    for (const [period, times] of Object.entries(this.interactionPeriods)) {
+      if (times.start <= hour && hour <= times.end) {
+        return period;
+      }
+    }
+    
+    return 'NIGHT'; // Periodo por defecto
+  }
+
+  async getRecentInteractions(userId, limit = 10) {
+    try {
+      // Aquí implementarías la lógica para obtener interacciones recientes de la base de datos
+      return [];
+    } catch (error) {
+      console.error('Error obteniendo interacciones recientes:', error);
+      return [];
+    }
+  }
+
+  analyzeInteractionContext(interactions) {
+    const context = {
+      timing: {},
+      frequency: {
+        daily: 0,
+        weekly: 0
+      },
+      topics: []
+    };
+
+    if (!interactions || interactions.length === 0) {
+      return context;
+    }
+
+    interactions.forEach(interaction => {
+      if (interaction && interaction.timestamp) {
+        const period = this.getPeriodFromTimestamp(interaction.timestamp);
+        context.timing[period] = (context.timing[period] || 0) + 1;
+      }
+    });
+
+    return context;
+  }
+
+  getPeriodFromTimestamp(timestamp) {
+    const hour = new Date(timestamp).getHours();
+    
+    for (const [period, times] of Object.entries(this.interactionPeriods)) {
+      if (times.start <= hour && hour <= times.end) {
+        return period;
+      }
+    }
+    
+    return 'NIGHT';
+  }
+
+  extractRecentTopics(interactions) {
+    const topics = new Set();
+    
+    interactions.forEach(interaction => {
+      if (interaction?.metadata?.topics) {
+        interaction.metadata.topics.forEach(topic => topics.add(topic));
+      }
+    });
+
+    return Array.from(topics);
+  }
+
+  findCommonPatterns(interactions) {
+    return {
+      timePatterns: this.analyzeTimePatterns(interactions),
+      topicPatterns: this.analyzeTopicPatterns(interactions),
+      emotionalPatterns: this.analyzeEmotionalPatterns(interactions)
+    };
+  }
+
+  analyzeTimePatterns(interactions) {
+    const patterns = {};
+    
+    interactions.forEach(interaction => {
+      if (interaction?.timestamp) {
+        const hour = new Date(interaction.timestamp).getHours();
+        patterns[hour] = (patterns[hour] || 0) + 1;
+      }
+    });
+
+    return patterns;
+  }
+
+  analyzeTopicPatterns(interactions) {
+    const topics = {};
+    
+    interactions.forEach(interaction => {
+      if (interaction?.metadata?.topics) {
+        interaction.metadata.topics.forEach(topic => {
+          topics[topic] = (topics[topic] || 0) + 1;
+        });
+      }
+    });
+
+    return topics;
+  }
+
+  analyzeEmotionalPatterns(interactions) {
+    const emotions = {};
+    
+    interactions.forEach(interaction => {
+      if (interaction?.metadata?.emotional?.mainEmotion) {
+        const emotion = interaction.metadata.emotional.mainEmotion;
+        emotions[emotion] = (emotions[emotion] || 0) + 1;
+      }
+    });
+
+    return emotions;
+  }
+
+  getDefaultContext() {
+    return {
+      patterns: {
+        timing: {},
+        frequency: {
+          daily: 0,
+          weekly: 0
+        },
+        topics: []
+      },
+      currentContext: {
+        period: this.getCurrentPeriod(),
+        analysis: {},
+        recentTopics: []
+      },
+      history: {
+        lastInteraction: null,
+        commonPatterns: {
+          timePatterns: {},
+          topicPatterns: {},
+          emotionalPatterns: {}
+        }
+      }
+    };
+  }
 
   async updateUserInsights(userId, message, analysis) {
     try {
@@ -141,39 +296,6 @@ const memoryService = {
     return 'madrugada';
   },
 
-  async getRelevantContext(userId, currentMessage) {
-    try {
-      const userInsight = await UserInsight.findOne({ userId });
-      
-      if (!userInsight) {
-        return DEFAULT_CONTEXT;
-      }
-
-      // Obtener últimas 10 interacciones
-      const recentInteractions = userInsight.interactions.slice(-10);
-      
-      // Análisis de tendencias emocionales
-      const emotionalTrend = this.analyzeEmotionalTrend(recentInteractions);
-
-      // Análisis de patrones cognitivos recurrentes
-      const cognitivePatterns = this.analyzeCognitiveHistory(recentInteractions);
-
-      // Análisis de contexto de interacción
-      const interactionContext = this.analyzeInteractionContext(recentInteractions);
-
-      return {
-        emotionalTrend,
-        cognitivePatterns,
-        interactionContext,
-        lastInteraction: userInsight.lastUpdate || new Date()
-      };
-
-    } catch (error) {
-      console.error('Error obteniendo contexto:', error);
-      return DEFAULT_CONTEXT;
-    }
-  },
-
   analyzeEmotionalTrend(interactions) {
     const emotions = interactions.map(i => ({
       emotion: i.emotion,
@@ -233,22 +355,7 @@ const memoryService = {
       }
       return patterns;
     }, {});
-  },
-
-  analyzeInteractionContext(interactions) {
-    const context = {
-      frecuencia: {},
-      horarios: {},
-      duracion: {}
-    };
-
-    interactions.forEach(interaction => {
-      const { horario } = interaction;
-      context.horarios[horario.periodo] = (context.horarios[horario.periodo] || 0) + 1;
-    });
-
-    return context;
   }
-};
+}
 
-export default memoryService;
+export default new MemoryService();
