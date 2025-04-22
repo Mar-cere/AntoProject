@@ -768,17 +768,27 @@ ESTRUCTURA DE RESPUESTA:
   }
 
   async validarYMejorarRespuesta(respuesta, contexto) {
-    // Verificar calidad de la respuesta
-    if (this.esRespuestaGenerica(respuesta)) {
-      return await responseGenerator.generateResponse(contexto);
-    }
+    try {
+      // Validaciones básicas
+      if (!respuesta) {
+        return this.getDefaultResponse();
+      }
 
-    // Verificar coherencia emocional
-    if (!this.esCoherenteConEmocion(respuesta, contexto.emotional)) {
-      return await this.ajustarCoherenciaEmocional(respuesta, contexto.emotional);
-    }
+      // Ajustar coherencia emocional
+      respuesta = this.ajustarCoherenciaEmocional(respuesta, contexto.emotional);
 
-    return respuesta;
+      // Verificar longitud
+      if (respuesta.length < 50) {
+        respuesta = this.expandirRespuesta(respuesta);
+      } else if (respuesta.length > 500) {
+        respuesta = this.reducirRespuesta(respuesta);
+      }
+
+      return respuesta;
+    } catch (error) {
+      console.error('Error en validación y mejora de respuesta:', error);
+      return this.getDefaultResponse();
+    }
   }
 
   esRespuestaGenerica(respuesta) {
@@ -802,6 +812,82 @@ ESTRUCTURA DE RESPUESTA:
     };
 
     return patronesEmocion[emocion]?.test(respuesta) ?? true;
+  }
+
+  ajustarCoherenciaEmocional(respuesta, contextoEmocional) {
+    try {
+      if (!respuesta || !contextoEmocional) {
+        return respuesta;
+      }
+
+      const { mainEmotion, intensity } = contextoEmocional;
+      
+      // Verificar coherencia emocional básica
+      const coherenciaEmocional = {
+        tristeza: ['comprendo tu tristeza', 'entiendo que te sientas así', 'es normal sentirse triste'],
+        ansiedad: ['entiendo tu preocupación', 'es normal sentirse ansioso', 'respiremos juntos'],
+        enojo: ['entiendo tu frustración', 'es válido sentirse enojado', 'hablemos de lo que te molesta'],
+        alegría: ['me alegro por ti', 'es genial escuchar eso', 'comparto tu alegría'],
+        neutral: ['entiendo', 'te escucho', 'cuéntame más']
+      };
+
+      // Si la emoción principal está presente, asegurar que la respuesta sea coherente
+      if (mainEmotion && coherenciaEmocional[mainEmotion]) {
+        const frasesClave = coherenciaEmocional[mainEmotion];
+        const tieneCoherencia = frasesClave.some(frase => 
+          respuesta.toLowerCase().includes(frase.toLowerCase())
+        );
+
+        if (!tieneCoherencia) {
+          // Ajustar la respuesta para incluir reconocimiento emocional
+          const fraseInicial = frasesClave[Math.floor(Math.random() * frasesClave.length)];
+          respuesta = `${fraseInicial}. ${respuesta}`;
+        }
+      }
+
+      // Ajustar tono según intensidad emocional
+      if (intensity >= 7) {
+        respuesta = this.ajustarTonoAlta(respuesta);
+      } else if (intensity <= 3) {
+        respuesta = this.ajustarTonoBaja(respuesta);
+      }
+
+      return respuesta;
+    } catch (error) {
+      console.error('Error ajustando coherencia emocional:', error);
+      return respuesta; // Devolver respuesta original si hay error
+    }
+  }
+
+  ajustarTonoAlta(respuesta) {
+    // Asegurar un tono más empático y contenedor para emociones intensas
+    if (!respuesta.includes('Entiendo que')) {
+      respuesta = `Entiendo que esto es importante para ti. ${respuesta}`;
+    }
+    return respuesta;
+  }
+
+  ajustarTonoBaja(respuesta) {
+    // Mantener un tono más ligero y exploratorio para emociones de baja intensidad
+    if (!respuesta.includes('Me gustaría')) {
+      respuesta = `Me gustaría explorar esto contigo. ${respuesta}`;
+    }
+    return respuesta;
+  }
+
+  expandirRespuesta(respuesta) {
+    // Expandir respuestas muy cortas
+    return `${respuesta} ¿Te gustaría que exploremos esto con más detalle?`;
+  }
+
+  reducirRespuesta(respuesta) {
+    // Reducir respuestas muy largas
+    const oraciones = respuesta.split(/[.!?]+/);
+    return oraciones.slice(0, 3).join('. ') + '.';
+  }
+
+  getDefaultResponse() {
+    return "Entiendo. ¿Podrías contarme más sobre eso?";
   }
 
   async actualizarRegistros(userId, data) {
