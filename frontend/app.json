@@ -18,13 +18,6 @@
       "package": "com.yourcompany.yourapp"
     },
     "plugins": [
-      "expo-router",
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "ProyectoAnto necesita usar Face ID para autenticar tu identidad"
-        }
-      ]
     ],
     "experiments": {
       "typedRoutes": true
