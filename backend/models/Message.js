@@ -45,10 +45,7 @@ const messageSchema = new mongoose.Schema({
         topics: [String],
         urgent: Boolean
       },
-      response: {
-        type: String,
-        confidence: Number
-      }
+      response: mongoose.Schema.Types.Mixed
     },
     error: String
   }

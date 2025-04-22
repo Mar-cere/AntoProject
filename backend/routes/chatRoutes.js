@@ -130,27 +130,22 @@ router.post('/conversations', protect, async (req, res) => {
 router.post('/messages', protect, async (req, res) => {
   const startTime = Date.now();
   const logs = [];
+  let userMessage = null;
+  let assistantMessage = null;
   
   try {
     const { conversationId, content, role = 'user' } = req.body;
 
-    // Validación inicial
     if (!content?.trim()) {
       return res.status(400).json({
         message: 'El contenido del mensaje es requerido'
       });
     }
 
-    if (!conversationId) {
-      return res.status(400).json({
-        message: 'El ID de conversación es requerido'
-      });
-    }
-
     logs.push(`[${Date.now() - startTime}ms] Iniciando procesamiento de mensaje`);
 
-    // Crear mensaje del usuario
-    const userMessage = new Message({
+    // 1. Crear mensaje del usuario
+    userMessage = new Message({
       userId: req.user._id,
       content: content.trim(),
       role,
@@ -164,7 +159,7 @@ router.post('/messages', protect, async (req, res) => {
 
     if (role === 'user') {
       try {
-        // 1. Obtener contexto e historial
+        // 2. Obtener contexto e historial
         logs.push(`[${Date.now() - startTime}ms] Obteniendo contexto e historial`);
         const [conversationHistory, userProfile, therapeuticRecord] = await Promise.all([
           Message.find({ 
@@ -178,14 +173,17 @@ router.post('/messages', protect, async (req, res) => {
           TherapeuticRecord.findOne({ userId: req.user._id })
         ]);
 
-        // 2. Análisis del mensaje
+        // 3. Análisis y generación de respuesta
         logs.push(`[${Date.now() - startTime}ms] Realizando análisis del mensaje`);
         const [emotionalAnalysis, contextualAnalysis] = await Promise.all([
           emotionalAnalyzer.analyzeEmotion(content),
           contextAnalyzer.analizarMensaje(userMessage, conversationHistory)
         ]);
 
-        // 3. Generar respuesta
+        // 4. Guardar mensaje del usuario primero
+        await userMessage.save();
+
+        // 5. Generar respuesta
         logs.push(`[${Date.now() - startTime}ms] Generando respuesta`);
         const response = await openaiService.generarRespuesta(
           userMessage,
@@ -198,13 +196,8 @@ router.post('/messages', protect, async (req, res) => {
           }
         );
 
-        // 4. Validar respuesta
-        if (!response?.content) {
-          throw new Error('Respuesta inválida generada');
-        }
-
-        // 5. Crear mensaje del asistente
-        const assistantMessage = new Message({
+        // 6. Crear y guardar mensaje del asistente
+        assistantMessage = new Message({
           userId: req.user._id,
           content: response.content,
           role: 'assistant',
@@ -216,16 +209,16 @@ router.post('/messages', protect, async (req, res) => {
             context: {
               emotional: emotionalAnalysis,
               contextual: contextualAnalysis,
-              response: response.context
+              response: JSON.stringify(response.context) // Convertir a string
             }
           }
         });
 
-        // 6. Guardar y actualizar
-        logs.push(`[${Date.now() - startTime}ms] Guardando mensajes y actualizando registros`);
+        await assistantMessage.save();
+
+        // 7. Actualizar registros en paralelo
+        logs.push(`[${Date.now() - startTime}ms] Actualizando registros adicionales`);
         await Promise.all([
-          userMessage.save(),
-          assistantMessage.save(),
           progressTracker.trackProgress(req.user._id, {
             userMessage,
             assistantMessage,
@@ -234,15 +227,15 @@ router.post('/messages', protect, async (req, res) => {
               contextual: contextualAnalysis
             }
           }),
-          memoryService.updateConversationMemory(req.user._id, {
-            message: userMessage,
-            response: assistantMessage,
-            analysis: {
-              emotional: emotionalAnalysis,
-              contextual: contextualAnalysis
-            }
+          userProfileService.actualizarPerfil(req.user._id, userMessage, {
+            emotional: emotionalAnalysis,
+            contextual: contextualAnalysis
           })
-        ]);
+        ]).catch(error => {
+          // Log error pero no fallar la respuesta principal
+          console.warn('Error en actualizaciones secundarias:', error);
+          logs.push(`[${Date.now() - startTime}ms] Advertencia: Error en actualizaciones secundarias`);
+        });
 
         logs.push(`[${Date.now() - startTime}ms] Proceso completado exitosamente`);
         
@@ -265,34 +258,34 @@ router.post('/messages', protect, async (req, res) => {
           messageContent: content
         });
 
-        // Intentar generar respuesta de fallback
-        const errorMessage = new Message({
-          userId: req.user._id,
-          content: await responseGenerator.generateFallbackResponse(userMessage),
-          role: 'assistant',
-          conversationId,
-          metadata: {
-            timestamp: new Date(),
-            type: 'error',
-            status: 'sent',
-            error: error.message
-          }
-        });
+        // Si el mensaje del usuario ya se guardó, crear mensaje de error
+        if (userMessage._id) {
+          assistantMessage = new Message({
+            userId: req.user._id,
+            content: "Lo siento, ha ocurrido un error al procesar tu mensaje. ¿Podrías intentarlo de nuevo?",
+            role: 'assistant',
+            conversationId,
+            metadata: {
+              timestamp: new Date(),
+              type: 'error',
+              status: 'sent',
+              error: error.message
+            }
+          });
 
-        await Promise.all([
-          userMessage.save(),
-          errorMessage.save()
-        ]);
+          await assistantMessage.save();
+        }
 
         return res.status(500).json({
           message: 'Error procesando el mensaje',
           error: error.message,
-          userMessage,
-          errorMessage,
+          userMessage: userMessage._id ? userMessage : null,
+          errorMessage: assistantMessage,
           logs
         });
       }
     } else {
+      // Para mensajes que no son del usuario
       const savedMessage = await userMessage.save();
       return res.status(201).json({ message: savedMessage });
     }
