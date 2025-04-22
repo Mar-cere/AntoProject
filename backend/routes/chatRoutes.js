@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { authenticateToken as protect } from '../middleware/auth.js';
 import {
   Message,
@@ -27,6 +28,13 @@ const VENTANA_CONTEXTO = 30 * 60 * 1000; // 30 minutos en milisegundos
 // Middleware para validar conversationId
 const validarConversationId = (req, res, next) => {
   const { conversationId } = req.params;
+  
+  if (!conversationId) {
+    return res.status(400).json({
+      message: 'ID de conversación requerido'
+    });
+  }
+
   if (!mongoose.Types.ObjectId.isValid(conversationId)) {
     return res.status(400).json({
       message: 'ID de conversación inválido'
@@ -35,13 +43,13 @@ const validarConversationId = (req, res, next) => {
   next();
 };
 
-// Obtener mensajes de una conversación con filtros
+// Obtener mensajes de una conversación
 router.get('/conversations/:conversationId', protect, validarConversationId, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { 
       page = 1, 
-      limit = LIMITE_MENSAJES, 
+      limit = 50, 
       status, 
       type,
       role 
@@ -57,7 +65,7 @@ router.get('/conversations/:conversationId', protect, validarConversationId, asy
 
     const [messages, total] = await Promise.all([
       Message.find(query)
-        .sort({ timestamp: -1 })
+        .sort({ 'metadata.timestamp': -1 })
         .skip((page - 1) * limit)
         .limit(parseInt(limit))
         .lean(),
@@ -73,7 +81,7 @@ router.get('/conversations/:conversationId', protect, validarConversationId, asy
       }
     });
   } catch (error) {
-    console.error('Error al obtener mensajes:', error);
+    console.error('Error obteniendo mensajes:', error);
     res.status(500).json({
       message: 'Error al obtener el historial de mensajes',
       error: error.message
