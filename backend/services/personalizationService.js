@@ -35,19 +35,90 @@ const ESTILOS_COMUNICACION = {
   }
 };
 
-const personalizationService = {
-  async getPersonalizedPrompt(userId, contextData = {}) {
+class PersonalizationService {
+  async getUserProfile(userId) {
     try {
-      const userProfile = await this.getOrCreateProfile(userId);
-      const periodo = this.analizarPeriodoTemporal();
-      const patronesUsuario = await this.analizarPatronesUsuario(userProfile);
+      let profile = await UserProfile.findOne({ userId });
       
-      return this.generarConfiguracionPersonalizada(userProfile, periodo, patronesUsuario, contextData);
+      if (!profile) {
+        profile = await this.createDefaultProfile(userId);
+      }
+
+      return profile;
     } catch (error) {
-      console.error('Error en personalización:', error);
-      return this.getDefaultConfiguration();
+      console.error('Error obteniendo perfil de usuario:', error);
+      return this.getDefaultProfile(userId);
     }
-  },
+  }
+
+  async createDefaultProfile(userId) {
+    try {
+      return await UserProfile.create({
+        userId,
+        preferences: {
+          communicationStyle: 'neutral',
+          responseLength: 'MEDIUM',
+          topicsOfInterest: [],
+          triggerTopics: []
+        },
+        patrones: {
+          emocionales: [],
+          conexion: [],
+          temas: []
+        },
+        metadata: {
+          ultimaInteraccion: new Date(),
+          sesionesCompletadas: 0,
+          progresoGeneral: 0
+        }
+      });
+    } catch (error) {
+      console.error('Error creando perfil por defecto:', error);
+      return this.getDefaultProfile(userId);
+    }
+  }
+
+  getDefaultProfile(userId) {
+    return {
+      userId,
+      preferences: {
+        communicationStyle: 'neutral',
+        responseLength: 'MEDIUM',
+        topicsOfInterest: [],
+        triggerTopics: []
+      },
+      patrones: {
+        emocionales: [],
+        conexion: [],
+        temas: []
+      },
+      metadata: {
+        ultimaInteraccion: new Date(),
+        sesionesCompletadas: 0,
+        progresoGeneral: 0
+      }
+    };
+  }
+
+  async getPersonalizedPrompt(userId) {
+    try {
+      const profile = await this.getUserProfile(userId);
+      return {
+        style: profile.preferences?.communicationStyle || 'neutral',
+        responseLength: profile.preferences?.responseLength || 'MEDIUM',
+        topics: profile.preferences?.topicsOfInterest || [],
+        triggers: profile.preferences?.triggerTopics || []
+      };
+    } catch (error) {
+      console.error('Error obteniendo prompt personalizado:', error);
+      return {
+        style: 'neutral',
+        responseLength: 'MEDIUM',
+        topics: [],
+        triggers: []
+      };
+    }
+  }
 
   async getOrCreateProfile(userId) {
     try {
@@ -82,7 +153,7 @@ const personalizationService = {
       console.error('Error obteniendo perfil:', error);
       throw error;
     }
-  },
+  }
 
   analizarPeriodoTemporal() {
     const hora = new Date().getHours();
@@ -94,7 +165,7 @@ const personalizationService = {
       ...periodo,
       caracteristicas: this.getCaracteristicasPeriodo(periodo.nombre)
     };
-  },
+  }
 
   getCaracteristicasPeriodo(nombrePeriodo) {
     const caracteristicas = {
@@ -131,7 +202,7 @@ const personalizationService = {
     };
 
     return caracteristicas[nombrePeriodo] || caracteristicas.tarde;
-  },
+  }
 
   async analizarPatronesUsuario(userProfile) {
     const patrones = {
@@ -144,7 +215,7 @@ const personalizationService = {
       ...patrones,
       estiloComunicacionRecomendado: this.determinarEstiloComunicacion(patrones)
     };
-  },
+  }
 
   analizarPatronEmocional(patronesEmocionales) {
     const ultimasEmociones = patronesEmocionales?.ultimas || [];
@@ -155,7 +226,7 @@ const personalizationService = {
       intensidad: this.calcularIntensidadEmocional(ultimasEmociones),
       estabilidad: this.calcularEstabilidadEmocional(ultimasEmociones)
     };
-  },
+  }
 
   calcularTendenciaEmocional(emociones) {
     if (!emociones.length) return 'neutral';
@@ -167,7 +238,7 @@ const personalizationService = {
 
     return Object.entries(frecuencias)
       .sort(([,a], [,b]) => b - a)[0][0];
-  },
+  }
 
   determinarEstiloComunicacion(patrones) {
     const { emocionales, temporales } = patrones;
@@ -185,7 +256,7 @@ const personalizationService = {
     }
     
     return ESTILOS_COMUNICACION.DIRECTO;
-  },
+  }
 
   async generarConfiguracionPersonalizada(userProfile, periodo, patrones, contextData) {
     const { estiloBase } = userProfile.preferencias;
@@ -210,7 +281,7 @@ const personalizationService = {
         ultimaInteraccion: userProfile.patrones.temporales.ultima
       }
     };
-  },
+  }
 
   async updateInteractionPattern(userId, data) {
     try {
@@ -243,7 +314,7 @@ const personalizationService = {
     } catch (error) {
       console.error('Error actualizando patrón:', error);
     }
-  },
+  }
 
   getDefaultConfiguration() {
     return {
@@ -261,6 +332,6 @@ const personalizationService = {
       }
     };
   }
-};
+}
 
-export default personalizationService; 
+export default new PersonalizationService(); 
