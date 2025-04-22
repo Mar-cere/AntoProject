@@ -66,12 +66,11 @@ class MemoryService {
       }
     }
     
-    return 'NIGHT'; // Periodo por defecto
+    return 'NIGHT';
   }
 
   async getRecentInteractions(userId, limit = 10) {
     try {
-      // Aquí implementarías la lógica para obtener interacciones recientes de la base de datos
       return [];
     } catch (error) {
       console.error('Error obteniendo interacciones recientes:', error);
