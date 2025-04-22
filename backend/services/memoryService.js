@@ -205,13 +205,8 @@ class MemoryService {
       const timestamp = new Date();
       const hora = timestamp.getHours();
 
-      // Análisis de patrones cognitivos
       const cognitiveInsights = this.analyzeCognitivePatterns(message.content);
-      
-      // Análisis de contexto
       const contextInsights = this.analyzeContext(message.content);
-
-      // Análisis de intensidad emocional
       const emotionalIntensity = analysis?.emotionalContext?.intensity || 5;
       
       const interaction = {
@@ -227,14 +222,13 @@ class MemoryService {
         }
       };
 
-      // Actualizar insights del usuario
       const update = await UserInsight.findOneAndUpdate(
         { userId },
         {
           $push: {
             interactions: {
               $each: [interaction],
-              $slice: -50 // Mantener últimas 50 interacciones
+              $slice: -50
             }
           },
           $set: {
@@ -259,7 +253,7 @@ class MemoryService {
       console.error('Error actualizando insights:', error);
       return null;
     }
-  },
+  }
 
   analyzeCognitivePatterns(content) {
     const patterns = {};
@@ -274,7 +268,7 @@ class MemoryService {
     }
 
     return patterns;
-  },
+  }
 
   analyzeContext(content) {
     const contexts = {};
@@ -286,14 +280,14 @@ class MemoryService {
     }
 
     return contexts;
-  },
+  }
 
   categorizarHorario(hora) {
     if (hora >= 5 && hora < 12) return 'mañana';
     if (hora >= 12 && hora < 18) return 'tarde';
     if (hora >= 18 && hora < 22) return 'noche';
     return 'madrugada';
-  },
+  }
 
   analyzeEmotionalTrend(interactions) {
     const emotions = interactions.map(i => ({
@@ -307,7 +301,7 @@ class MemoryService {
       history: emotions,
       patterns: this.detectEmotionalPatterns(emotions)
     };
-  },
+  }
 
   detectEmotionalPatterns(emotions) {
     const patterns = {
@@ -320,17 +314,14 @@ class MemoryService {
     };
 
     emotions.forEach(e => {
-      // Analizar intensidad
       if (e.intensity > 7) patterns.intensidad.alta++;
       if (e.intensity < 4) patterns.intensidad.baja++;
 
-      // Registrar emociones dominantes
       patterns.emocionesDominantes.set(
         e.emotion,
         (patterns.emocionesDominantes.get(e.emotion) || 0) + 1
       );
 
-      // Analizar fluctuaciones
       if (patterns.fluctuación.length > 0) {
         const lastEmotion = patterns.fluctuación[patterns.fluctuación.length - 1];
         if (lastEmotion !== e.emotion) {
@@ -342,7 +333,7 @@ class MemoryService {
     });
 
     return patterns;
-  },
+  }
 
   analyzeCognitiveHistory(interactions) {
     return interactions.reduce((patterns, interaction) => {
