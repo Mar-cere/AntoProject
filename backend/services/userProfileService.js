@@ -31,6 +31,51 @@ const DIMENSIONES_ANALISIS = {
 };
 
 class UserProfileService {
+  async getOrCreateProfile(userId) {
+    try {
+      let userProfile = await UserProfile.findOne({ userId });
+      
+      if (!userProfile) {
+        userProfile = await UserProfile.create({
+          userId,
+          preferences: {
+            communicationStyle: 'neutral',
+            responseLength: 'MEDIUM',
+            topicsOfInterest: [],
+            triggerTopics: []
+          },
+          patrones: {
+            emocionales: [],
+            conexion: [],
+            temas: []
+          },
+          metadata: {
+            ultimaInteraccion: new Date(),
+            sesionesCompletadas: 0,
+            progresoGeneral: 0
+          }
+        });
+      }
+
+      return userProfile;
+    } catch (error) {
+      console.error('Error en getOrCreateProfile:', error);
+      // Retornar un perfil por defecto en caso de error
+      return {
+        userId,
+        preferences: {
+          communicationStyle: 'neutral',
+          responseLength: 'MEDIUM'
+        },
+        patrones: {
+          emocionales: [],
+          conexion: [],
+          temas: []
+        }
+      };
+    }
+  }
+
   async actualizarPerfil(userId, mensaje, analisis) {
     try {
       const actualizacion = {
@@ -42,20 +87,155 @@ class UserProfileService {
           }
         },
         $set: {
-          'ultimaInteraccion': new Date(),
+          'metadata.ultimaInteraccion': new Date(),
           'metadata.ultimoContexto': analisis?.contextual || {}
+        },
+        $inc: {
+          'metadata.sesionesCompletadas': 1
         }
       };
 
       return await UserProfile.findOneAndUpdate(
         { userId },
         actualizacion,
-        { new: true, upsert: true }
+        { 
+          new: true, 
+          upsert: true,
+          setDefaultsOnInsert: true
+        }
       );
     } catch (error) {
       console.error('Error actualizando perfil:', error);
       return null;
     }
+  }
+
+  async getPersonalizedPrompt(userId) {
+    try {
+      const perfil = await this.getOrCreateProfile(userId);
+      
+      return {
+        style: perfil.preferences?.communicationStyle || 'neutral',
+        responseLength: perfil.preferences?.responseLength || 'MEDIUM',
+        topics: perfil.preferences?.topicsOfInterest || [],
+        triggers: perfil.preferences?.triggerTopics || []
+      };
+    } catch (error) {
+      console.error('Error obteniendo prompt personalizado:', error);
+      return {
+        style: 'neutral',
+        responseLength: 'MEDIUM',
+        topics: [],
+        triggers: []
+      };
+    }
+  }
+
+  async updatePreferences(userId, newPreferences) {
+    try {
+      return await UserProfile.findOneAndUpdate(
+        { userId },
+        { 
+          $set: { 
+            'preferences': {
+              ...newPreferences,
+              lastUpdate: new Date()
+            }
+          }
+        },
+        { new: true, upsert: true }
+      );
+    } catch (error) {
+      console.error('Error actualizando preferencias:', error);
+      return null;
+    }
+  }
+
+  async shouldGenerateInsight(userId, contexto) {
+    try {
+      const perfil = await this.getOrCreateProfile(userId);
+      const ultimaInteraccion = perfil.metadata?.ultimaInteraccion;
+      const ahora = new Date();
+      
+      // Generar insight si:
+      // 1. Han pasado más de 24 horas desde la última interacción
+      // 2. Ha habido un cambio emocional significativo
+      // 3. Se han completado al menos 5 sesiones desde el último insight
+      
+      const horasDesdeUltimaInteraccion = ultimaInteraccion ? 
+        (ahora - new Date(ultimaInteraccion)) / (1000 * 60 * 60) : 24;
+
+      return horasDesdeUltimaInteraccion >= 24 || 
+             contexto?.emotional?.intensity >= 8 ||
+             (perfil.metadata?.sesionesCompletadas % 5 === 0);
+    } catch (error) {
+      console.error('Error evaluando generación de insight:', error);
+      return false;
+    }
+  }
+
+  async getEmotionalPatterns(userId) {
+    try {
+      const perfil = await this.getOrCreateProfile(userId);
+      const patronesEmocionales = perfil.patrones?.emocionales || [];
+      
+      // Analizar los últimos 7 días
+      const ultimaSemana = new Date();
+      ultimaSemana.setDate(ultimaSemana.getDate() - 7);
+      
+      const patronesRecientes = patronesEmocionales.filter(p => 
+        new Date(p.timestamp) >= ultimaSemana
+      );
+
+      return {
+        predominante: this.calcularEmocionPredominante(patronesRecientes),
+        intensidadPromedio: this.calcularIntensidadPromedio(patronesRecientes),
+        tendencia: this.calcularTendencia(patronesRecientes),
+        patrones: patronesRecientes
+      };
+    } catch (error) {
+      console.error('Error obteniendo patrones emocionales:', error);
+      return {
+        predominante: 'neutral',
+        intensidadPromedio: 5,
+        tendencia: 'estable',
+        patrones: []
+      };
+    }
+  }
+
+  calcularEmocionPredominante(patrones) {
+    if (!patrones.length) return 'neutral';
+    
+    const conteo = patrones.reduce((acc, p) => {
+      acc[p.emocion] = (acc[p.emocion] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(conteo)
+      .sort(([,a], [,b]) => b - a)[0][0];
+  }
+
+  calcularIntensidadPromedio(patrones) {
+    if (!patrones.length) return 5;
+    
+    const suma = patrones.reduce((acc, p) => acc + p.intensidad, 0);
+    return Math.round(suma / patrones.length);
+  }
+
+  calcularTendencia(patrones) {
+    if (patrones.length < 2) return 'estable';
+    
+    const ordenados = [...patrones].sort((a, b) => 
+      new Date(a.timestamp) - new Date(b.timestamp)
+    );
+
+    const primeraIntensidad = ordenados[0].intensidad;
+    const ultimaIntensidad = ordenados[ordenados.length - 1].intensidad;
+    
+    if (ultimaIntensidad - primeraIntensidad > 2) return 'ascendente';
+    if (primeraIntensidad - ultimaIntensidad > 2) return 'descendente';
+    return 'estable';
   }
 
   async actualizarPatronesConexion(userId) {

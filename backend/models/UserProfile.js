@@ -64,17 +64,19 @@ const userProfileSchema = new mongoose.Schema({
   preferences: {
     communicationStyle: {
       type: String,
-      enum: ['directo', 'empático', 'analítico', 'motivacional'],
-      default: 'empático'
+      enum: ['formal', 'casual', 'neutral', 'empático'],
+      default: 'neutral'
     },
     responseLength: {
       type: String,
-      enum: ['corto', 'medio', 'largo'],
-      default: 'medio'
+      enum: ['SHORT', 'MEDIUM', 'LONG'],
+      default: 'MEDIUM'
     },
-    topics: {
-      preferred: [String],
-      avoided: [String]
+    topicsOfInterest: [String],
+    triggerTopics: [String],
+    lastUpdate: {
+      type: Date,
+      default: Date.now
     }
   },
   progressMetrics: {
@@ -113,10 +115,45 @@ const userProfileSchema = new mongoose.Schema({
       saturday: { type: Number, default: 0 },
       sunday: { type: Number, default: 0 }
     }
+  },
+  patrones: {
+    emocionales: [{
+      emocion: String,
+      intensidad: Number,
+      timestamp: Date
+    }],
+    conexion: [{
+      horario: String,
+      duracion: Number,
+      fecha: Date
+    }],
+    temas: [{
+      tema: String,
+      frecuencia: Number,
+      ultimaVez: Date
+    }]
+  },
+  metadata: {
+    ultimaInteraccion: Date,
+    sesionesCompletadas: {
+      type: Number,
+      default: 0
+    },
+    progresoGeneral: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
+    ultimoContexto: mongoose.Schema.Types.Mixed
   }
 }, {
   timestamps: true
 });
+
+// Índices
+userProfileSchema.index({ userId: 1 }, { unique: true });
+userProfileSchema.index({ 'metadata.ultimaInteraccion': -1 });
 
 // Middleware para asegurar que la estructura existe
 userProfileSchema.pre('save', function(next) {
@@ -155,4 +192,6 @@ userProfileSchema.pre('save', function(next) {
   next();
 });
 
-export default mongoose.model('UserProfile', userProfileSchema); 
+const UserProfile = mongoose.models.UserProfile || mongoose.model('UserProfile', userProfileSchema);
+
+export default UserProfile; 
