@@ -365,9 +365,15 @@ export const userService = {
       console.error('Error en login:', error);
       throw error;
     }
+  },
+
+  recoverPassword: async (email) => {
+    try {
+      const response = await apiClient.post('/api/auth/recover-password', { email });
+      return response.data;
+    } catch (error) {
+      console.error('Error en recuperación de contraseña:', error);
+      throw error;
+    }
   }
 };
-
-export const handleApiError = (error) => {
-  // ... código existente del handleApiError ...
-}; 

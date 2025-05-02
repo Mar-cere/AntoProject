@@ -9,6 +9,7 @@ import ParticleBackground from '../components/ParticleBackground';
 import { api, ENDPOINTS, login } from '../config/api';
 import { ROUTES } from '../../constants/routes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 
 const SignInScreen = () => {
@@ -261,43 +262,46 @@ const SignInScreen = () => {
                     <Text style={styles.subTitleText}>Accede a tu cuenta</Text>
                   </View>
 
-                  <View style={styles.inputContainer}>
-                    <View style={styles.inputWrapper}>
+                  <View style={globalStyles.inputWrapper}>
+                    <View style={[
+                      globalStyles.inputContainer, 
+                      errors.email && globalStyles.inputError
+                    ]}>
+                      <Ionicons name="mail-outline" size={20} color={colors.primary} style={globalStyles.inputIcon} />
                       <TextInput
-                        style={[styles.input, errors.email ? styles.inputError : null]}
+                        style={globalStyles.input}
                         placeholder="Correo Electrónico"
-                        placeholderTextColor="#A3B8E8"
+                        placeholderTextColor={errors.email ? colors.error : colors.accent}
                         keyboardType="email-address"
                         autoCapitalize="none"
                         onChangeText={(text) => handleInputChange('email', text)}
                         value={formData.email}
+                        accessibilityLabel="Correo Electrónico"
                       />
-                      {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
                     </View>
-                    
-                    <View style={styles.inputWrapper}>
-                      <View style={[styles.passwordContainer, errors.password ? styles.inputError : null]}>
-                        <TextInput
-                          style={styles.passwordInput}
-                          placeholder="Contraseña"
-                          placeholderTextColor="#A3B8E8"
-                          secureTextEntry={!isPasswordVisible}
-                          onChangeText={(text) => handleInputChange('password', text)}
-                          value={formData.password}
-                        />
-                        <TouchableOpacity 
-                          onPress={() => setPasswordVisible(!isPasswordVisible)}
-                          style={styles.eyeIcon}
-                        >
-                          <Ionicons 
-                            name={isPasswordVisible ? "eye-off" : "eye"} 
-                            size={24} 
-                            color="#A3B8E8" 
-                          />
-                        </TouchableOpacity>
-                      </View>
-                      {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+                    {errors.email ? <Text style={globalStyles.errorText}>{errors.email}</Text> : null}
+                  </View>
+
+                  <View style={globalStyles.inputWrapper}>
+                    <View style={[
+                      globalStyles.inputContainer, 
+                      errors.password && globalStyles.inputError
+                    ]}>
+                      <Ionicons name="lock-closed-outline" size={20} color={colors.primary} style={globalStyles.inputIcon} />
+                      <TextInput
+                        style={globalStyles.input}
+                        placeholder="Contraseña"
+                        placeholderTextColor={colors.accent}
+                        secureTextEntry={!isPasswordVisible}
+                        onChangeText={(text) => handleInputChange('password', text)}
+                        value={formData.password}
+                        accessibilityLabel="Contraseña"
+                      />
+                      <TouchableOpacity onPress={() => setPasswordVisible(!isPasswordVisible)} style={globalStyles.inputIcon}>
+                        <Ionicons name={isPasswordVisible ? "eye-off" : "eye"} size={20} color={colors.accent} />
+                      </TouchableOpacity>
                     </View>
+                    {errors.password ? <Text style={globalStyles.errorText}>{errors.password}</Text> : null}
                   </View>
 
                   <View style={styles.buttonContainer}>
@@ -365,10 +369,7 @@ const SignInScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#030A24',
-  },
+  ...globalStyles,
   background: {
     flex: 1,
     width: '100%',
@@ -395,21 +396,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
-  },
-  titleText: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 5,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  subTitleText: {
-    fontSize: 20,
-    color: '#A3B8E8',
-    textAlign: 'center',
   },
   inputContainer: {
     width: '100%',
@@ -459,12 +445,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 5,
     marginLeft: 10,
-  },
-  buttonContainer: {
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
   },
   mainButton: {
     backgroundColor: 'rgba(26, 221, 219, 0.9)',

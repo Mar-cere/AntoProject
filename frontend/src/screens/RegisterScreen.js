@@ -10,6 +10,7 @@ import { ROUTES } from '../constants/routes';
 import { handleApiError, checkServerConnection } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkServerStatus } from '../utils/networkUtils';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 const RegisterScreen = ({ navigation }) => {
   // Referencias para animaciones
@@ -303,109 +304,104 @@ const RegisterScreen = ({ navigation }) => {
             <Text style={styles.subtitle}>Por favor, llena los campos para registrarte.</Text>
 
             {/* Campo de Username */}
-            <View style={styles.inputWrapper}>
-              <View style={styles.usernameContainer}>
-                <TextInput 
-                  style={[
-                    styles.input, 
-                    errors.username && styles.inputError,
-                    { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }
-                  ]} 
-                  placeholder="Nombre de usuario" 
-                  placeholderTextColor="#A3B8E8"
+            <View style={globalStyles.inputWrapper}>
+              <View style={[
+                globalStyles.inputContainer, 
+                errors.username && globalStyles.inputError
+              ]}>
+                <Ionicons name="person-outline" size={20} color={colors.primary} style={globalStyles.inputIcon} />
+                <TextInput
+                  style={globalStyles.input}
+                  placeholder="Nombre de usuario"
+                  placeholderTextColor={colors.accent}
                   autoCapitalize="none"
-                  onChangeText={(text) => handleInputChange('username', text)} 
-                  value={formData.username} 
+                  onChangeText={(text) => handleInputChange('username', text)}
+                  value={formData.username}
+                  accessibilityLabel="Nombre de usuario"
                 />
-                <TouchableOpacity 
-                  style={styles.infoButton}
-                  onPress={() => setShowInfo(!showInfo)}
-                >
-                  <Ionicons name="information-circle-outline" size={24} color="#A3B8E8" />
-                </TouchableOpacity>
               </View>
-              {errors.username && <Text style={styles.errorText}>{errors.username}</Text>}
-              
-              {showInfo && (
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoText}>
-                    • Tu nombre de usuario es único y se usará para generar tu identidad digital
-                  </Text>
-                  <Text style={styles.infoText}>
-                    • Solo letras minúsculas, números y guiones bajos (_)
-                  </Text>
-                  <Text style={styles.infoText}>
-                    • Entre 3 y 20 caracteres
-                  </Text>
-                  <Text style={styles.infoText}>
-                    • No podrás cambiarlo después
-                  </Text>
-                </View>
-              )}
+              {errors.username ? <Text style={globalStyles.errorText}>{errors.username}</Text> : null}
             </View>
 
             {/* Campo de Correo */}
-            <View style={styles.inputWrapper}>
-              <TextInput 
-                style={[styles.input, errors.email && styles.inputError]} 
-                placeholder="Correo Electrónico" 
-                placeholderTextColor="#A3B8E8"
-                keyboardType="email-address" 
-                autoCapitalize="none"
-                onChangeText={(text) => handleInputChange('email', text)} 
-                value={formData.email} 
-              />
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+            <View style={globalStyles.inputWrapper}>
+              <View style={[
+                globalStyles.inputContainer, 
+                errors.email && globalStyles.inputError
+              ]}>
+                <Ionicons name="mail-outline" size={20} color={colors.primary} style={globalStyles.inputIcon} />
+                <TextInput
+                  style={globalStyles.input}
+                  placeholder="Correo Electrónico"
+                  placeholderTextColor={colors.accent}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  onChangeText={(text) => handleInputChange('email', text)}
+                  value={formData.email}
+                  accessibilityLabel="Correo Electrónico"
+                />
+              </View>
+              {errors.email ? <Text style={globalStyles.errorText}>{errors.email}</Text> : null}
             </View>
 
             {/* Campo de Contraseña */}
-            <View style={styles.inputWrapper}>
-              <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
+            <View style={globalStyles.inputWrapper}>
+              <View style={[
+                globalStyles.inputContainer, 
+                errors.password && globalStyles.inputError
+              ]}>
+                <Ionicons name="lock-closed-outline" size={20} color={colors.primary} style={globalStyles.inputIcon} />
                 <TextInput
-                  style={styles.passwordInput}
+                  style={globalStyles.input}
                   placeholder="Contraseña"
-                  placeholderTextColor="#A3B8E8"
+                  placeholderTextColor={colors.accent}
                   secureTextEntry={!isPasswordVisible}
                   onChangeText={(text) => handleInputChange('password', text)}
                   value={formData.password}
+                  accessibilityLabel="Contraseña"
                 />
                 <TouchableOpacity 
                   onPress={() => setPasswordVisible(!isPasswordVisible)}
-                  style={styles.eyeIcon}
+                  style={globalStyles.eyeIcon}
                 >
                   <Ionicons 
                     name={isPasswordVisible ? "eye-off" : "eye"} 
                     size={24} 
-                    color="#A3B8E8" 
+                    color={colors.primary} 
                   />
                 </TouchableOpacity>
               </View>
-              {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+              {errors.password ? <Text style={globalStyles.errorText}>{errors.password}</Text> : null}
             </View>
             
             {/* Confirmación de Contraseña */}
-            <View style={styles.inputWrapper}>
-              <View style={[styles.passwordContainer, errors.confirmPassword && styles.inputError]}>
+            <View style={globalStyles.inputWrapper}>
+              <View style={[
+                globalStyles.inputContainer, 
+                errors.confirmPassword && globalStyles.inputError
+              ]}>
+                <Ionicons name="lock-closed-outline" size={20} color={colors.primary} style={globalStyles.inputIcon} />
                 <TextInput 
-                  style={styles.passwordInput} 
+                  style={globalStyles.input} 
                   placeholder="Confirma tu Contraseña" 
-                  placeholderTextColor="#A3B8E8"
+                  placeholderTextColor={colors.accent}
                   secureTextEntry={!isConfirmPasswordVisible}
                   onChangeText={(text) => handleInputChange('confirmPassword', text)} 
                   value={formData.confirmPassword} 
+                  accessibilityLabel="Confirma tu Contraseña"
                 />
                 <TouchableOpacity 
                   onPress={() => setConfirmPasswordVisible(!isConfirmPasswordVisible)}
-                  style={styles.eyeIcon}
+                  style={globalStyles.eyeIcon}
                 >
                   <Ionicons 
                     name={isConfirmPasswordVisible ? "eye-off" : "eye"} 
                     size={24} 
-                    color="#A3B8E8" 
+                    color={colors.primary} 
                   />
                 </TouchableOpacity>
               </View>
-              {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+              {errors.confirmPassword ? <Text style={globalStyles.errorText}>{errors.confirmPassword}</Text> : null}
             </View>
             
             {/* Términos y condiciones */}
@@ -421,25 +417,26 @@ const RegisterScreen = ({ navigation }) => {
                 Acepto los <Text style={styles.termsLink} onPress={() => Alert.alert('Términos y Condiciones', 'Aquí irían los términos y condiciones de la aplicación.')}>términos y condiciones</Text>.
               </Text>
             </TouchableOpacity>
-            {errors.terms && <Text style={styles.errorText}>{errors.terms}</Text>}
+            {errors.terms && <Text style={globalStyles.errorText}>{errors.terms}</Text>}
 
             {/* Botón de registro */}
-            <Animated.View style={{ transform: [{ scale: buttonScale }], width: '100%' }}>
-              <TouchableOpacity 
-                style={[styles.button, isSubmitting && styles.disabledButton]} 
-                onPress={handleRegister} 
-                disabled={isSubmitting}
-                activeOpacity={0.7}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.buttonText}>Registrarse</Text>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity
+              style={[globalStyles.modernButton, isSubmitting && globalStyles.disabledButton]}
+              onPress={handleRegister}
+              disabled={isSubmitting}
+              activeOpacity={0.85}
+              accessibilityLabel="Registrarse"
+              testID="registerButton"
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="person-add-outline" size={22} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={globalStyles.buttonText}>Registrarse</Text>
+                </>
+              )}
+            </TouchableOpacity>
             
             {/* Link a inicio de sesión */}
             <TouchableOpacity 

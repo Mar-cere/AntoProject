@@ -15,6 +15,7 @@ import AnimatedButton from '../components/AnimatedButton';
 import EmotionBanner from '../components/EmotionBanner';
 import emotions from '../data/emotions';
 import { ROUTES } from '../../constants/routes';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -30,19 +31,13 @@ const HomeScreen = () => {
   useEffect(() => {
     setTimeout(() => {
       setIsLoading(false);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateYAnim, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: true,
-        })
+      Animated.sequence([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(translateYAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+        Animated.spring(buttonScale, { toValue: 1.1, friction: 3, useNativeDriver: true }),
+        Animated.spring(buttonScale, { toValue: 1, friction: 3, useNativeDriver: true }),
       ]).start();
-    }, 1500);
+    }, 1000);
   }, []);
 
   // Función para manejar la navegación
@@ -141,10 +136,8 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#030A24',
-  },
+  ...globalStyles,
+
   background: {
     flex: 1,
     resizeMode: 'cover',
@@ -168,38 +161,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 50,
   },
-  titleText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 10,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  subTitleText: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    opacity: 0.8,
-  },
-  buttonContainer: {
-    width: '100%',
-    alignItems: 'center',
-  },
   footerContainer: {
     position: 'absolute',
     bottom: 40,
     width: '100%',
     alignItems: 'center',
-  },
-  FQText: {
-    fontSize: 15,
-    color: '#1ADDDB',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    marginTop: 10,
   },
 });
 

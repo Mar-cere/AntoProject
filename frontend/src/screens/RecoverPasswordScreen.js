@@ -10,6 +10,7 @@ import ParticleBackground from '../components/ParticleBackground';
 import { userService } from '../services/userService';
 import { ROUTES } from '../../constants/routes';
 import { handleApiError } from '../config/api';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 const RecoverPasswordScreen = ({ navigation }) => {
   // Referencias para animaciones
@@ -125,35 +126,48 @@ const RecoverPasswordScreen = ({ navigation }) => {
               Introduce tu correo electrónico y te enviaremos un código de verificación para recuperar tu contraseña.
             </Text>
 
-            <View style={styles.inputWrapper}>
-              <TextInput 
-                style={[styles.input, error && styles.inputError]} 
-                placeholder="Correo Electrónico" 
-                placeholderTextColor="#A3B8E8"
-                keyboardType="email-address" 
-                autoCapitalize="none"
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text.toLowerCase().trim());
-                  setError('');
-                }}
-              />
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            <View style={globalStyles.inputWrapper}>
+              <View style={[
+                globalStyles.inputContainer, 
+                error && globalStyles.inputError
+              ]}>
+                <Ionicons name="mail-outline" size={20} color={colors.primary} style={globalStyles.inputIcon} />
+                <TextInput 
+                  style={globalStyles.input}
+                  placeholder="Correo Electrónico" 
+                  placeholderTextColor={colors.accent}
+                  keyboardType="email-address" 
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text.toLowerCase().trim());
+                    setError('');
+                  }}
+                  accessibilityLabel="Correo Electrónico"
+                  testID="recoverEmailInput"
+                />
+              </View>
+              {error ? <Text style={globalStyles.errorText}>{error}</Text> : null}
             </View>
 
             <Animated.View style={{ transform: [{ scale: buttonScale }], width: '100%' }}>
               <TouchableOpacity 
-                style={[styles.button, isSubmitting && styles.disabledButton]} 
+                style={[globalStyles.modernButton, isSubmitting && globalStyles.disabledButton]} 
                 onPress={handleRecoverPassword} 
                 disabled={isSubmitting}
                 activeOpacity={0.7}
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
+                accessibilityLabel="Enviar Código"
+                testID="sendCodeButton"
               >
                 {isSubmitting ? (
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
-                  <Text style={styles.buttonText}>Enviar Código</Text>
+                  <>
+                    <Ionicons name="send-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                    <Text style={globalStyles.buttonText}>Enviar Código</Text>
+                  </>
                 )}
               </TouchableOpacity>
             </Animated.View>
@@ -220,56 +234,6 @@ const styles = StyleSheet.create({
     color: '#A3B8E8',
     marginBottom: 30, 
     textAlign: 'center',
-  },
-  inputWrapper: {
-    width: '100%',
-    marginBottom: 25,
-  },
-  input: {
-    width: '100%',
-    backgroundColor: '#1D2B5F',
-    borderRadius: 10,
-    paddingVertical: 15,
-    fontSize: 18, 
-    color: '#FFFFFF',
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  inputError: {
-    borderColor: '#FF6B6B',
-    borderWidth: 1,
-  },
-  errorText: {
-    color: '#FF6B6B',
-    fontSize: 14,
-    marginTop: 8,
-    marginLeft: 5,
-  },
-  button: {
-    backgroundColor: 'rgba(26, 221, 219, 0.9)',
-    paddingVertical: 18, 
-    borderRadius: 25, 
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 15,
-    marginBottom: 16, 
-    paddingHorizontal: 50,
-    shadowColor: '#1ADDDB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 5,
-    maxWidth: 300,
-    alignSelf: 'center',
-  },
-  buttonText: {
-    color: '#FFF',
-    fontSize: 18, 
-    fontWeight: 'bold',
-  },
-  disabledButton: {
-    backgroundColor: 'rgba(26, 221, 219, 0.5)',
   },
   linkContainer: {
     marginTop: 20,

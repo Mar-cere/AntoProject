@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { authenticateToken } from '../middleware/auth.js';
 import User from '../models/User.js';
 import crypto from 'crypto';
+import mailer from '../config/mailer.js';
 
 const router = express.Router();
 
@@ -181,6 +182,42 @@ router.post('/login', async (req, res) => {
       message: 'Error al iniciar sesión' 
     });
   }
+});
+
+// Ruta para recuperar contraseña
+router.post('/recover-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        
+        // Verificar si el usuario existe
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ 
+                message: 'No existe una cuenta con este correo electrónico' 
+            });
+        }
+
+        // Generar código de verificación
+        const verificationCode = crypto.randomInt(100000, 999999).toString();
+        
+        // Guardar el código en el usuario
+        user.resetPasswordCode = verificationCode;
+        user.resetPasswordExpires = Date.now() + 600000; // 10 minutos
+        await user.save();
+
+        // Enviar correo con el código
+        await mailer.sendVerificationCode(email, verificationCode);
+
+        res.json({ 
+            message: 'Se ha enviado un código de verificación a tu correo' 
+        });
+
+    } catch (error) {
+        console.error('Error en recuperación de contraseña:', error);
+        res.status(500).json({ 
+            message: 'Error al procesar la solicitud' 
+        });
+    }
 });
 
 export default router;
