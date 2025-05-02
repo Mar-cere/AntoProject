@@ -18,14 +18,49 @@ const emailTemplates = {
   verificationCode: (code) => ({
     subject: 'Código de Verificación - AntoApp',
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Verificación de Cuenta</h2>
-        <p>Tu código de verificación es:</p>
-        <h1 style="color: #4CAF50; font-size: 32px; text-align: center; padding: 20px;">
-          ${code}
-        </h1>
-        <p>Este código expirará en 10 minutos.</p>
-        <p>Si no solicitaste este código, por favor ignora este correo.</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <!-- Encabezado con gradiente -->
+        <div style="background: linear-gradient(135deg, #1D2B5F 0%, #1ADDDB 100%); padding: 30px; border-radius: 15px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+          <h1 style="color: #FFFFFF; text-align: center; margin: 0; font-size: 28px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
+            Código de Verificación
+          </h1>
+        </div>
+
+        <!-- Contenedor principal con efecto glassmorphism -->
+        <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 30px; border-radius: 15px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15); border: 1px solid rgba(255, 255, 255, 0.18);">
+          <p style="color: #1D2B5F; font-size: 16px; line-height: 1.6; margin-bottom: 25px; text-align: center;">
+            Tu código de verificación para recuperar tu contraseña es:
+          </p>
+
+          <!-- Código con estilo moderno -->
+          <div style="background: linear-gradient(135deg, #1D2B5F 0%, #1ADDDB 100%); padding: 3px; border-radius: 12px; margin: 30px 0;">
+            <div style="background: white; padding: 20px; border-radius: 10px;">
+              <h2 style="color: #1D2B5F; font-size: 36px; text-align: center; letter-spacing: 8px; margin: 0; font-weight: bold;">
+                ${code}
+              </h2>
+            </div>
+          </div>
+
+          <!-- Información adicional -->
+          <div style="margin-top: 25px; text-align: center;">
+            <p style="color: #666; font-size: 14px; line-height: 1.6; margin-bottom: 10px;">
+              Este código expirará en <span style="color: #1D2B5F; font-weight: bold;">10 minutos</span>.
+            </p>
+            <p style="color: #666; font-size: 14px; line-height: 1.6;">
+              Si no solicitaste este código, por favor ignora este correo.
+            </p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; margin-top: 30px;">
+          <p style="color: #888; font-size: 12px;">
+            Este es un correo automático, por favor no respondas a este mensaje.
+          </p>
+          <p style="color: #888; font-size: 12px; margin-top: 5px;">
+            © ${new Date().getFullYear()} AntoApp. Todos los derechos reservados.
+          </p>
+        </div>
       </div>
     `
   }),
@@ -65,7 +100,7 @@ const emailTemplates = {
           <ul style="color: #333; font-size: 16px; line-height: 1.5;">
             <li>Organizar tus tareas diarias de forma eficiente ✅</li>
             <li>Desarrollar hábitos positivos para tu crecimiento personal 🌱</li>
-            <li>Interactuar con nuestro asistente AI para maximizar tu productividad ��</li>
+            <li>Interactuar con nuestro asistente AI para maximizar tu productividad 🤖</li>
             <li>Hacer seguimiento de tu progreso con estadísticas detalladas 📊</li>
           </ul>
 
