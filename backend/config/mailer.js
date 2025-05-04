@@ -19,17 +19,17 @@ const emailTemplates = {
     subject: 'Código de Verificación - AntoApp',
     html: `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background: #f3f7fa;">
-        <!-- Encabezado con gradiente y logo -->
-        <div style="background: linear-gradient(135deg, #1D2B5F 0%, #1ADDDB 100%); padding: 32px 0 24px 0; border-radius: 0 0 32px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); text-align: center;">
-          <img src="https://i.imgur.com/1ADDDB.png" alt="AntoApp Logo" style="width: 64px; height: 64px; margin-bottom: 12px;" />
-          <h1 style="color: #fff; margin: 0; font-size: 2.2rem; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,0.10);">
+        <!-- Encabezado con gradiente oscuro y logo -->
+        <div style="background: linear-gradient(135deg, #0A1533 0%, #1D2B5F 60%, #1ADDDB 100%); padding: 36px 0 24px 0; border-radius: 0 0 32px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); text-align: center;">
+          <img src="https://res.cloudinary.com/dfmmn3hqw/image/upload/v1746325071/Anto_nnrwjr.png" alt="AntoApp Logo" style="width: 64px; height: 64px; margin-bottom: 12px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.10);" />
+          <h1 style="color: #fff; margin: 0; font-size: 2.2rem; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,0.15);">
             Código de Verificación
           </h1>
         </div>
 
         <!-- Contenedor principal con efecto glassmorphism -->
-        <div style="background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); margin: -24px 24px 24px 24px; padding: 32px 24px; border-radius: 18px; box-shadow: 0 8px 32px rgba(31,38,135,0.10); border: 1px solid rgba(255,255,255,0.18);">
-          <p style="color: #1D2B5F; font-size: 1.1rem; line-height: 1.7; margin-bottom: 28px; text-align: center;">
+        <div style="background: rgba(20, 28, 56, 0.92); backdrop-filter: blur(12px); margin: -24px 24px 24px 24px; padding: 32px 24px; border-radius: 18px; box-shadow: 0 8px 32px rgba(31,38,135,0.10); border: 1px solid rgba(255,255,255,0.10);">
+          <p style="color: #fff; font-size: 1.1rem; line-height: 1.7; margin-bottom: 28px; text-align: center;">
             ¡Hola!<br>
             Tu código de verificación para recuperar tu contraseña es:
           </p>
@@ -44,10 +44,10 @@ const emailTemplates = {
           </div>
 
           <div style="margin-top: 24px; text-align: center;">
-            <p style="color: #666; font-size: 1rem; margin-bottom: 8px;">
+            <p style="color: #A3B8E8; font-size: 1rem; margin-bottom: 8px;">
               Este código expirará en <span style="color: #1ADDDB; font-weight: bold;">10 minutos</span>.
             </p>
-            <p style="color: #888; font-size: 0.95rem;">
+            <p style="color: #A3B8E8; font-size: 0.95rem;">
               Si no solicitaste este código, puedes ignorar este correo.
             </p>
           </div>
