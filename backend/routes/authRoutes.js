@@ -223,32 +223,27 @@ router.post('/recover-password', async (req, res) => {
 router.post('/verify-code', async (req, res) => {
   try {
     const { email, code } = req.body;
-
-    // Validar campos
-    if (!email || !code) {
-      return res.status(400).json({ message: 'Email y código son requeridos' });
-    }
+    console.log('Verificando código para:', email, 'Código recibido:', code);
 
     // Buscar usuario
     const user = await User.findOne({ email });
     if (!user) {
+      console.log('Usuario no encontrado');
       return res.status(404).json({ message: 'No existe una cuenta con este correo electrónico' });
     }
 
-    // Verificar código y expiración
+    console.log('Código guardado:', user.resetPasswordCode);
+    console.log('Expira en:', new Date(user.resetPasswordExpires), 'Ahora:', new Date());
+
     if (
       !user.resetPasswordCode ||
       !user.resetPasswordExpires ||
       user.resetPasswordCode !== code ||
       user.resetPasswordExpires < Date.now()
     ) {
+      console.log('Código inválido o expirado');
       return res.status(400).json({ message: 'Código inválido o expirado' });
     }
-
-    // Opcional: puedes limpiar el código para que no se reutilice
-    // user.resetPasswordCode = undefined;
-    // user.resetPasswordExpires = undefined;
-    // await user.save();
 
     res.json({ message: 'Código verificado correctamente' });
   } catch (error) {
