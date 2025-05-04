@@ -18,47 +18,46 @@ const emailTemplates = {
   verificationCode: (code) => ({
     subject: 'Código de Verificación - AntoApp',
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-        <!-- Encabezado con gradiente -->
-        <div style="background: linear-gradient(135deg, #1D2B5F 0%, #1ADDDB 100%); padding: 30px; border-radius: 15px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-          <h1 style="color: #FFFFFF; text-align: center; margin: 0; font-size: 28px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background: #f3f7fa;">
+        <!-- Encabezado con gradiente y logo -->
+        <div style="background: linear-gradient(135deg, #1D2B5F 0%, #1ADDDB 100%); padding: 32px 0 24px 0; border-radius: 0 0 32px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); text-align: center;">
+          <img src="https://i.imgur.com/1ADDDB.png" alt="AntoApp Logo" style="width: 64px; height: 64px; margin-bottom: 12px;" />
+          <h1 style="color: #fff; margin: 0; font-size: 2.2rem; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,0.10);">
             Código de Verificación
           </h1>
         </div>
 
         <!-- Contenedor principal con efecto glassmorphism -->
-        <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 30px; border-radius: 15px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15); border: 1px solid rgba(255, 255, 255, 0.18);">
-          <p style="color: #1D2B5F; font-size: 16px; line-height: 1.6; margin-bottom: 25px; text-align: center;">
+        <div style="background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); margin: -24px 24px 24px 24px; padding: 32px 24px; border-radius: 18px; box-shadow: 0 8px 32px rgba(31,38,135,0.10); border: 1px solid rgba(255,255,255,0.18);">
+          <p style="color: #1D2B5F; font-size: 1.1rem; line-height: 1.7; margin-bottom: 28px; text-align: center;">
+            ¡Hola!<br>
             Tu código de verificación para recuperar tu contraseña es:
           </p>
 
           <!-- Código con estilo moderno -->
-          <div style="background: linear-gradient(135deg, #1D2B5F 0%, #1ADDDB 100%); padding: 3px; border-radius: 12px; margin: 30px 0;">
-            <div style="background: white; padding: 20px; border-radius: 10px;">
-              <h2 style="color: #1D2B5F; font-size: 36px; text-align: center; letter-spacing: 8px; margin: 0; font-weight: bold;">
+          <div style="background: linear-gradient(135deg, #1D2B5F 0%, #1ADDDB 100%); padding: 4px; border-radius: 14px; margin: 32px 0;">
+            <div style="background: white; padding: 24px 0; border-radius: 12px;">
+              <span style="display: block; color: #1D2B5F; font-size: 2.5rem; text-align: center; letter-spacing: 12px; font-weight: bold; font-family: 'Segoe UI Mono', 'Menlo', 'Monaco', monospace;">
                 ${code}
-              </h2>
+              </span>
             </div>
           </div>
 
-          <!-- Información adicional -->
-          <div style="margin-top: 25px; text-align: center;">
-            <p style="color: #666; font-size: 14px; line-height: 1.6; margin-bottom: 10px;">
-              Este código expirará en <span style="color: #1D2B5F; font-weight: bold;">10 minutos</span>.
+          <div style="margin-top: 24px; text-align: center;">
+            <p style="color: #666; font-size: 1rem; margin-bottom: 8px;">
+              Este código expirará en <span style="color: #1ADDDB; font-weight: bold;">10 minutos</span>.
             </p>
-            <p style="color: #666; font-size: 14px; line-height: 1.6;">
-              Si no solicitaste este código, por favor ignora este correo.
+            <p style="color: #888; font-size: 0.95rem;">
+              Si no solicitaste este código, puedes ignorar este correo.
             </p>
           </div>
         </div>
 
         <!-- Footer -->
-        <div style="text-align: center; margin-top: 30px;">
-          <p style="color: #888; font-size: 12px;">
-            Este es un correo automático, por favor no respondas a este mensaje.
-          </p>
-          <p style="color: #888; font-size: 12px; margin-top: 5px;">
-            © ${new Date().getFullYear()} AntoApp. Todos los derechos reservados.
+        <div style="text-align: center; margin: 0 24px 24px 24px;">
+          <p style="color: #A3B8E8; font-size: 0.95rem; margin: 0;">
+            Este es un correo automático, por favor no respondas a este mensaje.<br>
+            © ${new Date().getFullYear()} <span style="color: #1ADDDB;">AntoApp</span>. Todos los derechos reservados.
           </p>
         </div>
       </div>
