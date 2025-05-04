@@ -95,7 +95,9 @@ const userSchema = new mongoose.Schema({
   totalPoints: {
     type: Number,
     default: 0
-  }
+  },
+  resetPasswordCode: String,
+  resetPasswordExpires: Date,
 }, {
   timestamps: true
 });
