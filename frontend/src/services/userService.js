@@ -375,5 +375,15 @@ export const userService = {
       console.error('Error en recuperación de contraseña:', error);
       throw error;
     }
+  },
+
+  verifyCode: async (email, code) => {
+    try {
+      const response = await apiClient.post('/api/auth/verify-code', { email, code });
+      return response.data;
+    } catch (error) {
+      console.error('Error al verificar código:', error);
+      throw error;
+    }
   }
 };

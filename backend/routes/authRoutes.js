@@ -220,4 +220,41 @@ router.post('/recover-password', async (req, res) => {
     }
 });
 
+router.post('/verify-code', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    // Validar campos
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email y código son requeridos' });
+    }
+
+    // Buscar usuario
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'No existe una cuenta con este correo electrónico' });
+    }
+
+    // Verificar código y expiración
+    if (
+      !user.resetPasswordCode ||
+      !user.resetPasswordExpires ||
+      user.resetPasswordCode !== code ||
+      user.resetPasswordExpires < Date.now()
+    ) {
+      return res.status(400).json({ message: 'Código inválido o expirado' });
+    }
+
+    // Opcional: puedes limpiar el código para que no se reutilice
+    // user.resetPasswordCode = undefined;
+    // user.resetPasswordExpires = undefined;
+    // await user.save();
+
+    res.json({ message: 'Código verificado correctamente' });
+  } catch (error) {
+    console.error('Error al verificar código:', error);
+    res.status(500).json({ message: 'Error al verificar el código' });
+  }
+});
+
 export default router;
