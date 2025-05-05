@@ -385,5 +385,15 @@ export const userService = {
       console.error('Error al verificar código:', error);
       throw error;
     }
+  },
+
+  resetPassword: async (email, code, newPassword) => {
+    try {
+      const response = await apiClient.post('/api/auth/reset-password', { email, code, newPassword });
+      return response.data;
+    } catch (error) {
+      console.error('Error al restablecer contraseña:', error);
+      throw error;
+    }
   }
 };

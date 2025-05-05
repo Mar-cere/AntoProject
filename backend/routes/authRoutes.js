@@ -252,4 +252,42 @@ router.post('/verify-code', async (req, res) => {
   }
 });
 
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    // Validar campos
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ message: 'Todos los campos son requeridos' });
+    }
+
+    // Buscar usuario
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'No existe una cuenta con este correo electrónico' });
+    }
+
+    // Verificar código y expiración
+    if (
+      !user.resetPasswordCode ||
+      !user.resetPasswordExpires ||
+      user.resetPasswordCode !== code ||
+      user.resetPasswordExpires < Date.now()
+    ) {
+      return res.status(400).json({ message: 'Código inválido o expirado' });
+    }
+
+    // Cambiar la contraseña (usa el método de tu modelo para hashear)
+    user.password = newPassword; // Si tienes un método para hashear, úsalo aquí
+    user.resetPasswordCode = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Contraseña restablecida correctamente' });
+  } catch (error) {
+    console.error('Error al restablecer contraseña:', error);
+    res.status(500).json({ message: 'Error al restablecer la contraseña' });
+  }
+});
+
 export default router;
