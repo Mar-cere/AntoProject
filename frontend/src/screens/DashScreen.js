@@ -21,7 +21,7 @@ import { usePoints } from '../components/Points';
 import { API_URL } from '../config/api';
 import DashboardScroll from '../components/DashboardScroll';
 import PomodoroCard from '../components/PomodoroCard';
-import NetInfo from '@react-native-community/netinfo';
+import { getGreetingByHour } from '../utils/greetings';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -121,10 +121,7 @@ const DashScreen = () => {
       ]);
 
       // Actualizar el saludo
-      const currentHour = new Date().getHours();
-      const greeting = currentHour < 12 ? 'Buenos días' :
-                      currentHour < 18 ? 'Buenas tardes' :
-                      'Buenas noches';
+      const greeting = getGreetingByHour();
 
       setState(prev => ({
         ...prev,
