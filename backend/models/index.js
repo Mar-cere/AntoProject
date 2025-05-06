@@ -5,7 +5,6 @@ import UserProgress from './UserProgress.js';
 import UserInsight from './UserInsight.js';
 import Journal from './Journal.js';
 import User from './User.js';
-import Achievement from './Achievement.js';
 import Habit from './Habit.js';
 import Task from './Task.js';
 import UserGoals from './UserGoals.js';
@@ -19,7 +18,6 @@ const models = {
   UserInsight,
   Journal,
   User,
-  Achievement,
   Habit,
   Task,
   UserGoals
@@ -40,7 +38,6 @@ export {
   UserInsight,
   Journal,
   User,
-  Achievement,
   Habit,
   Task,
   UserGoals

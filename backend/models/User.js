@@ -10,7 +10,6 @@
  */
 import mongoose from 'mongoose';
 import crypto from 'crypto';
-import { ACHIEVEMENTS } from '../config/achievements.js';
 
 const userSchema = new mongoose.Schema({
   id: {
@@ -85,17 +84,6 @@ const userSchema = new mongoose.Schema({
       default: Date.now
     }
   },
-  achievements: [{
-    id: String,
-    unlockedAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  totalPoints: {
-    type: Number,
-    default: 0
-  },
   resetPasswordCode: String,
   resetPasswordExpires: Date,
 }, {
@@ -123,20 +111,6 @@ userSchema.methods.toJSON = function() {
   delete obj.salt;
   delete obj.__v;
   return obj;
-};
-
-// Método para desbloquear un logro
-userSchema.methods.unlockAchievement = async function(achievementId) {
-  if (!this.achievements.some(a => a.id === achievementId)) {
-    this.achievements.push({
-      id: achievementId,
-      unlockedAt: new Date()
-    });
-    this.totalPoints += ACHIEVEMENTS[achievementId].points;
-    await this.save();
-    return true;
-  }
-  return false;
 };
 
 const User = mongoose.model('User', userSchema);
