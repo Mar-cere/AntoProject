@@ -13,13 +13,13 @@ const greetingsRepertoire = {
   ],
   mediodia: [
     "Buen mediodía",
-    "¡Hola al mediodía!",
+    "¡Hola!",
     "Pausa y respira",
     "Mitad del día, ¡ánimo!"
   ],
   tarde: [
     "Buenas tardes",
-    "¡Hola en la tarde!",
+    "¡Hola!",
     "Sigue adelante esta tarde",
     "Aquí para ti esta tarde"
   ],

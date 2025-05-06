@@ -18,32 +18,6 @@ import * as ImagePicker from 'expo-image-picker';
 import FloatingNavBar from '../components/FloatingNavBar';
 import { ROUTES } from '../constants/routes';
 
-const LEVEL_CONFIG = {
-  BASE_XP: 100,
-  XP_INCREASE: 50, // Cada nivel requiere 50 XP más que el anterior
-  MAX_LEVEL: 50
-};
-
-const calculateLevelInfo = (points) => {
-  let level = 1;
-  let remainingPoints = points;
-  let requiredXP = LEVEL_CONFIG.BASE_XP;
-  
-  while (remainingPoints >= requiredXP && level < LEVEL_CONFIG.MAX_LEVEL) {
-    remainingPoints -= requiredXP;
-    level++;
-    requiredXP = LEVEL_CONFIG.BASE_XP + (LEVEL_CONFIG.XP_INCREASE * (level - 1));
-  }
-
-  const progress = remainingPoints / requiredXP;
-  
-  return {
-    level,
-    currentXP: remainingPoints,
-    requiredXP,
-    progress: Math.min(progress, 1)
-  };
-};
 
 const ProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -62,13 +36,10 @@ const ProfileScreen = ({ navigation }) => {
       habitsStreak: 0,
       lastActive: null
     },
-    achievements: [],
-    totalPoints: 0
   });
   const [stats, setStats] = useState({
     tasksCompleted: 0,
     habitsActive: 0,
-    achievementsUnlocked: 0,
     currentStreak: 0,
     bestStreak: 0,
   });
@@ -79,8 +50,6 @@ const ProfileScreen = ({ navigation }) => {
     habitsActive: 0,
     habitsCompleted: 0,
     totalHabits: 0,
-    achievementsUnlocked: 0,
-    totalAchievements: 0,
     currentStreak: 0,
     bestStreak: 0,
     lastActive: null
@@ -104,7 +73,6 @@ const ProfileScreen = ({ navigation }) => {
       // Calculamos estadísticas detalladas
       setDetailedStats({
         ...detailedStats,
-        achievementsUnlocked: userData.achievements.length,
         currentStreak: userData.stats.habitsStreak,
         lastActive: userData.stats.lastActive
       });
@@ -126,40 +94,6 @@ const ProfileScreen = ({ navigation }) => {
     setRefreshing(true);
     loadUserData();
   }, []);
-
-  const calculateLevel = (points) => {
-    return Math.floor(points / 100) + 1;
-  };
-
-  const calculateProgress = (points) => {
-    return (points % 100) / 100;
-  };
-
-  const handleAvatarChange = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'Necesitamos permisos para acceder a tu galería');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-      });
-
-      if (!result.canceled) {
-        const newUserData = { ...userData, avatar: result.assets[0].uri };
-        await AsyncStorage.setItem('userData', JSON.stringify(newUserData));
-        setUserData(newUserData);
-      }
-    } catch (error) {
-      console.error('Error al cambiar avatar:', error);
-      Alert.alert('Error', 'No se pudo actualizar la imagen de perfil');
-    }
-  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -200,8 +134,6 @@ const ProfileScreen = ({ navigation }) => {
                   habitsStreak: 0,
                   lastActive: null
                 },
-                achievements: [],
-                totalPoints: 0
               });
 
               // Navegar a la pantalla de inicio de sesión usando la constante de ruta
@@ -223,8 +155,6 @@ const ProfileScreen = ({ navigation }) => {
       ]
     );
   };
-
-  const levelInfo = calculateLevelInfo(userData.totalPoints);
 
   if (loading) {
     return (
@@ -271,10 +201,7 @@ const ProfileScreen = ({ navigation }) => {
 
           {/* Perfil Principal */}
           <View style={styles.profileSection}>
-            <TouchableOpacity 
-              style={styles.avatarContainer}
-              onPress={handleAvatarChange}
-            >
+            <View style={styles.avatarContainer}>
               {userData.avatar ? (
                 <Image 
                   source={{ uri: userData.avatar }} 
@@ -285,31 +212,9 @@ const ProfileScreen = ({ navigation }) => {
                   <MaterialCommunityIcons name="account" size={40} color="#A3B8E8" />
                 </View>
               )}
-              <View style={styles.editAvatarButton}>
-                <MaterialCommunityIcons name="camera" size={16} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
+            </View>
             <Text style={styles.userName}>{userData.username}</Text>
             <Text style={styles.userEmail}>{userData.email}</Text>
-            
-            {/* Nivel y Progreso Mejorado */}
-            <View style={styles.levelContainer}>
-              <Text style={styles.levelText}>Nivel {levelInfo.level}</Text>
-              <View style={styles.progressBarContainer}>
-                <View 
-                  style={[
-                    styles.progressBar,
-                    { width: `${levelInfo.progress * 100}%` }
-                  ]} 
-                />
-              </View>
-              <Text style={styles.pointsText}>
-                {levelInfo.currentXP} / {levelInfo.requiredXP} XP
-              </Text>
-              <Text style={styles.totalPointsText}>
-                Total: {userData.totalPoints} puntos
-              </Text>
-            </View>
           </View>
 
           {/* Estadísticas actualizadas */}
@@ -330,16 +235,6 @@ const ProfileScreen = ({ navigation }) => {
                 <Text style={styles.statLabel}>Hábitos Activos</Text>
                 <Text style={styles.statSubLabel}>
                   {detailedStats.habitsCompleted} completados hoy
-                </Text>
-              </View>
-              <View style={styles.statItem}>
-                <MaterialCommunityIcons name="trophy" size={24} color="#FF6B6B" />
-                <Text style={styles.statValue}>
-                  {userData.achievements.length}/{detailedStats.totalAchievements}
-                </Text>
-                <Text style={styles.statLabel}>Logros Desbloqueados</Text>
-                <Text style={styles.statSubLabel}>
-                  {Math.round((userData.achievements.length / detailedStats.totalAchievements) * 100)}% completado
                 </Text>
               </View>
               <View style={styles.statItem}>
@@ -384,6 +279,7 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </ScrollView>
       </ImageBackground>
+      <FloatingNavBar />
     </SafeAreaView>
   );
 };
@@ -447,17 +343,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#1ADDDB',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   userName: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -468,34 +353,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#A3B8E8',
     marginBottom: 16,
-  },
-  levelContainer: {
-    alignItems: 'center',
-    width: '100%',
-    marginTop: 8,
-  },
-  levelText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1ADDDB',
-    marginBottom: 8,
-  },
-  progressBarContainer: {
-    width: '80%',
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#1ADDDB',
-    borderRadius: 3,
-  },
-  pointsText: {
-    fontSize: 14,
-    color: '#A3B8E8',
   },
   statsContainer: {
     padding: 16,

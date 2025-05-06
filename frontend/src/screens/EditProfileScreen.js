@@ -10,12 +10,14 @@ import {
   ActivityIndicator,
   ImageBackground,
   SafeAreaView,
-  Animated
+  Animated,
+  Image
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 
 const EditProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -24,12 +26,14 @@ const EditProfileScreen = ({ navigation }) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [formData, setFormData] = useState({
+    avatar: null,
     name: '',
     username: '',
     email: '',
     notifications: true,
     theme: 'light'
   });
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const [errors, setErrors] = useState({});
   const [fadeAnim] = useState(new Animated.Value(0));
 
@@ -72,6 +76,7 @@ const EditProfileScreen = ({ navigation }) => {
       const userData = await response.json();
       
       setFormData({
+        avatar: userData.avatar || null,
         name: userData.name || '',
         username: userData.username || '',
         email: userData.email || '',
@@ -79,12 +84,29 @@ const EditProfileScreen = ({ navigation }) => {
         theme: userData.preferences?.theme || 'light'
       });
 
+      if (userData.avatar) {
+        const url = await fetchAvatarUrl(userData.avatar, token);
+        setAvatarUrl(url);
+      } else {
+        setAvatarUrl(null);
+      }
+
     } catch (error) {
       console.error('Error al cargar datos:', error);
       handleError(error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchAvatarUrl = async (publicId, token) => {
+    const res = await fetch(`${API_URL}/api/users/avatar-url/${publicId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const data = await res.json();
+    return data.url;
   };
 
   const handleError = (error) => {
@@ -158,6 +180,7 @@ const EditProfileScreen = ({ navigation }) => {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          avatar: formData.avatar,
           name: formData.name.trim(),
           email: formData.email.trim(),
           preferences: {
@@ -175,6 +198,13 @@ const EditProfileScreen = ({ navigation }) => {
       const updatedUser = await response.json();
       await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
       
+      if (updatedUser.avatar) {
+        const url = await fetchAvatarUrl(updatedUser.avatar, token);
+        setAvatarUrl(url);
+      } else {
+        setAvatarUrl(null);
+      }
+
       Alert.alert(
         'Éxito',
         'Perfil actualizado correctamente',
@@ -234,6 +264,55 @@ const EditProfileScreen = ({ navigation }) => {
     handleFormChange('theme', formData.theme === 'light' ? 'dark' : 'light');
   }, [editing, formData.theme]);
 
+  const handleAvatarChange = async () => {
+    if (!editing) return;
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permiso requerido', 'Se necesita acceso a la galería para cambiar la foto de perfil.');
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const publicId = await uploadImageToCloudinary(result.assets[0].uri);
+      setFormData(prev => ({
+        ...prev,
+        avatar: publicId
+      }));
+      const token = await checkSession();
+      const url = await fetchAvatarUrl(publicId, token);
+      setAvatarUrl(url);
+      setHasChanges(true);
+    }
+  };
+
+  const uploadImageToCloudinary = async (imageUri) => {
+    const data = new FormData();
+    data.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'avatar.jpg',
+    });
+    data.append('upload_preset', 'Anto Avatar'); // Debe ser de tipo 'authenticated'
+    data.append('type', 'authenticated'); // Hace la imagen privada
+
+    const res = await fetch('https://api.cloudinary.com/v1_1/dfmmn3hqw/image/upload', {
+      method: 'POST',
+      body: data,
+    });
+    const file = await res.json();
+    if (!file.public_id) {
+      throw new Error('No se pudo subir la imagen. Intenta nuevamente.');
+    }
+    return file.public_id; // Guarda el public_id, no la URL
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -281,9 +360,33 @@ const EditProfileScreen = ({ navigation }) => {
 
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <MaterialCommunityIcons name="account-circle" size={80} color="#1ADDDB" />
-            </View>
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={handleAvatarChange}
+              disabled={!editing}
+              activeOpacity={editing ? 0.7 : 1}
+            >
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={{ width: 100, height: 100, borderRadius: 50 }}
+                />
+              ) : (
+                <MaterialCommunityIcons name="account-circle" size={80} color="#1ADDDB" />
+              )}
+              {editing && (
+                <View style={{
+                  position: 'absolute',
+                  bottom: 8,
+                  right: 8,
+                  backgroundColor: '#1ADDDB',
+                  borderRadius: 12,
+                  padding: 4,
+                }}>
+                  <MaterialCommunityIcons name="camera" size={20} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
             <Text style={styles.profileName}>{formData.name || ""}</Text>
             <Text style={styles.profileUsername}>@{formData.username}</Text>
           </View>
@@ -320,14 +423,19 @@ const EditProfileScreen = ({ navigation }) => {
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Correo Electrónico</Text>
-              <TextInput
-                style={[styles.input, errors.email && styles.inputError]}
-                value={formData.email}
-                onChangeText={(text) => handleFormChange('email', text)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                editable={editing}
-              />
+              <View style={styles.inputWrapper}>
+                <MaterialCommunityIcons name="email" size={20} color="#A3B8E8" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.input, errors.email && styles.inputError]}
+                  value={formData.email}
+                  onChangeText={(text) => handleFormChange('email', text)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  editable={editing}
+                  placeholder="Correo electrónico"
+                  placeholderTextColor="#A3B8E8"
+                />
+              </View>
               {errors.email && (
                 <Text style={styles.errorText}>{errors.email}</Text>
               )}
@@ -574,6 +682,15 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#1ADDDB',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1D2B5F',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.1)',
   },
 });
 

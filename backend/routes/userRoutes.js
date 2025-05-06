@@ -1,6 +1,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import { authenticateToken } from '../middleware/auth.js';
+import cloudinary from 'cloudinary';
 
 const router = express.Router();
 
@@ -43,6 +44,23 @@ router.put('/me', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error al actualizar usuario:', error);
     res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/avatar-url/:publicId', authenticateToken, async (req, res) => {
+  try {
+    const { publicId } = req.params;
+    // Opcional: verifica que el usuario tenga permiso para ver este avatar
+
+    const url = cloudinary.url(publicId, {
+      type: 'authenticated',
+      sign_url: true,
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 5 // 5 minutos de validez
+    });
+
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: 'Error generando URL de avatar' });
   }
 });
 
