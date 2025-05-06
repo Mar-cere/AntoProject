@@ -277,8 +277,11 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'Código inválido o expirado' });
     }
 
-    // Cambiar la contraseña (usa el método de tu modelo para hashear)
-    user.password = newPassword; // Si tienes un método para hashear, úsalo aquí
+    // Hashear la nueva contraseña igual que en el registro
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(newPassword, salt, 1000, 64, 'sha512').toString('hex');
+    user.password = hash;
+    user.salt = salt;
     user.resetPasswordCode = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
