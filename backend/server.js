@@ -22,7 +22,6 @@ import habitRoutes from './routes/habitRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
-import achievementRoutes from './routes/achievementRoutes.js';
 import journalRoutes from './routes/journalRoutes.js';
 
 // Configuración de variables de entorno
@@ -68,7 +67,6 @@ app.use('/api/habits', habitRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
-app.use('/api/achievements', achievementRoutes);
 app.use('/api/journal', journalRoutes);
 
 // Ruta de health check
@@ -83,7 +81,6 @@ app.get('/health', (req, res) => {
       users: 'active',
       auth: 'active',
       chat: 'active',
-      achievements: 'active',
       journal: 'active'
     },
     version: '1.2.0'
