@@ -85,28 +85,33 @@ const emailTemplates = {
   welcomeEmail: (username) => ({
     subject: '¡Bienvenido a AntoApp! 🎉',
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-        <div style="background-color: #1D2B5F; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-          <h1 style="color: #1ADDDB; text-align: center; margin: 0;">¡Bienvenido a AntoApp, ${username}! 🎉</h1>
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background: #f3f7fa;">
+        <!-- Encabezado con gradiente oscuro y logo -->
+        <div style="background: linear-gradient(135deg, #0A1533 0%, #1D2B5F 60%, #1ADDDB 100%); padding: 36px 0 24px 0; border-radius: 0 0 32px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); text-align: center;">
+          <img src="https://res.cloudinary.com/dfmmn3hqw/image/upload/v1746325071/Anto_nnrwjr.png" alt="AntoApp Logo" style="width: 64px; height: 64px; margin-bottom: 12px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.10);" />
+          <h1 style="color: #fff; margin: 0; font-size: 2.2rem; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+            ¡Bienvenido a AntoApp, ${username}! 🎉
+          </h1>
         </div>
-        
-        <div style="background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          <p style="font-size: 16px; line-height: 1.5; color: #333;">
+
+        <!-- Contenedor principal con efecto glassmorphism -->
+        <div style="background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); margin: -24px 24px 24px 24px; padding: 32px 24px; border-radius: 18px; box-shadow: 0 8px 32px rgba(31,38,135,0.10); border: 1px solid rgba(255,255,255,0.18);">
+          <p style="color: #1D2B5F; font-size: 1.1rem; line-height: 1.7; margin-bottom: 28px; text-align: center;">
             ¡Gracias por unirte a nuestra comunidad! Estamos emocionados de tenerte con nosotros.
           </p>
           
-          <h2 style="color: #1D2B5F; margin-top: 20px;">Con AntoApp podrás:</h2>
-          <ul style="color: #333; font-size: 16px; line-height: 1.5;">
+          <h2 style="color: #1ADDDB; margin-top: 20px; text-align: center;">Con AntoApp podrás:</h2>
+          <ul style="color: #333; font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
             <li>Organizar tus tareas diarias de forma eficiente ✅</li>
             <li>Desarrollar hábitos positivos para tu crecimiento personal 🌱</li>
             <li>Interactuar con nuestro asistente AI para maximizar tu productividad 🤖</li>
             <li>Hacer seguimiento de tu progreso con estadísticas detalladas 📊</li>
           </ul>
 
-          <p style="font-size: 16px; line-height: 1.5; color: #333; margin-top: 20px;">
+          <p style="font-size: 16px; line-height: 1.5; color: #1D2B5F; margin-top: 20px; text-align: center;">
             ¿Listo para comenzar? Aquí hay algunos consejos para empezar:
           </p>
-          <ol style="color: #333; font-size: 16px; line-height: 1.5;">
+          <ol style="color: #333; font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
             <li>Configura tu perfil personal</li>
             <li>Crea tu primera tarea</li>
             <li>Establece un hábito que quieras desarrollar</li>
@@ -115,14 +120,18 @@ const emailTemplates = {
 
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #666; font-size: 14px;">
-              Si tienes alguna pregunta o sugerencia, no dudes en contactarnos.
+              Si tienes alguna pregunta o sugerencia, no dudes en contactarnos.<br>
               ¡Estamos aquí para ayudarte en tu camino hacia una mejor organización y productividad!
             </p>
           </div>
         </div>
         
-        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 12px;">
-          <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+        <!-- Footer -->
+        <div style="text-align: center; margin: 0 24px 24px 24px;">
+          <p style="color: #A3B8E8; font-size: 0.95rem; margin: 0;">
+            Este es un correo automático, por favor no respondas a este mensaje.<br>
+            © ${new Date().getFullYear()} <span style="color: #1ADDDB;">AntoApp</span>. Todos los derechos reservados.
+          </p>
         </div>
       </div>
     `
@@ -180,28 +189,33 @@ const mailer = {
         to: email,
         subject: '¡Bienvenido a AntoApp! 🎉',
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-            <div style="background-color: #1D2B5F; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-              <h1 style="color: #1ADDDB; text-align: center; margin: 0;">¡Bienvenido a AntoApp, ${username}! 🎉</h1>
+          <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background: #f3f7fa;">
+            <!-- Encabezado con gradiente oscuro y logo -->
+            <div style="background: linear-gradient(135deg, #0A1533 0%, #1D2B5F 60%, #1ADDDB 100%); padding: 36px 0 24px 0; border-radius: 0 0 32px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); text-align: center;">
+              <img src="https://res.cloudinary.com/dfmmn3hqw/image/upload/v1746325071/Anto_nnrwjr.png" alt="AntoApp Logo" style="width: 64px; height: 64px; margin-bottom: 12px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.10);" />
+              <h1 style="color: #fff; margin: 0; font-size: 2.2rem; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                ¡Bienvenido a AntoApp, ${username}! ��
+              </h1>
             </div>
-            
-            <div style="background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-              <p style="font-size: 16px; line-height: 1.5; color: #333;">
+
+            <!-- Contenedor principal con efecto glassmorphism -->
+            <div style="background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); margin: -24px 24px 24px 24px; padding: 32px 24px; border-radius: 18px; box-shadow: 0 8px 32px rgba(31,38,135,0.10); border: 1px solid rgba(255,255,255,0.18);">
+              <p style="color: #1D2B5F; font-size: 1.1rem; line-height: 1.7; margin-bottom: 28px; text-align: center;">
                 ¡Gracias por unirte a nuestra comunidad! Estamos emocionados de tenerte con nosotros.
               </p>
               
-              <h2 style="color: #1D2B5F; margin-top: 20px;">Con AntoApp podrás:</h2>
-              <ul style="color: #333; font-size: 16px; line-height: 1.5;">
+              <h2 style="color: #1ADDDB; margin-top: 20px; text-align: center;">Con AntoApp podrás:</h2>
+              <ul style="color: #333; font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
                 <li>Organizar tus tareas diarias de forma eficiente ✅</li>
                 <li>Desarrollar hábitos positivos para tu crecimiento personal 🌱</li>
                 <li>Interactuar con nuestro asistente AI para maximizar tu productividad 🤖</li>
                 <li>Hacer seguimiento de tu progreso con estadísticas detalladas 📊</li>
               </ul>
 
-              <p style="font-size: 16px; line-height: 1.5; color: #333; margin-top: 20px;">
+              <p style="font-size: 16px; line-height: 1.5; color: #1D2B5F; margin-top: 20px; text-align: center;">
                 ¿Listo para comenzar? Aquí hay algunos consejos para empezar:
               </p>
-              <ol style="color: #333; font-size: 16px; line-height: 1.5;">
+              <ol style="color: #333; font-size: 16px; line-height: 1.5; margin-bottom: 20px;">
                 <li>Configura tu perfil personal</li>
                 <li>Crea tu primera tarea</li>
                 <li>Establece un hábito que quieras desarrollar</li>
@@ -210,14 +224,18 @@ const mailer = {
 
               <div style="text-align: center; margin-top: 30px;">
                 <p style="color: #666; font-size: 14px;">
-                  Si tienes alguna pregunta o sugerencia, no dudes en contactarnos.
+                  Si tienes alguna pregunta o sugerencia, no dudes en contactarnos.<br>
                   ¡Estamos aquí para ayudarte en tu camino hacia una mejor organización y productividad!
                 </p>
               </div>
             </div>
             
-            <div style="text-align: center; margin-top: 20px; color: #666; font-size: 12px;">
-              <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+            <!-- Footer -->
+            <div style="text-align: center; margin: 0 24px 24px 24px;">
+              <p style="color: #A3B8E8; font-size: 0.95rem; margin: 0;">
+                Este es un correo automático, por favor no respondas a este mensaje.<br>
+                © ${new Date().getFullYear()} <span style="color: #1ADDDB;">AntoApp</span>. Todos los derechos reservados.
+              </p>
             </div>
           </div>
         `

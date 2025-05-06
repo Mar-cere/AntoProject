@@ -84,6 +84,13 @@ router.post('/register', async (req, res) => {
 
     await Promise.race([savePromise, timeoutPromise]);
 
+    // Enviar correo de bienvenida
+    try {
+      await mailer.sendWelcomeEmail(email, username);
+    } catch (e) {
+      console.error('No se pudo enviar el correo de bienvenida:', e);
+    }
+
     // Generar token
     console.log('🎟️ Generando token...');
     const token = jwt.sign(
