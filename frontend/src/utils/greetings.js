@@ -1,48 +1,61 @@
 const greetingsRepertoire = {
   madrugada: [
-    "¡Hola! Espero que estés bien a esta hora",
-    "¡Hola noctámbulo! Aquí estoy para escucharte",
-    "¡Hola! ¿Necesitas desahogarte a esta hora?",
-    "¡Hola! Recuerda que siempre puedes contar con Anto, sin importar la hora"
+    "Aquí estoy para ti",
+    "¿Despierto a esta hora? Cuenta conmigo",
+    "Siempre disponible, incluso de madrugada",
+    "Un abrazo nocturno"
   ],
   mañana: [
     "Buenos días",
-    "¡Buen día! Que tengas una jornada positiva",
-    "¡Hola! ¿Listo para un nuevo día?",
-    "¡Buenos días! Hoy es un buen día para cuidar de ti"
+    "¡Buen día!",
+    "¡Hola! Que tengas un gran día",
+    "Energía para hoy"
   ],
   mediodia: [
     "Buen mediodía",
-    "¡Hola! ¿Cómo va tu día hasta ahora?",
-    "¡Buen mediodía! Tómate un momento para respirar",
-    "¡Hola! Recuerda hacer una pausa y cuidarte"
+    "¡Hola al mediodía!",
+    "Pausa y respira",
+    "Mitad del día, ¡ánimo!"
   ],
   tarde: [
     "Buenas tardes",
-    "¡Hola! Espero que tu tarde sea tranquila",
-    "¡Buenas tardes! ¿Cómo te sientes hoy?",
-    "¡Hola! Aquí estoy para acompañarte esta tarde"
+    "¡Hola en la tarde!",
+    "Sigue adelante esta tarde",
+    "Aquí para ti esta tarde"
   ],
   noche: [
     "Buenas noches",
-    "¡Hola! Espero que tengas una noche reparadora",
-    "¡Buenas noches! Es un buen momento para reflexionar",
-    "¡Hola! Si necesitas hablar antes de dormir, aquí estoy"
+    "Que descanses",
+    "Aquí si necesitas hablar",
+    "Noche tranquila"
   ]
 };
 
-export function getGreetingByHour(hour = new Date().getHours()) {
+const diasSemana = [
+  "domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"
+];
+
+export function getGreetingByHourAndDayAndName({ hour = new Date().getHours(), dayIndex = new Date().getDay(), userName = "" } = {}) {
+  let baseGreeting = '';
   if (hour >= 0 && hour < 6) {
-    return randomFromArray(greetingsRepertoire.madrugada);
+    baseGreeting = randomFromArray(greetingsRepertoire.madrugada);
   } else if (hour >= 6 && hour < 12) {
-    return randomFromArray(greetingsRepertoire.mañana);
+    baseGreeting = randomFromArray(greetingsRepertoire.mañana);
   } else if (hour >= 12 && hour < 14) {
-    return randomFromArray(greetingsRepertoire.mediodia);
+    baseGreeting = randomFromArray(greetingsRepertoire.mediodia);
   } else if (hour >= 14 && hour < 19) {
-    return randomFromArray(greetingsRepertoire.tarde);
+    baseGreeting = randomFromArray(greetingsRepertoire.tarde);
   } else {
-    return randomFromArray(greetingsRepertoire.noche);
+    baseGreeting = randomFromArray(greetingsRepertoire.noche);
   }
+
+  const dia = diasSemana[dayIndex];
+
+  // Saludo breve y personalizado, día en nueva línea
+  if (userName) {
+    return `${baseGreeting}, ${userName}.\nFeliz ${dia}`;
+  }
+  return `${baseGreeting}.\nFeliz ${dia}`;
 }
 
 function randomFromArray(arr) {

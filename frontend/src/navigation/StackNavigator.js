@@ -12,7 +12,6 @@ import VerifyCodeScreen from '../screens/VerifyCodeScreen';
 import NewPasswordScreen from '../screens/NewPasswordScreen';
 import TaskScreen from '../screens/TaskScreen';
 import HabitsScreen from '../screens/HabitsScreen';
-import AchievementsScreen from '../screens/AchievementsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import JournalScreen from '../screens/JournalScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
@@ -45,7 +44,6 @@ const StackNavigator = () => {
       <Stack.Screen name={ROUTES.NEW_PASSWORD} component={NewPasswordScreen} />
       <Stack.Screen name="Tasks" component={TaskScreen} />
       <Stack.Screen name="Habits" component={HabitsScreen} />
-      <Stack.Screen name="Achievements" component={AchievementsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Journal" component={JournalScreen} />
       <Stack.Screen 

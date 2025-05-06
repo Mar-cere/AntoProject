@@ -11,33 +11,16 @@ import * as Haptics from 'expo-haptics';
 import ParticleBackground from '../components/ParticleBackground';
 import TaskCard from '../components/TaskCard';
 import HabitCard from '../components/HabitCard';
-import AchievementCard from '../components/AchievementCard';
-import motivationalQuotes from '../data/quotes';
 import FloatingNavBar from '../components/FloatingNavBar';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import QuoteSection from '../components/QuoteSection';
-import { usePoints } from '../components/Points';
 import { API_URL } from '../config/api';
 import DashboardScroll from '../components/DashboardScroll';
 import PomodoroCard from '../components/PomodoroCard';
-import { getGreetingByHour } from '../utils/greetings';
+import { getGreetingByHourAndDayAndName } from '../utils/greetings';
 
 const screenWidth = Dimensions.get('window').width;
-
-// Constantes
-const POINTS = {
-  COMPLETE_TASK: 10,
-  MAINTAIN_HABIT: 20,
-  UNLOCK_ACHIEVEMENT: 50
-};
-
-const ACHIEVEMENTS = [
-  { id: '1', title: 'Primer Paso', description: 'Completa tu primera tarea', points: 50, icon: '🏆', unlocked: false },
-  { id: '2', title: 'Constancia', description: 'Mantén un hábito por 7 días', points: 100, icon: '🔄', unlocked: false },
-  { id: '3', title: 'Productividad', description: 'Completa 10 tareas en una semana', points: 150, icon: '⚡', unlocked: false },
-  { id: '4', title: 'Maestría', description: 'Alcanza el 100% en un hábito', points: 200, icon: '🌟', unlocked: false },
-];
 
 // Constante para caché
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutos
@@ -69,7 +52,6 @@ const ErrorMessage = ({ message, onRetry, onDismiss }) => (
 
 const DashScreen = () => {
   const navigation = useNavigation();
-  const { points, addPoints } = usePoints(0);
   
   const [state, setState] = useState({
     loading: true,
@@ -78,7 +60,6 @@ const DashScreen = () => {
     userData: null,
     tasks: [],
     habits: [],
-    achievements: [],
     greeting: ''
   });
 
@@ -117,11 +98,15 @@ const DashScreen = () => {
         fetchWithSafeResponse(`${API_URL}/api/users/me`),
         fetchWithSafeResponse(`${API_URL}/api/tasks`),
         fetchWithSafeResponse(`${API_URL}/api/habits`),
-        fetchWithSafeResponse(`${API_URL}/api/achievements`)
       ]);
 
       // Actualizar el saludo
-      const greeting = getGreetingByHour();
+      const now = new Date();
+      const greeting = getGreetingByHourAndDayAndName({
+        hour: now.getHours(),
+        dayIndex: now.getDay(),
+        userName: userData?.username || ""
+      });
 
       setState(prev => ({
         ...prev,
@@ -130,7 +115,6 @@ const DashScreen = () => {
         userData: userData || {},
         tasks: Array.isArray(tasks) ? tasks : [],
         habits: Array.isArray(habits) ? habits : [],
-        achievements: Array.isArray(achievements) ? achievements : [],
         greeting,
         error: null
       }));
@@ -175,8 +159,6 @@ const DashScreen = () => {
         <View style={styles.headerFixed}>
           <Header 
             greeting={state.greeting}
-            userName={state.userData?.username}
-            userPoints={points}
             userAvatar={state.userData?.avatar}
           />
         </View>
@@ -203,7 +185,6 @@ const DashScreen = () => {
             tasks={state.tasks}
             onComplete={async (taskId) => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              await addPoints(POINTS.COMPLETE_TASK, 'complete_task');
               loadData(true);
             }}
           />
@@ -212,21 +193,12 @@ const DashScreen = () => {
             habits={state.habits}
             onUpdate={async (habitId) => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              await addPoints(POINTS.MAINTAIN_HABIT, 'maintain_habit');
               loadData(true);
             }}
           />
           
           <PomodoroCard />
 
-          <AchievementCard 
-            achievements={state.achievements}
-            onUnlock={async (achievementId) => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              await addPoints(POINTS.UNLOCK_ACHIEVEMENT, 'unlock_achievement');
-              loadData(true);
-            }}
-          />
         </DashboardScroll>
         
         <FloatingNavBar activeTab="home" />
@@ -334,20 +306,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
-  },
-  pointsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 4,
-  },
-  pointsText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
   avatarContainer: {
     borderWidth: 2,
