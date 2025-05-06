@@ -70,6 +70,7 @@ const EditProfileScreen = ({ navigation }) => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.log('Error de backend:', errorData);
         throw new Error(errorData.message || 'Error al obtener datos del usuario');
       }
 
@@ -192,6 +193,7 @@ const EditProfileScreen = ({ navigation }) => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.log('Error de backend:', errorData);
         throw new Error(errorData.message || 'Error al actualizar el perfil');
       }
 
@@ -273,7 +275,7 @@ const EditProfileScreen = ({ navigation }) => {
     }
 
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType.IMAGE,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,

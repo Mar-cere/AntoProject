@@ -24,7 +24,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 // Actualizar perfil del usuario
 router.put('/me', authenticateToken, async (req, res) => {
   const updates = Object.keys(req.body);
-  const allowedUpdates = ['name', 'username', 'email', 'preferences'];
+  const allowedUpdates = ['name', 'username', 'email', 'preferences', 'avatar'];
   const isValidOperation = updates.every(update => allowedUpdates.includes(update));
 
   if (!isValidOperation) {
