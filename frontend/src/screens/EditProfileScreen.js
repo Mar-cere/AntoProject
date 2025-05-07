@@ -268,51 +268,67 @@ const EditProfileScreen = ({ navigation }) => {
 
   const handleAvatarChange = async () => {
     if (!editing) return;
+    console.log('Abriendo picker');
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log('Permiso galería:', permissionResult);
     if (!permissionResult.granted) {
       Alert.alert('Permiso requerido', 'Se necesita acceso a la galería para cambiar la foto de perfil.');
       return;
     }
 
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.IMAGE,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      console.log('Resultado del picker:', result);
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const publicId = await uploadImageToCloudinary(result.assets[0].uri);
-      setFormData(prev => ({
-        ...prev,
-        avatar: publicId
-      }));
-      const token = await checkSession();
-      const url = await fetchAvatarUrl(publicId, token);
-      setAvatarUrl(url);
-      setHasChanges(true);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const publicId = await uploadImageToCloudinary(result.assets[0].uri);
+        setFormData(prev => ({
+          ...prev,
+          avatar: publicId
+        }));
+        const token = await checkSession();
+        const url = await fetchAvatarUrl(publicId, token);
+        setAvatarUrl(url);
+        setHasChanges(true);
+      }
+    } catch (e) {
+      console.log('Error al abrir picker:', e);
     }
   };
 
   const uploadImageToCloudinary = async (imageUri) => {
+    const sigData = await getCloudinarySignature();
     const data = new FormData();
     data.append('file', {
       uri: imageUri,
       type: 'image/jpeg',
       name: 'avatar.jpg',
     });
-    data.append('upload_preset', 'Anto Avatar'); // Debe ser de tipo 'authenticated'
-    data.append('type', 'authenticated'); // Hace la imagen privada
+    data.append('api_key', sigData.apiKey);
+    data.append('timestamp', sigData.timestamp);
+    data.append('upload_preset', sigData.uploadPreset);
+    data.append('signature', sigData.signature);
 
-    const res = await fetch('https://api.cloudinary.com/v1_1/dfmmn3hqw/image/upload', {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`, {
       method: 'POST',
       body: data,
     });
     const file = await res.json();
+    console.log('Respuesta de Cloudinary:', file);
     if (!file.public_id) {
       throw new Error('No se pudo subir la imagen. Intenta nuevamente.');
     }
-    return file.public_id; // Guarda el public_id, no la URL
+    return file.public_id;
+  };
+
+  const getCloudinarySignature = async () => {
+    const res = await fetch(`${API_URL}/api/cloudinary/signature`, { method: 'POST' });
+    return await res.json();
   };
 
   if (loading) {

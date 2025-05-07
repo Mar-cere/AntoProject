@@ -23,6 +23,7 @@ import userRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import journalRoutes from './routes/journalRoutes.js';
+import cloudinaryRoutes from './routes/cloudinary.js';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -68,6 +69,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/journal', journalRoutes);
+app.use('/api/cloudinary', cloudinaryRoutes);
 
 // Ruta de health check
 app.get('/health', (req, res) => {
