@@ -335,26 +335,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  avatarContainer: {
-    borderWidth: 2,
-    borderColor: '#1ADDDB',
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1D2B5F',
-  },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1D2B5F',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',

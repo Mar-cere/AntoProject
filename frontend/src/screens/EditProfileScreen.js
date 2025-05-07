@@ -318,6 +318,7 @@ const EditProfileScreen = ({ navigation }) => {
     data.append('timestamp', sigData.timestamp);
     data.append('upload_preset', sigData.uploadPreset);
     data.append('signature', sigData.signature);
+    data.append('type', 'authenticated');
 
     const res = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`, {
       method: 'POST',

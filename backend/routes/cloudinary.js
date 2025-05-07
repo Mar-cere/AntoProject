@@ -7,7 +7,8 @@ router.post('/signature', (req, res) => {
   const timestamp = Math.round((new Date).getTime()/1000);
   const paramsToSign = {
     timestamp,
-    upload_preset: 'Anto Avatar'
+    upload_preset: 'Anto Avatar',
+    type: 'authenticated'
   };
   const signature = cloudinary.v2.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET);
 
