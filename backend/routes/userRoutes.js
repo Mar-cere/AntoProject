@@ -5,6 +5,12 @@ import cloudinary from 'cloudinary';
 
 const router = express.Router();
 
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 // Ruta para obtener datos del usuario actual
 router.get('/me', authenticateToken, async (req, res) => {
   try {
@@ -57,9 +63,10 @@ router.get('/avatar-url/:publicId', authenticateToken, async (req, res) => {
       sign_url: true,
       expires_at: Math.floor(Date.now() / 1000) + 60 * 5 // 5 minutos de validez
     });
-
+    console.log('URL firmada generada:', url);
     res.json({ url });
   } catch (err) {
+    console.error('Error generando URL de avatar:', err);
     res.status(500).json({ error: 'Error generando URL de avatar' });
   }
 });

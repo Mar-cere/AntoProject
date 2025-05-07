@@ -101,13 +101,18 @@ const EditProfileScreen = ({ navigation }) => {
   };
 
   const fetchAvatarUrl = async (publicId, token) => {
-    const res = await fetch(`${API_URL}/api/users/avatar-url/${publicId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    const data = await res.json();
-    return data.url;
+    if (!publicId) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/users/avatar-url/${publicId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      console.log('Respuesta avatar-url:', data);
+      return data.url;
+    } catch (e) {
+      console.log('Error obteniendo avatar:', e);
+      return null;
+    }
   };
 
   const handleError = (error) => {

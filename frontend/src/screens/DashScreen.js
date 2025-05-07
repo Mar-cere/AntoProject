@@ -50,6 +50,20 @@ const ErrorMessage = ({ message, onRetry, onDismiss }) => (
   </View>
 );
 
+const fetchAvatarUrl = async (publicId, token) => {
+  if (!publicId) return null;
+  try {
+    const res = await fetch(`${API_URL}/api/users/avatar-url/${publicId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    return data.url;
+  } catch (e) {
+    console.log('Error obteniendo avatar:', e);
+    return null;
+  }
+};
+
 const DashScreen = () => {
   const navigation = useNavigation();
   
@@ -62,6 +76,8 @@ const DashScreen = () => {
     habits: [],
     greeting: ''
   });
+
+  const [avatarUrl, setAvatarUrl] = useState(null);
 
   // Función para cargar datos
   const loadData = useCallback(async (forceRefresh = false) => {
@@ -100,6 +116,14 @@ const DashScreen = () => {
         fetchWithSafeResponse(`${API_URL}/api/habits`),
       ]);
 
+      console.log('userData.avatar:', userData?.avatar);
+
+      // Obtener la URL firmada del avatar si existe
+      let avatarUrl = null;
+      if (userData?.avatar) {
+        avatarUrl = await fetchAvatarUrl(userData.avatar, token);
+      }
+
       // Actualizar el saludo
       const now = new Date();
       const greeting = getGreetingByHourAndDayAndName({
@@ -107,6 +131,8 @@ const DashScreen = () => {
         dayIndex: now.getDay(),
         userName: userData?.username || ""
       });
+
+      setAvatarUrl(avatarUrl);
 
       setState(prev => ({
         ...prev,
@@ -146,6 +172,8 @@ const DashScreen = () => {
     );
   }
 
+  console.log('Avatar en header:', avatarUrl);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#030A24" />
@@ -159,7 +187,7 @@ const DashScreen = () => {
         <View style={styles.headerFixed}>
           <Header 
             greeting={state.greeting}
-            userAvatar={state.userData?.avatar}
+            userAvatar={avatarUrl}
           />
         </View>
 
