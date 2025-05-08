@@ -3,6 +3,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import StackNavigator from "./src/navigation/StackNavigator";
 import { Linking } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 export default function App() {
   // Usar una referencia al navegador en lugar de useNavigation
@@ -44,6 +45,21 @@ export default function App() {
       }
     }
   };
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notificación recibida:', notification);
+    });
+
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Respuesta a notificación:', response);
+    });
+
+    return () => {
+      subscription.remove();
+      responseSubscription.remove();
+    };
+  }, []);
 
   return (
     <SafeAreaProvider>

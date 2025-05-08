@@ -39,7 +39,7 @@ const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
           navigation.navigate('Journal');
           break;
         case 'Settings':
-          navigation.navigate('Profile');
+          navigation.navigate('Settings');
           break;
         case 'Chat':
           navigation.navigate('Chat');

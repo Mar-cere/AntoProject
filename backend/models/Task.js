@@ -24,6 +24,9 @@ const taskSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  completedAt: {
+    type: Date
+  },
   // Nuevo campo para distinguir entre tareas y recordatorios
   itemType: {
     type: String,
@@ -45,6 +48,10 @@ const taskSchema = new mongoose.Schema({
       type: Date
     }
   },
+  notifications: [{
+    enabled: { type: Boolean, default: false },
+    time: { type: Date }
+  }],
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -57,6 +64,11 @@ const taskSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  repeat: {
+    type: String,
+    enum: ['none', 'daily', 'weekly', 'monthly'],
+    default: 'none'
   }
 });
 

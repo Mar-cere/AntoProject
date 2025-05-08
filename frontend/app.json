@@ -1,22 +1,38 @@
 {
   "expo": {
-    "name": "ProyectoAnto",
-    "slug": "ProyectoAnto",
+    "name": "Anto",
+    "slug": "anto",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#030A24"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.yourapp",
-      "infoPlist": {
-        "NSFaceIDUsageDescription": "ProyectoAnto necesita usar Face ID para autenticar tu identidad de forma segura",
-        "LSApplicationQueriesSchemes": ["face-id"]
-      }
+      "bundleIdentifier": "com.antoapp.anto"
     },
     "android": {
-      "package": "com.yourcompany.yourapp"
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#030A24"
+      },
+      "package": "com.antoapp.anto",
     },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#1ADDDB",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Anto",
+      "iosDisplayInForeground": true
+    },
+    "newArchEnabled": true,
     "plugins": [
     ],
     "experiments": {

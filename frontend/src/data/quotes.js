@@ -1,7 +1,3 @@
-/**
- * Colección de frases motivacionales para mostrar en la aplicación
- * Estas frases están diseñadas para inspirar, motivar y ofrecer perspectivas positivas
- */
 const quotes = [
   // Frases originales
   "El único modo de hacer un gran trabajo es amar lo que haces.",
@@ -71,7 +67,65 @@ const quotes = [
   "La autenticidad es la práctica diaria de soltar quién pensamos que deberíamos ser y abrazar quiénes somos.",
   "Cuando eres fiel a ti mismo, todo encaja naturalmente.",
   "Tu tiempo es limitado, no lo desperdicies viviendo la vida de alguien más.",
-  "La mayor libertad es ser tú mismo."
+  "La mayor libertad es ser tú mismo.",
+
+  // Nuevas categorías y frases
+
+  // Frases sobre confianza
+  "La confianza en ti mismo es el primer secreto del éxito.",
+  "Cree en ti mismo y todo será posible.",
+  "La confianza no viene de tener todas las respuestas, sino de estar abierto a todas las preguntas.",
+  "Tu potencial es ilimitado cuando crees en ti mismo.",
+  "La confianza es el puente entre el pensamiento y la acción.",
+
+  // Frases sobre perseverancia
+  "La perseverancia es el trabajo duro que haces después de cansarte del trabajo duro que ya hiciste.",
+  "El éxito no es final, el fracaso no es fatal: lo que cuenta es el coraje para continuar.",
+  "La perseverancia es el secreto de todos los triunfos.",
+  "No te rindas, las mejores cosas de la vida suelen ocurrir justo cuando estás a punto de darte por vencido.",
+  "La perseverancia transforma el fracaso en logro extraordinario.",
+
+  // Frases sobre gratitud
+  "La gratitud convierte lo que tenemos en suficiente.",
+  "La gratitud es la memoria del corazón.",
+  "Cuando damos gracias por lo que tenemos, siempre tenemos más por lo que dar gracias.",
+  "La gratitud es la mejor actitud.",
+  "La vida es un regalo, y la gratitud es la forma de abrirlo.",
+
+  // Frases sobre cambio
+  "El cambio es inevitable, el crecimiento es opcional.",
+  "El cambio comienza cuando decides ser diferente.",
+  "No esperes que las cosas cambien, cambia tú primero.",
+  "El cambio es la única constante en la vida.",
+  "Cada día es una oportunidad para ser una mejor versión de ti mismo.",
+
+  // Frases sobre sueños
+  "Los sueños no funcionan a menos que tú lo hagas.",
+  "No dejes que tus sueños sean solo sueños.",
+  "Los sueños son el combustible que impulsa el logro.",
+  "Cada gran logro comenzó con un sueño.",
+  "Los sueños son el lenguaje del alma.",
+
+  // Frases sobre equilibrio
+  "El equilibrio no es algo que encuentras, es algo que creas.",
+  "La vida es como montar en bicicleta, para mantener el equilibrio debes seguir moviéndote.",
+  "El equilibrio es la clave de una vida plena.",
+  "Encuentra tu equilibrio y encontrarás tu paz.",
+  "El equilibrio entre dar y recibir es el secreto de la felicidad.",
+
+  // Frases sobre aprendizaje
+  "El aprendizaje es un tesoro que seguirá a su dueño a todas partes.",
+  "Cada día es una oportunidad para aprender algo nuevo.",
+  "El aprendizaje es un viaje, no un destino.",
+  "La vida es el mejor maestro, siempre que estés dispuesto a aprender.",
+  "El conocimiento es poder, pero el aprendizaje es superpoder.",
+
+  // Frases sobre esperanza
+  "La esperanza es el sueño del alma despierta.",
+  "Donde hay esperanza, hay vida.",
+  "La esperanza es la única cosa más fuerte que el miedo.",
+  "La esperanza es el ancla del alma.",
+  "La esperanza es la capacidad de ver la luz a pesar de la oscuridad."
 ];
 
 export default quotes;

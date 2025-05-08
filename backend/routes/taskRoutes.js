@@ -1,11 +1,29 @@
 import express from 'express';
 import Task from '../models/Task.js';
 import { authenticateToken } from '../middleware/auth.js';
+import Joi from 'joi';
 
 const router = express.Router();
 
 // Middleware de autenticación para todas las rutas
 router.use(authenticateToken);
+
+// --- Esquema de validación con Joi ---
+const notificationSchema = Joi.object({
+  enabled: Joi.boolean(),
+  time: Joi.date()
+});
+
+const taskSchema = Joi.object({
+  title: Joi.string().required(),
+  description: Joi.string().allow(''),
+  dueDate: Joi.date().required(),
+  priority: Joi.string().valid('low', 'medium', 'high'),
+  itemType: Joi.string().valid('task', 'reminder'),
+  repeat: Joi.string().valid('none', 'daily', 'weekly', 'monthly'),
+  notifications: Joi.array().items(notificationSchema),
+  completed: Joi.boolean()
+});
 
 // Obtener todas las tareas y recordatorios del usuario
 router.get('/', async (req, res) => {
@@ -27,16 +45,19 @@ router.get('/', async (req, res) => {
 // Crear una nueva tarea o recordatorio
 router.post('/', async (req, res) => {
   try {
-    console.log('Datos recibidos:', req.body); // Para debug
+    // Validar datos de entrada
+    const { error, value } = taskSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ message: 'Datos inválidos', error: error.details[0].message });
+    }
 
+    // Preparar datos para el modelo
     const itemData = {
-      ...req.body,
+      ...value,
       userId: req.user._id,
-      itemType: req.body.itemType || 'task',
-      isReminder: req.body.itemType === 'reminder'
+      isReminder: value.itemType === 'reminder'
     };
 
-    // Si es un recordatorio, ajustamos algunos campos
     if (itemData.itemType === 'reminder') {
       itemData.completed = false;
       itemData.priority = undefined;
@@ -44,46 +65,33 @@ router.post('/', async (req, res) => {
 
     const task = new Task(itemData);
     await task.save();
-    
-    console.log('Item creado:', task); // Para debug
 
-    // Verificar logro de primera tarea
-    const tasksCount = await Task.countDocuments({ userId: req.user._id });
-    if (tasksCount === 1) {
-      await req.user.unlockAchievement('FIRST_TASK');
-    } else if (tasksCount === 10) {
-      await req.user.unlockAchievement('TASK_MASTER');
-    }
-
-    res.status(201).json(task);
+    res.status(201).json({ success: true, data: task });
   } catch (error) {
-    console.error('Error al crear:', error);
-    res.status(400).json({ 
-      message: `Error al crear el ${req.body.itemType === 'reminder' ? 'recordatorio' : 'tarea'}`,
-      error: error.message 
-    });
+    res.status(400).json({ message: 'Error al crear la tarea/recordatorio', error: error.message });
   }
 });
 
 // Actualizar una tarea o recordatorio
 router.put('/:id', async (req, res) => {
   try {
-    const updateData = { ...req.body };
-    
-    // Asegurarnos de que no se pueda cambiar el tipo de item
-    delete updateData.itemType;
-    delete updateData.isReminder;
+    // Validar datos de entrada (no requerimos todos los campos)
+    const { error, value } = taskSchema.fork(['title', 'dueDate'], field => field.optional()).validate(req.body, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ message: 'Datos inválidos', error: error.details[0].message });
+    }
+
+    // No permitir cambiar tipo ni usuario
+    delete value.itemType;
+    delete value.userId;
 
     const task = await Task.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      updateData,
+      value,
       { new: true }
     );
-    
-    if (!task) {
-      return res.status(404).json({ message: 'Item no encontrado' });
-    }
-    res.json(task);
+    if (!task) return res.status(404).json({ message: 'Item no encontrado' });
+    res.json({ success: true, data: task });
   } catch (error) {
     res.status(400).json({ message: 'Error al actualizar', error: error.message });
   }

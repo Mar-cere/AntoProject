@@ -14,9 +14,8 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
-import FloatingNavBar from '../components/FloatingNavBar';
 import { ROUTES } from '../constants/routes';
+import { API_URL } from '../config/api';
 
 
 const ProfileScreen = ({ navigation }) => {
@@ -54,9 +53,11 @@ const ProfileScreen = ({ navigation }) => {
     bestStreak: 0,
     lastActive: null
   });
+  const [avatarUrl, setAvatarUrl] = useState(null);
 
   const loadUserData = useCallback(async () => {
     try {
+      const token = await AsyncStorage.getItem('userToken');
       const storedUserData = await AsyncStorage.getItem('userData');
       if (storedUserData) {
         const parsedUserData = JSON.parse(storedUserData);
@@ -68,15 +69,24 @@ const ProfileScreen = ({ navigation }) => {
             lastActive: new Date()
           }
         }));
+
+        // Calculamos estadísticas detalladas
+        setDetailedStats({
+          ...detailedStats,
+          currentStreak: parsedUserData.stats?.habitsStreak ?? 0,
+          lastActive: parsedUserData.stats?.lastActive ?? null
+        });
+
+        if (parsedUserData.avatar) {
+          const url = await fetchAvatarUrl(parsedUserData.avatar, token);
+          setAvatarUrl(url);
+        } else {
+          setAvatarUrl(null);
+        }
+
+        console.log('userData.avatar:', parsedUserData.avatar);
+        console.log('avatarUrl:', avatarUrl);
       }
-
-      // Calculamos estadísticas detalladas
-      setDetailedStats({
-        ...detailedStats,
-        currentStreak: userData.stats.habitsStreak,
-        lastActive: userData.stats.lastActive
-      });
-
     } catch (error) {
       console.error('Error al cargar datos del perfil:', error);
       Alert.alert('Error', 'No se pudieron cargar los datos del perfil');
@@ -85,6 +95,20 @@ const ProfileScreen = ({ navigation }) => {
       setRefreshing(false);
     }
   }, []);
+
+  const fetchAvatarUrl = async (publicId, token) => {
+    if (!publicId) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/users/avatar-url/${publicId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      return data.url;
+    } catch (e) {
+      console.log('Error obteniendo avatar:', e);
+      return null;
+    }
+  };
 
   useEffect(() => {
     loadUserData();
@@ -202,9 +226,9 @@ const ProfileScreen = ({ navigation }) => {
           {/* Perfil Principal */}
           <View style={styles.profileSection}>
             <View style={styles.avatarContainer}>
-              {userData.avatar ? (
+              {avatarUrl ? (
                 <Image 
-                  source={{ uri: userData.avatar }} 
+                  source={{ uri: avatarUrl }} 
                   style={styles.avatar}
                 />
               ) : (
@@ -220,7 +244,11 @@ const ProfileScreen = ({ navigation }) => {
           {/* Estadísticas actualizadas */}
           <View style={styles.statsContainer}>
             <Text style={styles.sectionTitle}>Estadísticas</Text>
-            <View style={styles.statsGrid}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.statsGrid}
+            >
               <View style={styles.statItem}>
                 <MaterialCommunityIcons name="check-circle" size={24} color="#1ADDDB" />
                 <Text style={styles.statValue}>{userData.stats.tasksCompleted}</Text>
@@ -245,7 +273,7 @@ const ProfileScreen = ({ navigation }) => {
                   Mejor: {detailedStats.bestStreak} días
                 </Text>
               </View>
-            </View>
+            </ScrollView>
           </View>
 
           {/* Opciones */}
@@ -279,7 +307,6 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </ScrollView>
       </ImageBackground>
-      <FloatingNavBar />
     </SafeAreaView>
   );
 };
@@ -365,16 +392,16 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 16,
+    alignItems: 'stretch',
+    paddingVertical: 4,
   },
   statItem: {
-    width: '45%',
+    width: 160,
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
+    marginRight: 12,
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
   },

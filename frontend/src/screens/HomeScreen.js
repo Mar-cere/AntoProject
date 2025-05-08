@@ -31,13 +31,19 @@ const HomeScreen = () => {
   useEffect(() => {
     setTimeout(() => {
       setIsLoading(false);
-      Animated.sequence([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.timing(translateYAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
-        Animated.spring(buttonScale, { toValue: 1.1, friction: 3, useNativeDriver: true }),
-        Animated.spring(buttonScale, { toValue: 1, friction: 3, useNativeDriver: true }),
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        })
       ]).start();
-    }, 1000);
+    }, 1500);
   }, []);
 
   // Función para manejar la navegación

@@ -10,12 +10,14 @@ import {
   Image,
   LayoutAnimation,
   Platform,
-  UIManager
+  UIManager,
+  Linking
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import ParticleBackground from '../components/ParticleBackground';
 import faqData from '../data/FaQScreen';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 // Habilitar LayoutAnimation para Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
