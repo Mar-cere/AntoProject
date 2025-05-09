@@ -110,17 +110,12 @@ const TaskScreen = ({ route }) => {
     }
   };
 
-  // Marcar tarea como completada
+  // Función unificada para marcar como completado (tanto tareas como recordatorios)
   const handleToggleComplete = async (id) => {
-    if (!id) {
-      console.warn('handleToggleComplete: id es undefined');
-      return;
-    }
+    if (!id) return;
 
     try {
       const token = await AsyncStorage.getItem('userToken');
-      console.log('Marcando como completada tarea:', id); // Debug
-
       const response = await fetch(`${API_URL}/api/tasks/${id}/complete`, {
         method: 'PATCH',
         headers: { 
@@ -131,25 +126,52 @@ const TaskScreen = ({ route }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al actualizar tarea');
+        throw new Error(errorData.message || 'Error al actualizar el item');
       }
 
-      const updatedTask = await response.json();
-      console.log('Tarea actualizada:', updatedTask); // Debug
-
+      const updatedItem = await response.json();
+      
+      // Actualizar estado para mostrar item completado
       setState(prev => ({
         ...prev,
         items: prev.items.map(item => 
-          item._id === id ? updatedTask.data : item
+          item._id === id ? updatedItem.data : item
         )
       }));
 
+      // Feedback háptico de completado
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await cancelTaskNotifications(id);
-      await scheduleTaskNotification(updatedTask.data);
+
+      // Esperar 3.5 segundos antes de eliminar
+      setTimeout(async () => {
+        try {
+          const deleteResponse = await fetch(`${API_URL}/api/tasks/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (!deleteResponse.ok) {
+            throw new Error('Error al eliminar el item');
+          }
+
+          // Actualizar estado para remover el item
+          setState(prev => ({
+            ...prev,
+            items: prev.items.filter(item => item._id !== id)
+          }));
+
+          // Feedback háptico de eliminación
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+          console.error('Error al eliminar item completado:', error);
+          Alert.alert('Error', 'No se pudo eliminar el item completado');
+        }
+      }, 3500);
+
     } catch (error) {
-      console.error('Error al completar tarea:', error); // Debug
-      Alert.alert('Error', 'No se pudo actualizar la tarea');
+      console.error('Error al completar item:', error);
+      Alert.alert('Error', 'No se pudo actualizar el item');
     }
   };
 

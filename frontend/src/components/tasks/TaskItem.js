@@ -1,9 +1,46 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
   const isTask = item.itemType === 'task';
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  
+  // Función para verificar si está caducado (tanto tareas como recordatorios)
+  const isOverdue = () => {
+    return new Date(item.dueDate) < new Date();
+  };
+
+  // Función para determinar el estado del ítem
+  const getItemState = () => {
+    if (item.completed) return 'completed';
+    if (isOverdue()) return 'overdue';
+    return 'pending';
+  };
+
+  const itemState = getItemState();
+
+  useEffect(() => {
+    if (item.completed) {
+      // Animación unificada para tareas y recordatorios
+      Animated.sequence([
+        // Primero reducimos la opacidad a 0.7
+        Animated.timing(fadeAnim, {
+          toValue: 0.7,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        // Esperamos 2 segundos
+        Animated.delay(2000),
+        // Reducimos más la opacidad
+        Animated.timing(fadeAnim, {
+          toValue: 0.4,
+          duration: 500,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
+  }, [item.completed]);
 
   if (!item) {
     console.warn('TaskItem: item es undefined');
@@ -11,110 +48,137 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
   }
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.itemCard,
-        item.completed && styles.completedItem,
-        {
-          shadowColor: isTask ? '#1ADDDB' : '#FF6B6B',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-          elevation: 3,
-        }
-      ]}
-      onPress={() => onPress(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.itemHeader}>
-        <View style={styles.itemTitleContainer}>
-          <View style={[
-            styles.iconContainer,
-            { backgroundColor: isTask ? 'rgba(26, 221, 219, 0.1)' : 'rgba(255, 107, 107, 0.1)' }
-          ]}>
-            <Ionicons 
-              name={isTask ? 'checkbox-outline' : 'alarm-outline'} 
-              size={18} 
-              color={isTask ? '#1ADDDB' : '#FF6B6B'} 
-            />
-          </View>
-          <Text style={[
-            styles.itemTitle,
-            item.completed && styles.completedTitle
-          ]} numberOfLines={1}>
-            {item.title}
-          </Text>
-        </View>
-        <View style={styles.itemActions}>
-          {isTask && (
-            <TouchableOpacity
-              style={[
-                styles.completeButton,
-                item.completed && styles.completedButton
-              ]}
-              onPress={() => {
-                console.log('Intentando marcar como completada:', item._id);
-                onToggleComplete(item._id);
-              }}
-            >
-              <Ionicons 
-                name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} 
-                size={24} 
-                color={item.completed ? '#4CAF50' : '#A3B8E8'} 
-              />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => onDelete(item._id)}
-          >
-            <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.itemDetails}>
-        {item.description ? (
-          <Text style={[
-            styles.itemDescription,
-            item.completed && styles.completedDescription
-          ]} numberOfLines={2}>
-            {item.description}
-          </Text>
-        ) : null}
-        
-        <View style={styles.itemFooter}>
-          <View style={styles.itemMetadata}>
-            <View style={styles.dateContainer}>
-              <Ionicons name="calendar-outline" size={12} color="#A3B8E8" />
-              <Text style={styles.itemDate}>
-                {new Date(item.dueDate).toLocaleDateString()}
-              </Text>
-            </View>
-            <View style={styles.timeContainer}>
-              <Ionicons name="time-outline" size={12} color="#A3B8E8" />
-              <Text style={styles.itemDate}>
-                {new Date(item.dueDate).toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit',
-                  hour12: true 
-                })}
-              </Text>
-            </View>
-          </View>
-          {isTask && (
+    <Animated.View style={{ opacity: fadeAnim }}>
+      <TouchableOpacity
+        style={[
+          styles.itemCard,
+          itemState === 'completed' && styles.completedItem,
+          itemState === 'overdue' && styles.overdueItem
+        ]}
+        onPress={() => onPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.itemHeader}>
+          <View style={styles.itemTitleContainer}>
             <View style={[
-              styles.priorityBadge,
-              { backgroundColor: getPriorityColor(item.priority) }
+              styles.iconContainer,
+              { 
+                backgroundColor: itemState === 'overdue' 
+                  ? 'rgba(255, 107, 107, 0.1)' 
+                  : isTask 
+                    ? 'rgba(26, 221, 219, 0.1)' 
+                    : 'rgba(255, 107, 107, 0.1)'
+              }
             ]}>
-              <Text style={styles.priorityText}>
-                {getPriorityText(item.priority)}
-              </Text>
+              <Ionicons 
+                name={isTask ? 'checkbox-outline' : 'alarm-outline'} 
+                size={18} 
+                color={itemState === 'overdue' ? '#FF6B6B' : isTask ? '#1ADDDB' : '#FF6B6B'} 
+              />
             </View>
-          )}
+            <Text style={[
+              styles.itemTitle,
+              itemState === 'completed' && styles.completedTitle,
+              itemState === 'overdue' && styles.overdueTitle
+            ]} numberOfLines={1}>
+              {item.title}
+            </Text>
+          </View>
+          <View style={styles.itemActions}>
+            {itemState === 'pending' && (
+              <TouchableOpacity
+                style={styles.completeButton}
+                onPress={() => onToggleComplete(item._id)}
+              >
+                <Ionicons 
+                  name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} 
+                  size={24} 
+                  color={item.completed ? '#4CAF50' : '#A3B8E8'} 
+                />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => onDelete(item._id)}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
+
+        <View style={styles.itemDetails}>
+          {item.description ? (
+            <Text style={[
+              styles.itemDescription,
+              itemState === 'completed' && styles.completedDescription,
+              itemState === 'overdue' && styles.overdueDescription
+            ]} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
+          
+          <View style={styles.itemFooter}>
+            <View style={styles.itemMetadata}>
+              <View style={[
+                styles.dateContainer,
+                itemState === 'overdue' && styles.overdueDateContainer
+              ]}>
+                <Ionicons 
+                  name="calendar-outline" 
+                  size={12} 
+                  color={itemState === 'overdue' ? '#FF6B6B' : '#A3B8E8'} 
+                />
+                <Text style={[
+                  styles.itemDate,
+                  itemState === 'overdue' && styles.overdueDate
+                ]}>
+                  {new Date(item.dueDate).toLocaleDateString()}
+                </Text>
+              </View>
+              <View style={[
+                styles.timeContainer,
+                itemState === 'overdue' && styles.overdueDateContainer
+              ]}>
+                <Ionicons 
+                  name="time-outline" 
+                  size={12} 
+                  color={itemState === 'overdue' ? '#FF6B6B' : '#A3B8E8'} 
+                />
+                <Text style={[
+                  styles.itemDate,
+                  itemState === 'overdue' && styles.overdueDate
+                ]}>
+                  {new Date(item.dueDate).toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: true 
+                  })}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.badgeContainer}>
+              {isTask && itemState === 'pending' && (
+                <View style={[
+                  styles.priorityBadge,
+                  { backgroundColor: getPriorityColor(item.priority) }
+                ]}>
+                  <Text style={styles.priorityText}>
+                    {getPriorityText(item.priority)}
+                  </Text>
+                </View>
+              )}
+              {itemState === 'overdue' && (
+                <View style={styles.overdueBadge}>
+                  <Text style={styles.overdueText}>
+                    {isTask ? 'Caducada' : 'Pasado'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -233,6 +297,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FFFFFF',
     fontWeight: '500',
+  },
+  overdueItem: {
+    borderColor: 'rgba(255, 107, 107, 0.3)',
+    backgroundColor: 'rgba(255, 107, 107, 0.05)',
+  },
+  overdueTitle: {
+    color: '#FF6B6B',
+    textDecorationLine: 'line-through',
+  },
+  overdueDescription: {
+    color: '#FF6B6B',
+    opacity: 0.7,
+  },
+  overdueDateContainer: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+  },
+  overdueDate: {
+    color: '#FF6B6B',
+  },
+  overdueBadge: {
+    backgroundColor: 'rgba(255, 107, 107, 0.2)',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  overdueText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
   }
 });
 

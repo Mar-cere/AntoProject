@@ -114,7 +114,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Marcar tarea como completada (solo para tareas, no recordatorios)
+// Marcar item como completado (tanto tareas como recordatorios)
 router.patch('/:id/complete', async (req, res) => {
   try {
     const task = await Task.findOne({
@@ -123,28 +123,25 @@ router.patch('/:id/complete', async (req, res) => {
     });
     
     if (!task) {
-      return res.status(404).json({ message: 'Tarea no encontrada' });
+      return res.status(404).json({ message: 'Item no encontrado' });
     }
     
-    if (task.itemType === 'reminder') {
-      return res.status(400).json({ message: 'Los recordatorios no pueden marcarse como completados' });
-    }
+    // Marcar como completado independientemente del tipo
+    task.completed = true;
+    task.completedAt = new Date();
+    await task.save();
     
-    await task.markAsCompleted();
     res.json({ success: true, data: task });
   } catch (error) {
-    res.status(400).json({ message: 'Error al completar la tarea', error: error.message });
+    res.status(400).json({ message: 'Error al completar el item', error: error.message });
   }
 });
 
 // Obtener items pendientes (tareas no completadas y recordatorios futuros)
 router.get('/pending', async (req, res) => {
   try {
-    console.log('Usuario autenticado:', req.user); // Para debug
-
     const query = {
       userId: req.user._id,
-      dueDate: { $gte: new Date() },
       $or: [
         { itemType: 'reminder' },
         { itemType: 'task', completed: false }
@@ -152,7 +149,15 @@ router.get('/pending', async (req, res) => {
     };
 
     const tasks = await Task.find(query).sort({ dueDate: 1 });
-    res.json(tasks);
+    
+    // Agregar campo isOverdue a cada tarea
+    const tasksWithOverdue = tasks.map(task => {
+      const taskObj = task.toObject();
+      taskObj.isOverdue = !task.completed && new Date(task.dueDate) < new Date();
+      return taskObj;
+    });
+
+    res.json({ success: true, data: tasksWithOverdue });
   } catch (error) {
     console.error('Error al obtener items pendientes:', error);
     res.status(500).json({ message: 'Error al obtener los items pendientes' });
