@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { 
-  View, Text, TouchableOpacity, ActivityIndicator, Alert, Animated 
+  View, Text, TouchableOpacity, ActivityIndicator, Alert, Animated, StyleSheet 
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,6 +12,8 @@ const API_URL = 'https://antobackend.onrender.com';
 
 const TaskItem = memo(({ item, onPress }) => {
   const scaleAnim = new Animated.Value(1);
+  const isTask = item.itemType === 'task';
+  const isOverdue = new Date(item.dueDate) < new Date();
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -42,72 +44,124 @@ const TaskItem = memo(({ item, onPress }) => {
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
-        style={[commonStyles.itemContainer, {
-          backgroundColor: item.itemType === 'reminder' 
-            ? 'rgba(255, 107, 107, 0.1)' 
-            : 'rgba(255, 255, 255, 0.05)',
-        }]}
+        style={[
+          styles.taskCard,
+          {
+            backgroundColor: isOverdue 
+              ? 'rgba(255, 107, 107, 0.1)' 
+              : isTask 
+                ? 'rgba(255, 255, 255, 0.05)' 
+                : 'rgba(255, 107, 107, 0.05)',
+            borderColor: isOverdue 
+              ? 'rgba(255, 107, 107, 0.3)' 
+              : isTask 
+                ? 'rgba(26, 221, 219, 0.1)' 
+                : 'rgba(255, 107, 107, 0.1)',
+          }
+        ]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.7}
       >
         <View style={styles.taskContent}>
-          {/* Indicador de prioridad */}
-          <View style={[styles.priorityBadge, { backgroundColor: priorityData.color }]}>
-            <MaterialCommunityIcons 
-              name={priorityData.icon} 
-              size={12} 
-              color="#FFFFFF" 
-            />
-          </View>
-
-          {/* Contenido principal */}
-          <View style={styles.mainContent}>
-            <View style={styles.titleRow}>
+          {/* Icono y tipo */}
+          <View style={styles.taskHeader}>
+            <View style={[
+              styles.iconContainer,
+              {
+                backgroundColor: isOverdue 
+                  ? 'rgba(255, 107, 107, 0.2)' 
+                  : isTask 
+                    ? 'rgba(26, 221, 219, 0.2)' 
+                    : 'rgba(255, 107, 107, 0.2)'
+              }
+            ]}>
               <MaterialCommunityIcons 
-                name={item.itemType === 'reminder' ? 'clock-outline' : 'checkbox-blank-outline'} 
+                name={isTask ? 'checkbox-blank-outline' : 'clock-outline'} 
                 size={20} 
-                color={item.itemType === 'reminder' ? cardColors.error : cardColors.primary} 
+                color={isOverdue ? cardColors.error : isTask ? cardColors.primary : cardColors.error} 
               />
-              <Text style={styles.title} numberOfLines={1}>
-                {item.title}
-              </Text>
             </View>
-
-            {/* Información adicional */}
-            <View style={styles.detailsRow}>
-              <View style={styles.tagContainer}>
-                <Text style={styles.tagText}>
-                  {item.itemType === 'reminder' ? 'Recordatorio' : 'Tarea'}
-                </Text>
-              </View>
-              {item.dueDate && (
-                <View style={styles.dateContainer}>
-                  <MaterialCommunityIcons 
-                    name="calendar" 
-                    size={12} 
-                    color={cardColors.secondary} 
-                  />
-                  <Text style={styles.dateText}>
-                    {new Date(item.dueDate).toLocaleDateString('es-ES', {
-                      day: '2-digit',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+            <View style={styles.typeContainer}>
+              <Text style={styles.typeText}>
+                {isTask ? 'Tarea' : 'Recordatorio'}
+              </Text>
+              {isOverdue && (
+                <View style={styles.overdueBadge}>
+                  <Text style={styles.overdueText}>
+                    {isTask ? 'Caducada' : 'Pasado'}
                   </Text>
                 </View>
               )}
             </View>
           </View>
 
-          {/* Flecha de navegación */}
-          <MaterialCommunityIcons 
-            name="chevron-right" 
-            size={20} 
-            color={cardColors.secondary} 
-          />
+          {/* Título y prioridad */}
+          <View style={styles.taskBody}>
+            <Text style={[
+              styles.title,
+              isOverdue && styles.overdueTitle
+            ]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {isTask && !isOverdue && (
+              <View style={[styles.priorityBadge, { backgroundColor: priorityData.color }]}>
+                <MaterialCommunityIcons 
+                  name={priorityData.icon} 
+                  size={12} 
+                  color="#FFFFFF" 
+                />
+                <Text style={styles.priorityText}>
+                  {priorityData.label}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Fecha y hora */}
+          <View style={styles.taskFooter}>
+            <View style={styles.dateTimeContainer}>
+              <View style={styles.dateContainer}>
+                <MaterialCommunityIcons 
+                  name="calendar" 
+                  size={12} 
+                  color={isOverdue ? cardColors.error : cardColors.secondary} 
+                />
+                <Text style={[
+                  styles.dateText,
+                  isOverdue && styles.overdueText
+                ]}>
+                  {new Date(item.dueDate).toLocaleDateString('es-ES', {
+                    day: '2-digit',
+                    month: 'short'
+                  })}
+                </Text>
+              </View>
+              <View style={styles.timeContainer}>
+                <MaterialCommunityIcons 
+                  name="clock-outline" 
+                  size={12} 
+                  color={isOverdue ? cardColors.error : cardColors.secondary} 
+                />
+                <Text style={[
+                  styles.timeText,
+                  isOverdue && styles.overdueText
+                ]}>
+                  {new Date(item.dueDate).toLocaleTimeString('es-ES', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
+                </Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons 
+              name="chevron-right" 
+              size={20} 
+              color={cardColors.secondary} 
+            />
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -220,63 +274,120 @@ const TaskCard = memo(() => {
   );
 });
 
-const styles = {
-  tasksContainer: {
-    gap: 8,
+const styles = StyleSheet.create({
+  taskCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   taskContent: {
+    gap: 12,
+  },
+  taskHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  priorityBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  mainContent: {
-    flex: 1,
-    gap: 8,
-  },
-  titleRow: {
+  typeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  title: {
-    fontSize: 16,
+  typeText: {
+    color: cardColors.secondary,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#FFFFFF',
-    flex: 1,
   },
-  detailsRow: {
+  taskBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginRight: 12,
+  },
+  overdueTitle: {
+    color: cardColors.error,
+    textDecorationLine: 'line-through',
+  },
+  priorityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  priorityText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  taskFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  tagContainer: {
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  tagText: {
-    color: cardColors.primary,
-    fontSize: 12,
-    fontWeight: '500',
   },
   dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   dateText: {
     color: cardColors.secondary,
     fontSize: 12,
-  }
-};
+  },
+  timeText: {
+    color: cardColors.secondary,
+    fontSize: 12,
+  },
+  overdueBadge: {
+    backgroundColor: 'rgba(255, 107, 107, 0.2)',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  overdueText: {
+    color: cardColors.error,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+});
 
 export default TaskCard;
   
