@@ -173,3 +173,34 @@ export const checkNotificationStatus = async () => {
   const { status } = await Notifications.getPermissionsAsync();
   return status === 'granted';
 };
+
+// Programar una notificación local para una tarea
+export const scheduleTaskNotification = async (task) => {
+  if (!Device.isDevice) return;
+
+  if (Array.isArray(task.notifications)) {
+    for (const notif of task.notifications) {
+      if (notif.enabled && notif.time) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: task.title,
+            body: task.description || 'Tienes una tarea pendiente en Anto',
+            sound: true,
+            data: { taskId: task._id }
+          },
+          trigger: new Date(notif.time)
+        });
+      }
+    }
+  }
+};
+
+// Cancelar todas las notificaciones de una tarea (por id)
+export const cancelTaskNotifications = async (taskId) => {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const notif of scheduled) {
+    if (notif.content.data && notif.content.data.taskId === taskId) {
+      await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+    }
+  }
+};

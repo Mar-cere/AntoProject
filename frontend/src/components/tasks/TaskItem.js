@@ -3,34 +3,67 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
+  const isTask = item.itemType === 'task';
+
+  if (!item) {
+    console.warn('TaskItem: item es undefined');
+    return null;
+  }
+
   return (
     <TouchableOpacity
-      style={[styles.itemCard, item.completed && styles.completedItem]}
+      style={[
+        styles.itemCard,
+        item.completed && styles.completedItem,
+        {
+          shadowColor: isTask ? '#1ADDDB' : '#FF6B6B',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 3,
+        }
+      ]}
       onPress={() => onPress(item)}
       activeOpacity={0.7}
     >
       <View style={styles.itemHeader}>
         <View style={styles.itemTitleContainer}>
-          <Ionicons 
-            name={item.type === 'task' ? 'checkbox-outline' : 'alarm-outline'} 
-            size={16} 
-            color="#1ADDDB" 
-          />
-          <Text style={styles.itemTitle} numberOfLines={1}>
+          <View style={[
+            styles.iconContainer,
+            { backgroundColor: isTask ? 'rgba(26, 221, 219, 0.1)' : 'rgba(255, 107, 107, 0.1)' }
+          ]}>
+            <Ionicons 
+              name={isTask ? 'checkbox-outline' : 'alarm-outline'} 
+              size={18} 
+              color={isTask ? '#1ADDDB' : '#FF6B6B'} 
+            />
+          </View>
+          <Text style={[
+            styles.itemTitle,
+            item.completed && styles.completedTitle
+          ]} numberOfLines={1}>
             {item.title}
           </Text>
         </View>
         <View style={styles.itemActions}>
-          <TouchableOpacity
-            style={styles.completeButton}
-            onPress={() => onToggleComplete(item._id)}
-          >
-            <Ionicons 
-              name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} 
-              size={24} 
-              color={item.completed ? '#4CAF50' : '#A3B8E8'} 
-            />
-          </TouchableOpacity>
+          {isTask && (
+            <TouchableOpacity
+              style={[
+                styles.completeButton,
+                item.completed && styles.completedButton
+              ]}
+              onPress={() => {
+                console.log('Intentando marcar como completada:', item._id);
+                onToggleComplete(item._id);
+              }}
+            >
+              <Ionicons 
+                name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} 
+                size={24} 
+                color={item.completed ? '#4CAF50' : '#A3B8E8'} 
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.deleteButton}
             onPress={() => onDelete(item._id)}
@@ -42,34 +75,43 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
 
       <View style={styles.itemDetails}>
         {item.description ? (
-          <Text style={styles.itemDescription} numberOfLines={2}>
+          <Text style={[
+            styles.itemDescription,
+            item.completed && styles.completedDescription
+          ]} numberOfLines={2}>
             {item.description}
           </Text>
         ) : null}
         
         <View style={styles.itemFooter}>
           <View style={styles.itemMetadata}>
-            <Ionicons name="calendar-outline" size={12} color="#A3B8E8" />
-            <Text style={styles.itemDate}>
-              {new Date(item.dueDate).toLocaleDateString()}
-            </Text>
-            <Ionicons name="time-outline" size={12} color="#A3B8E8" />
-            <Text style={styles.itemDate}>
-              {new Date(item.dueDate).toLocaleTimeString([], { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
-              })}
-            </Text>
+            <View style={styles.dateContainer}>
+              <Ionicons name="calendar-outline" size={12} color="#A3B8E8" />
+              <Text style={styles.itemDate}>
+                {new Date(item.dueDate).toLocaleDateString()}
+              </Text>
+            </View>
+            <View style={styles.timeContainer}>
+              <Ionicons name="time-outline" size={12} color="#A3B8E8" />
+              <Text style={styles.itemDate}>
+                {new Date(item.dueDate).toLocaleTimeString([], { 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  hour12: true 
+                })}
+              </Text>
+            </View>
           </View>
-          <View style={[
-            styles.priorityBadge,
-            { backgroundColor: getPriorityColor(item.priority) }
-          ]}>
-            <Text style={styles.priorityText}>
-              {getPriorityText(item.priority)}
-            </Text>
-          </View>
+          {isTask && (
+            <View style={[
+              styles.priorityBadge,
+              { backgroundColor: getPriorityColor(item.priority) }
+            ]}>
+              <Text style={styles.priorityText}>
+                {getPriorityText(item.priority)}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -79,27 +121,35 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
 const styles = StyleSheet.create({
   itemCard: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 6,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
   },
   completedItem: {
     opacity: 0.7,
-    backgroundColor: 'rgba(29, 43, 95, 0.5)',
+    backgroundColor: 'rgba(29, 43, 95, 0.4)',
+    borderColor: 'rgba(76, 175, 80, 0.2)',
   },
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8 ,
+    marginBottom: 12,
   },
   itemTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
     flex: 1,
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   itemTitle: {
     fontSize: 16,
@@ -107,24 +157,39 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     flex: 1,
   },
+  completedTitle: {
+    color: '#A3B8E8',
+    textDecorationLine: 'line-through',
+  },
   itemActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
   completeButton: {
     padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  completedButton: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
   },
   deleteButton: {
     padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
   },
   itemDetails: {
-    gap: 8,
+    gap: 12,
   },
   itemDescription: {
     fontSize: 14,
     color: '#A3B8E8',
     lineHeight: 20,
+  },
+  completedDescription: {
+    color: '#A3B8E8',
+    opacity: 0.7,
   },
   itemFooter: {
     flexDirection: 'row',
@@ -135,7 +200,25 @@ const styles = StyleSheet.create({
   itemMetadata: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   itemDate: {
     fontSize: 12,
@@ -143,7 +226,7 @@ const styles = StyleSheet.create({
   },
   priorityBadge: {
     paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     borderRadius: 12,
   },
   priorityText: {

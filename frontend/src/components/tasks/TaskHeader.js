@@ -1,47 +1,56 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const TaskHeader = ({ filterType, onFilterChange }) => {
   return (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>Mis Tareas</Text>
-      <View style={styles.filterButtons}>
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
-          onPress={() => onFilterChange('all')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filterType === 'all' && styles.filterButtonTextActive
-          ]}>Todos</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'tasks' && styles.filterButtonActive]}
-          onPress={() => onFilterChange('tasks')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filterType === 'tasks' && styles.filterButtonTextActive
-          ]}>Tareas</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'reminders' && styles.filterButtonActive]}
-          onPress={() => onFilterChange('reminders')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filterType === 'reminders' && styles.filterButtonTextActive
-          ]}>Recordatorios</Text>
-        </TouchableOpacity>
+    <View style={styles.headerContainer}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Mis Tareas</Text>
+        <View style={styles.filterButtons}>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              filterType === 'all' && styles.filterButtonActive
+            ]}
+            onPress={() => onFilterChange('all')}
+          >
+            <Text>Todos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              filterType === 'task' && styles.filterButtonActive
+            ]}
+            onPress={() => onFilterChange('task')}
+          >
+            <Text>Tareas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              filterType === 'reminder' && styles.filterButtonActive
+            ]}
+            onPress={() => onFilterChange('reminder')}
+          >
+            <Text>Recordatorios</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    backgroundColor: 'rgba(29, 43, 95, 0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(26, 221, 219, 0.1)',
+    paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight,
+  },
   header: {
     padding: 16,
-    backgroundColor: 'rgba(29, 43, 95, 0.1)',
   },
   headerTitle: {
     fontSize: 24,
@@ -51,11 +60,14 @@ const styles = StyleSheet.create({
   },
   filterButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   filterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },

@@ -131,7 +131,7 @@ router.patch('/:id/complete', async (req, res) => {
     }
     
     await task.markAsCompleted();
-    res.json(task);
+    res.json({ success: true, data: task });
   } catch (error) {
     res.status(400).json({ message: 'Error al completar la tarea', error: error.message });
   }

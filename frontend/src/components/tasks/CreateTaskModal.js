@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Modal, 
   View, 
@@ -8,7 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  Alert
+  Alert,
+  Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -21,7 +22,12 @@ const CreateTaskModal = ({
   setFormData
 }) => {
   const [pickerMode, setPickerMode] = useState(null);
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
   const isTask = formData.itemType === 'task';
+
+  useEffect(() => {
+    setNotificationEnabled(true);
+  }, [visible]);
 
   const formatTime = (date) => {
     return date.toLocaleTimeString([], { 
@@ -77,34 +83,26 @@ const CreateTaskModal = ({
       Alert.alert('Error', 'Por favor ingresa un título');
       return;
     }
-
-    // Validar que la fecha no sea anterior a la actual
     if (formData.dueDate < new Date()) {
       Alert.alert('Error', 'La fecha no puede ser anterior a la actual');
       return;
     }
 
-    // Preparar los datos según el tipo
+    const notifications = [{
+      enabled: notificationEnabled,
+      time: formData.dueDate
+    }];
+
     const dataToSubmit = {
       title: formData.title.trim(),
       dueDate: formData.dueDate,
       itemType: formData.itemType,
-      isReminder: formData.itemType === 'reminder',
-      
-      // Para tareas incluimos campos adicionales
+      notifications,
       ...(isTask && {
         description: formData.description?.trim() || '',
         priority: formData.priority || 'medium',
         completed: false
       }),
-
-      // Para recordatorios
-      ...(!isTask && {
-        notification: {
-          enabled: true,
-          time: formData.dueDate
-        }
-      })
     };
 
     onSubmit(dataToSubmit);
@@ -296,6 +294,18 @@ const CreateTaskModal = ({
               </View>
             </View>
           )}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
+            <Switch
+              value={notificationEnabled}
+              onValueChange={setNotificationEnabled}
+              thumbColor={notificationEnabled ? "#1ADDDB" : "#ccc"}
+              trackColor={{ false: "#A3B8E8", true: "#1ADDDB" }}
+            />
+            <Text style={{ color: '#A3B8E8', marginLeft: 12 }}>
+              {notificationEnabled ? 'Notificación activada' : 'Notificación desactivada'}
+            </Text>
+          </View>
 
           <TouchableOpacity
             style={[
