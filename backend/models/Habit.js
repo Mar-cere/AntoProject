@@ -17,14 +17,18 @@ const habitSchema = new mongoose.Schema({
     type: String,
     required: [true, 'El icono es requerido'],
     enum: {
-      values: ['exercise', 'meditation', 'reading', 'water', 'sleep', 'study', 'diet', 'coding'],
+      values: [
+        'exercise', 'meditation', 'reading', 'water', 
+        'sleep', 'study', 'diet', 'coding', 'workout',
+        'yoga', 'journal', 'music', 'art', 'language'
+      ],
       message: 'Icono no válido'
     }
   },
   frequency: {
     type: String,
     enum: {
-      values: ['daily', 'weekly'],
+      values: ['daily', 'weekly', 'monthly'],
       message: 'Frecuencia no válida'
     },
     default: 'daily'
@@ -41,7 +45,12 @@ const habitSchema = new mongoose.Schema({
     lastNotified: {
       type: Date,
       default: null
-    }
+    },
+    notifications: [{
+      enabled: { type: Boolean, default: true },
+      time: { type: Date },
+      sent: { type: Boolean, default: false }
+    }]
   },
   progress: {
     streak: {
@@ -66,7 +75,14 @@ const habitSchema = new mongoose.Schema({
     weeklyProgress: [{
       week: Number,
       year: Number,
-      completedDays: Number
+      completedDays: Number,
+      streak: Number
+    }],
+    monthlyProgress: [{
+      month: Number,
+      year: Number,
+      completedDays: Number,
+      streak: Number
     }]
   },
   status: {
@@ -81,7 +97,16 @@ const habitSchema = new mongoose.Schema({
     lastCompleted: {
       type: Date,
       default: null
+    },
+    isOverdue: {
+      type: Boolean,
+      default: false
     }
+  },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high'],
+    default: 'medium'
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -98,7 +123,7 @@ const habitSchema = new mongoose.Schema({
   }
 });
 
-// Middleware para actualizar updatedAt
+// Middleware para actualizar updatedAt y verificar estado
 habitSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   
@@ -106,6 +131,15 @@ habitSchema.pre('save', function(next) {
   if (this.progress.streak > this.progress.bestStreak) {
     this.progress.bestStreak = this.progress.streak;
   }
+
+  // Verificar si está vencido
+  const now = new Date();
+  const reminderTime = new Date(this.reminder.time);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const reminderToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 
+                               reminderTime.getHours(), reminderTime.getMinutes());
+
+  this.status.isOverdue = !this.status.completedToday && now > reminderToday;
   
   next();
 });
@@ -122,20 +156,25 @@ habitSchema.methods.toggleComplete = async function() {
     lastCompleted.getDate() === today.getDate();
 
   if (wasCompletedToday) {
+    // Desmarcar como completado
     this.status.completedToday = false;
     this.status.lastCompleted = null;
     this.progress.streak = Math.max(0, this.progress.streak - 1);
     this.progress.completedDays = Math.max(0, this.progress.completedDays - 1);
   } else {
+    // Marcar como completado
     this.status.completedToday = true;
     this.status.lastCompleted = now;
+    this.status.isOverdue = false;
     this.progress.streak += 1;
     this.progress.completedDays += 1;
     this.progress.totalDays += 1;
     
-    // Actualizar progreso semanal
+    // Actualizar progreso semanal y mensual
     const currentWeek = this.getCurrentWeek();
+    const currentMonth = this.getCurrentMonth();
     this.updateWeeklyProgress(currentWeek);
+    this.updateMonthlyProgress(currentMonth);
   }
 
   return this.save();
@@ -152,7 +191,8 @@ habitSchema.statics.getStats = async function(userId) {
         activeHabits: { $sum: { $cond: [{ $eq: ['$status.archived', false] }, 1, 0] } },
         totalCompletions: { $sum: '$progress.completedDays' },
         averageStreak: { $avg: '$progress.streak' },
-        bestStreak: { $max: '$progress.bestStreak' }
+        bestStreak: { $max: '$progress.bestStreak' },
+        overdueHabits: { $sum: { $cond: [{ $eq: ['$status.isOverdue', true] }, 1, 0] } }
       }
     }
   ]);
@@ -170,6 +210,15 @@ habitSchema.methods.getCurrentWeek = function() {
   };
 };
 
+// Método para obtener el mes actual
+habitSchema.methods.getCurrentMonth = function() {
+  const now = new Date();
+  return {
+    month: now.getMonth(),
+    year: now.getFullYear()
+  };
+};
+
 // Método para actualizar el progreso semanal
 habitSchema.methods.updateWeeklyProgress = function(currentWeek) {
   const weekProgress = this.progress.weeklyProgress.find(
@@ -178,11 +227,32 @@ habitSchema.methods.updateWeeklyProgress = function(currentWeek) {
 
   if (weekProgress) {
     weekProgress.completedDays += 1;
+    weekProgress.streak = this.progress.streak;
   } else {
     this.progress.weeklyProgress.push({
       week: currentWeek.week,
       year: currentWeek.year,
-      completedDays: 1
+      completedDays: 1,
+      streak: this.progress.streak
+    });
+  }
+};
+
+// Método para actualizar el progreso mensual
+habitSchema.methods.updateMonthlyProgress = function(currentMonth) {
+  const monthProgress = this.progress.monthlyProgress.find(
+    mp => mp.month === currentMonth.month && mp.year === currentMonth.year
+  );
+
+  if (monthProgress) {
+    monthProgress.completedDays += 1;
+    monthProgress.streak = this.progress.streak;
+  } else {
+    this.progress.monthlyProgress.push({
+      month: currentMonth.month,
+      year: currentMonth.year,
+      completedDays: 1,
+      streak: this.progress.streak
     });
   }
 };
