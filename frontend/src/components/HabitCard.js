@@ -142,8 +142,9 @@ const HabitCard = memo(() => {
       }
 
       const data = await response.json();
-      // Ordenar por racha y mostrar solo los 3 mejores
-      const topHabits = data
+      // data ahora es { success: true, data: [...] }
+      const habitsArray = data.data || [];
+      const topHabits = habitsArray
         .sort((a, b) => (b.progress?.streak || 0) - (a.progress?.streak || 0))
         .slice(0, 3);
       

@@ -199,8 +199,9 @@ const TaskCard = memo(() => {
       }
 
       const data = JSON.parse(responseText);
-      // Ordenar por fecha y tipo (recordatorios primero)
-      const sortedItems = data.sort((a, b) => {
+      // data ahora es { success: true, data: [...] }
+      const itemsArray = data.data || [];
+      const sortedItems = itemsArray.sort((a, b) => {
         if (a.itemType !== b.itemType) {
           return a.itemType === 'reminder' ? -1 : 1;
         }

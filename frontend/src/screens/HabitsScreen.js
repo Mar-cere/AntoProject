@@ -67,7 +67,8 @@ const HabitsScreen = ({ route }) => {
       }
 
       const data = await response.json();
-      setHabits(data);
+      setHabits(data.data || []);
+      console.log(data.data.map(h => h._id));
     } catch (error) {
       console.error('Error al cargar hábitos:', error);
       Alert.alert('Error', 'No se pudieron cargar los hábitos');
@@ -125,7 +126,8 @@ const HabitsScreen = ({ route }) => {
         throw new Error(errorData.message || 'Error al crear el hábito');
       }
 
-      const createdHabit = await response.json();
+      const result = await response.json();
+      const createdHabit = result.data;
       setHabits(prevHabits => [createdHabit, ...prevHabits]);
       setModalVisible(false);
       resetForm();
@@ -147,11 +149,13 @@ const HabitsScreen = ({ route }) => {
         }
       });
 
-      if (!response.ok) {
-        throw new Error('Error al actualizar el hábito');
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Error al actualizar el hábito');
       }
 
-      const updatedHabit = await response.json();
+      const updatedHabit = result.data;
       setHabits(prevHabits =>
         prevHabits.map(habit =>
           habit._id === habitId ? updatedHabit : habit
@@ -524,7 +528,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 80, // Ajustado para FloatingNavBar
+    bottom: 100, // Ajustado para FloatingNavBar
     width: 56,
     height: 56,
     borderRadius: 28,

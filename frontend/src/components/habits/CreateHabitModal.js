@@ -45,7 +45,11 @@ const CreateHabitModal = ({
       description: formData.description?.trim() || '',
       icon: formData.icon,
       frequency: formData.frequency,
-      reminder: formData.reminder,
+      reminder: {
+        time: formData.reminder,
+        enabled: true
+      },
+      priority: formData.priority || 'medium',
     };
 
     onSubmit(dataToSubmit);
@@ -163,6 +167,23 @@ const CreateHabitModal = ({
                     formData.frequency === 'weekly' && styles.frequencyButtonTextSelected
                   ]}>Semanal</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.frequencyButton,
+                    formData.frequency === 'monthly' && styles.frequencyButtonSelected
+                  ]}
+                  onPress={() => setFormData({ ...formData, frequency: 'monthly' })}
+                >
+                  <MaterialCommunityIcons
+                    name="calendar-month"
+                    size={20}
+                    color={formData.frequency === 'monthly' ? "#1ADDDB" : "#A3B8E8"}
+                  />
+                  <Text style={[
+                    styles.frequencyButtonText,
+                    formData.frequency === 'monthly' && styles.frequencyButtonTextSelected
+                  ]}>Mensual</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -201,6 +222,52 @@ const CreateHabitModal = ({
                 />
               </View>
             )}
+
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Prioridad</Text>
+              <View style={styles.prioritySelector}>
+                {['low', 'medium', 'high'].map((level) => (
+                  <TouchableOpacity
+                    key={level}
+                    style={[
+                      styles.priorityButton,
+                      formData.priority === level && styles.priorityButtonSelected
+                    ]}
+                    onPress={() => setFormData({ ...formData, priority: level })}
+                  >
+                    <MaterialCommunityIcons
+                      name={
+                        level === 'high'
+                          ? 'alert-circle'
+                          : level === 'medium'
+                          ? 'alert'
+                          : 'check-circle'
+                      }
+                      size={20}
+                      color={
+                        level === 'high'
+                          ? '#FF6B6B'
+                          : level === 'medium'
+                          ? '#FFD93D'
+                          : '#6BCB77'
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.priorityButtonText,
+                        formData.priority === level && styles.priorityButtonTextSelected
+                      ]}
+                    >
+                      {level === 'high'
+                        ? 'Alta'
+                        : level === 'medium'
+                        ? 'Media'
+                        : 'Baja'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
             <TouchableOpacity
               style={styles.submitButton}
@@ -352,6 +419,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  prioritySelector: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  priorityButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  priorityButtonSelected: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
+  },
+  priorityButtonText: {
+    color: '#A3B8E8',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  priorityButtonTextSelected: {
+    color: '#FF6B6B',
   },
 });
 
