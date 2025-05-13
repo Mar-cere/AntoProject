@@ -140,21 +140,21 @@ const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
 const styles = StyleSheet.create({
   floatingBar: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -6,
     left: 0,
     right: 0,
     flexDirection: 'row',
     backgroundColor: 'rgba(3, 10, 36, 0.95)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: 85, // Altura base
+    height: 80, // Altura base
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
-    elevation: 8,
+    elevation: 7,
     borderWidth: 2,
     borderColor: 'rgba(26, 221, 219, 0.3)',
     borderBottomWidth: 0,
@@ -162,13 +162,13 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    height: '100%',
+    height: '96%',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 2,
+    paddingTop: 1,
   },
   activeButton: {
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
     borderBottomColor: '#1ADDDB',
   },
   iconContainer: {
@@ -176,28 +176,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   icon: {
-    width: 24,
-    height: 24,
-    tintColor: '#A3B8E8',
-    marginBottom:2,
-  },
-  activeIcon: {
     width: 26,
     height: 26,
-    tintColor: '#1ADDDB',
-    marginBottom:2,
+    tintColor: '#A3B8E8',
   },
-  // Estilos para iconos de texto (emojis)
+  activeIcon: {
+    width: 28,
+    height: 28,
+    tintColor: '#1ADDDB',
+  },
   iconText: {
-    fontSize: 22,
+    fontSize: 24,
     color: '#A3B8E8',
   },
   activeIconText: {
     color: '#1ADDDB',
-    fontSize: 22,
+    fontSize: 24,
   },
   text: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#A3B8E8',
   },
   activeText: {
@@ -208,7 +205,7 @@ const styles = StyleSheet.create({
     height: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -30,
+    marginTop: -20,
   },
   centerButton: {
     width: 50,
@@ -218,7 +215,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#1ADDDB',
     shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 8,
     overflow: 'hidden', // Para asegurar que la imagen respete el borderRadius
@@ -227,9 +224,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     resizeMode: 'contain',
-  },
-  centerButtonText: {
-    fontSize: 24,
   },
 });
 
