@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, Animated, Easing, Vibration,
   Dimensions
@@ -33,8 +33,8 @@ const modes = {
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const TimerDisplay = memo(({ timeLeft, totalTime, isActive, color }) => {
-  const progressAnim = new Animated.Value(0);
-  const scaleAnim = new Animated.Value(1);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const progress = 1 - (timeLeft / totalTime);

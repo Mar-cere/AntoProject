@@ -34,12 +34,12 @@ const HomeScreen = () => {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: 800,
           useNativeDriver: true,
         }),
         Animated.timing(translateYAnim, {
           toValue: 0,
-          duration: 1000,
+          duration: 800,
           useNativeDriver: true,
         })
       ]).start();

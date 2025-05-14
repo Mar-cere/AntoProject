@@ -13,7 +13,8 @@ import {
   Switch,
   SafeAreaView,
   StatusBar,
-  Alert
+  Alert,
+  Platform
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -433,24 +434,14 @@ const PomodoroScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#030A24" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mi Diario</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setCurrentEntry({
-              id: null,
-              date: new Date(),
-              content: '',
-              mood: 'neutral',
-              tags: []
-            });
-            setShowModal(true);
-          }}
-        >
-          <MaterialCommunityIcons name="plus" size={24} color="#1ADDDB" />
-        </TouchableOpacity>
+      <View style={styles.headerContainer}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <MaterialCommunityIcons name="timer-outline" size={28} color="#1ADDDB" />
+            <Text style={styles.headerTitle}>Pomodoro</Text>
+          </View>
+        </View>
       </View>
       <View style={styles.container}>
         <ScrollView style={styles.content}>
@@ -737,27 +728,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#030A24',
     paddingBottom: 85, // Agregar padding para el FloatingNavBar
   },
+  headerContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(26, 221, 219, 0.1)'
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: '#030A24',
+    padding: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: '#FFFFFF',
   },
-  addButton: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#1ADDDB',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerAction: {
+    padding: 8,
   },
   content: {
     flex: 1,
