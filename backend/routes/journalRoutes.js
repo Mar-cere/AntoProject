@@ -70,7 +70,7 @@ router.post('/', async (req, res) => {
 
     const savedEntry = await entry.save();
     console.log('Entrada guardada exitosamente:', savedEntry);
-    res.status(201).json(savedEntry);
+    res.status(201).json({ success: true, data: savedEntry });
   } catch (error) {
     console.error('Error detallado al crear entrada:', error);
     res.status(400).json({ 
@@ -84,23 +84,30 @@ router.post('/', async (req, res) => {
 // Actualizar entrada
 router.put('/:id', async (req, res) => {
   try {
+    const allowedFields = ['content', 'mood', 'tags', 'images', 'metadata', 'privacy'];
+    const updates = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    });
+
     const entry = await Journal.findOneAndUpdate(
       { 
         _id: req.params.id, 
         userId: req.user._id,
         isDeleted: false
       },
-      req.body,
+      updates,
       { new: true, runValidators: true }
     );
 
     if (!entry) {
-      return res.status(404).json({ message: 'Entrada no encontrada' });
+      return res.status(404).json({ success: false, message: 'Entrada no encontrada' });
     }
-    res.json(entry);
+    res.json({ success: true, data: entry.toJSON() });
   } catch (error) {
     console.error('Error al actualizar entrada:', error);
     res.status(400).json({ 
+      success: false,
       message: 'Error al actualizar la entrada', 
       error: error.message,
       validationErrors: error.errors 

@@ -19,9 +19,9 @@ const journalSchema = new mongoose.Schema({
     unique: true
   },
   userId: {
-    type: String,
-    required: [true, 'El ID del usuario es requerido'],
-    ref: 'User'
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'El ID del usuario es requerido']
   },
   content: {
     type: String,
@@ -36,11 +36,12 @@ const journalSchema = new mongoose.Schema({
     enum: ['happy', 'neutral', 'sad', 'excited', 'tired'],
     default: 'neutral'
   },
-  tags: [{
-    type: String,
+  tags: {
+    type: [String],
+    validate: [arr => arr.length <= 10, 'No puedes tener más de 10 etiquetas'],
     trim: true,
     maxlength: [20, 'Las etiquetas deben tener máximo 20 caracteres']
-  }],
+  },
   images: [{
     url: {
       type: String,
@@ -137,6 +138,11 @@ journalSchema.methods.softDelete = async function() {
   await this.save();
   return true;
 };
+
+journalSchema.pre(/^find/, function(next) {
+  this.where({ isDeleted: false });
+  next();
+});
 
 const Journal = mongoose.model('Journal', journalSchema);
 
