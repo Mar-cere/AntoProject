@@ -23,6 +23,7 @@ import FloatingNavBar from '../components/FloatingNavBar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api, ENDPOINTS } from '../config/api';
 import CreateJournalModal from '../components/journal/CreateJournalModal';
+import JournalItem from '../components/journal/JournalItem';
 
 const JournalScreen = ({ navigation }) => {
   const [entries, setEntries] = useState([]);
@@ -199,76 +200,10 @@ const JournalScreen = ({ navigation }) => {
     );
   };
 
-  const renderEntry = (entry, index) => (
-    <FadeInView key={entry.id || index} delay={index * 100}>
-      <View style={styles.entryCard}>
-        <View style={styles.entryHeader}>
-          <MaterialCommunityIcons 
-            name={moods[entry.mood]?.icon || moods['neutral'].icon} 
-            size={24} 
-            color={moods[entry.mood]?.color || moods['neutral'].color} 
-          />
-          <Text style={styles.entryDate}>
-            {new Date(entry.date).toLocaleDateString('es-ES', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </Text>
-          <View style={styles.entryActions}>
-            <TouchableOpacity 
-              onPress={() => {
-                setCurrentEntry(entry);
-                setShowModal(true);
-              }}
-              style={styles.actionButton}
-            >
-              <MaterialCommunityIcons name="pencil" size={20} color="#1ADDDB" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => deleteEntry(entry.id)}
-              style={styles.actionButton}
-            >
-              <MaterialCommunityIcons name="trash-can" size={20} color="#FF6B6B" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Text style={styles.entryContent}>{entry.content}</Text>
-      </View>
-    </FadeInView>
-  );
-
-  const Header = () => (
-    <View style={styles.header}>
-      <View style={styles.headerContent}>
-        <Text style={styles.headerTitle}>Mi Diario</Text>
-        <Text style={styles.headerSubtitle}>
-          {entries.length} {entries.length === 1 ? 'entrada' : 'entradas'}
-        </Text>
-      </View>
-      <TouchableOpacity 
-        style={styles.addButton}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setCurrentEntry({
-            id: null,
-            date: new Date(),
-            content: '',
-            mood: 'neutral',
-            tags: []
-          });
-          setShowModal(true);
-        }}
-      >
-        <MaterialCommunityIcons 
-          name="plus" 
-          size={24} 
-          color="#1ADDDB" 
-        />
-      </TouchableOpacity>
-    </View>
-  );
+  const normalizedEntries = entries.map(e => ({
+    ...e,
+    id: e.id || e._id
+  }));
 
   return (
     <SafeAreaProvider>
@@ -307,49 +242,19 @@ const JournalScreen = ({ navigation }) => {
               }
               style={styles.content}
             >
-              {entries.length > 0 ? (
-                entries.map((entry, index) => {
-                  const moodData = moods[entry.mood] || moods['neutral'];
-                  return (
-                    <FadeInView key={entry.id || index} delay={index * 100}>
-                      <View style={styles.entryCard}>
-                        <View style={styles.entryHeader}>
-                          <MaterialCommunityIcons 
-                            name={moodData.icon} 
-                            size={24} 
-                            color={moodData.color} 
-                          />
-                          <Text style={styles.entryDate}>
-                            {new Date(entry.date).toLocaleDateString('es-ES', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })}
-                          </Text>
-                          <View style={styles.entryActions}>
-                            <TouchableOpacity 
-                              onPress={() => {
-                                setCurrentEntry(entry);
-                                setShowModal(true);
-                              }}
-                              style={styles.actionButton}
-                            >
-                              <MaterialCommunityIcons name="pencil" size={20} color="#1ADDDB" />
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                              onPress={() => deleteEntry(entry.id)}
-                              style={styles.actionButton}
-                            >
-                              <MaterialCommunityIcons name="trash-can" size={20} color="#FF6B6B" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                        <Text style={styles.entryContent}>{entry.content}</Text>
-                      </View>
-                    </FadeInView>
-                  );
-                })
+              {normalizedEntries.length > 0 ? (
+                normalizedEntries.map((entry, index) => (
+                  <FadeInView key={entry.id || index} delay={index * 100}>
+                    <JournalItem
+                      entry={entry}
+                      onEdit={e => {
+                        setCurrentEntry(e);
+                        setShowModal(true);
+                      }}
+                      onDelete={id => deleteEntry(id)}
+                    />
+                  </FadeInView>
+                ))
               ) : (
                 <View style={styles.emptyContainer}>
                   <MaterialCommunityIcons 
@@ -430,45 +335,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
-  },
-  entryCard: {
-    backgroundColor: 'rgba(29, 43, 95, 0.8)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(26, 221, 219, 0.1)',
-    shadowColor: "#1ADDDB",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  entryDate: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 14,
-    color: '#A3B8E8',
-  },
-  entryActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 4,
-  },
-  entryContent: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    lineHeight: 24,
   },
   modalOverlay: {
     flex: 1,
