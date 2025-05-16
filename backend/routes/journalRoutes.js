@@ -45,7 +45,7 @@ router.get('/', async (req, res) => {
     const entries = await Journal.find(query)
       .sort({ createdAt: -1 });
     
-    res.json(entries);
+    res.json({ success: true, data: entries });
   } catch (error) {
     console.error('Error al obtener entradas del diario:', error);
     res.status(500).json({ message: 'Error al obtener las entradas', error: error.message });

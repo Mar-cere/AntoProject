@@ -151,6 +151,21 @@ journalSchema.pre(/^find/, function(next) {
   next();
 });
 
+journalSchema.virtual('date').get(function() {
+  return this.createdAt;
+});
+
+journalSchema.set('toJSON', {
+  virtuals: true,
+  transform: function(doc, ret) {
+    ret.id = ret.id || ret._id;
+    delete ret._id;
+    delete ret.__v;
+    delete ret.isDeleted;
+    return ret;
+  }
+});
+
 const Journal = mongoose.model('Journal', journalSchema);
 
 export default Journal;

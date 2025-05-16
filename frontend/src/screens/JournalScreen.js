@@ -205,6 +205,37 @@ const JournalScreen = ({ navigation }) => {
     id: e.id || e._id
   }));
 
+  const Header = () => (
+    <View style={styles.header}>
+      <View style={styles.headerContent}>
+        <Text style={styles.headerTitle}>Mi Diario</Text>
+        <Text style={styles.headerSubtitle}>
+          {entries.length} {entries.length === 1 ? 'entrada' : 'entradas'}
+        </Text>
+      </View>
+      <TouchableOpacity 
+        style={styles.addButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setCurrentEntry({
+            id: null,
+            date: new Date(),
+            content: '',
+            mood: 'neutral',
+            tags: []
+          });
+          setShowModal(true);
+        }}
+      >
+        <MaterialCommunityIcons 
+          name="plus" 
+          size={24} 
+          color="#1ADDDB" 
+        />
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <SafeAreaProvider>
       <View style={styles.container}>
