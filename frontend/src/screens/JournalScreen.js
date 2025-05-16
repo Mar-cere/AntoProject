@@ -204,9 +204,9 @@ const JournalScreen = ({ navigation }) => {
       <View style={styles.entryCard}>
         <View style={styles.entryHeader}>
           <MaterialCommunityIcons 
-            name={moods[entry.mood].icon} 
+            name={moods[entry.mood]?.icon || moods['neutral'].icon} 
             size={24} 
-            color={moods[entry.mood].color} 
+            color={moods[entry.mood]?.color || moods['neutral'].color} 
           />
           <Text style={styles.entryDate}>
             {new Date(entry.date).toLocaleDateString('es-ES', {
@@ -308,7 +308,48 @@ const JournalScreen = ({ navigation }) => {
               style={styles.content}
             >
               {entries.length > 0 ? (
-                entries.map((entry, index) => renderEntry(entry, index))
+                entries.map((entry, index) => {
+                  const moodData = moods[entry.mood] || moods['neutral'];
+                  return (
+                    <FadeInView key={entry.id || index} delay={index * 100}>
+                      <View style={styles.entryCard}>
+                        <View style={styles.entryHeader}>
+                          <MaterialCommunityIcons 
+                            name={moodData.icon} 
+                            size={24} 
+                            color={moodData.color} 
+                          />
+                          <Text style={styles.entryDate}>
+                            {new Date(entry.date).toLocaleDateString('es-ES', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </Text>
+                          <View style={styles.entryActions}>
+                            <TouchableOpacity 
+                              onPress={() => {
+                                setCurrentEntry(entry);
+                                setShowModal(true);
+                              }}
+                              style={styles.actionButton}
+                            >
+                              <MaterialCommunityIcons name="pencil" size={20} color="#1ADDDB" />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              onPress={() => deleteEntry(entry.id)}
+                              style={styles.actionButton}
+                            >
+                              <MaterialCommunityIcons name="trash-can" size={20} color="#FF6B6B" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <Text style={styles.entryContent}>{entry.content}</Text>
+                      </View>
+                    </FadeInView>
+                  );
+                })
               ) : (
                 <View style={styles.emptyContainer}>
                   <MaterialCommunityIcons 
