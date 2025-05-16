@@ -38,6 +38,10 @@ router.get('/', async (req, res) => {
       query.content = { $regex: search, $options: 'i' };
     }
 
+    if (req.query.activity) {
+      query.activity = req.query.activity;
+    }
+
     const entries = await Journal.find(query)
       .sort({ createdAt: -1 });
     
@@ -51,8 +55,6 @@ router.get('/', async (req, res) => {
 // Crear nueva entrada
 router.post('/', async (req, res) => {
   try {
-    console.log('Datos recibidos para nueva entrada:', req.body);
-    
     const entry = new Journal({
       ...req.body,
       userId: req.user._id,
@@ -61,7 +63,6 @@ router.post('/', async (req, res) => {
 
     const validationError = entry.validateSync();
     if (validationError) {
-      console.error('Error de validación:', validationError);
       return res.status(400).json({
         message: 'Error de validación',
         errors: Object.values(validationError.errors).map(err => err.message)
@@ -69,10 +70,8 @@ router.post('/', async (req, res) => {
     }
 
     const savedEntry = await entry.save();
-    console.log('Entrada guardada exitosamente:', savedEntry);
     res.status(201).json({ success: true, data: savedEntry });
   } catch (error) {
-    console.error('Error detallado al crear entrada:', error);
     res.status(400).json({ 
       message: 'Error al crear la entrada', 
       error: error.message,
@@ -84,7 +83,9 @@ router.post('/', async (req, res) => {
 // Actualizar entrada
 router.put('/:id', async (req, res) => {
   try {
-    const allowedFields = ['content', 'mood', 'tags', 'images', 'metadata', 'privacy'];
+    const allowedFields = [
+      'content', 'mood', 'tags', 'images', 'metadata', 'privacy', 'activity', 'gratitude'
+    ];
     const updates = {};
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -105,7 +106,6 @@ router.put('/:id', async (req, res) => {
     }
     res.json({ success: true, data: entry.toJSON() });
   } catch (error) {
-    console.error('Error al actualizar entrada:', error);
     res.status(400).json({ 
       success: false,
       message: 'Error al actualizar la entrada', 

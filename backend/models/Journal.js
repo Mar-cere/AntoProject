@@ -36,6 +36,18 @@ const journalSchema = new mongoose.Schema({
     enum: ['happy', 'neutral', 'sad', 'excited', 'tired'],
     default: 'neutral'
   },
+  activity: {
+    type: String,
+    trim: true,
+    maxlength: [40, 'La actividad debe tener máximo 40 caracteres'],
+    default: null
+  },
+  gratitude: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'El campo de gratitud debe tener máximo 200 caracteres'],
+    default: ''
+  },
   tags: {
     type: [String],
     validate: [arr => arr.length <= 10, 'No puedes tener más de 10 etiquetas'],
@@ -63,16 +75,11 @@ const journalSchema = new mongoose.Schema({
       type: String,
       trim: true,
       default: null
-    },
-    activity: {
-      type: String,
-      trim: true,
-      default: null
     }
   },
   privacy: {
     type: String,
-    enum: ['private', 'shared'],
+    enum: ['private', 'shared', 'chat'],
     default: 'private'
   },
   isDeleted: {

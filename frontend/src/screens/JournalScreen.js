@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api, ENDPOINTS } from '../config/api';
+import CreateJournalModal from '../components/journal/CreateJournalModal';
 
 const JournalScreen = ({ navigation }) => {
   const [entries, setEntries] = useState([]);
@@ -179,95 +180,6 @@ const JournalScreen = ({ navigation }) => {
     loadEntries();
   }, []);
 
-  const renderEntryModal = () => (
-    <Modal
-      visible={showModal}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setShowModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalSheet}>
-          {/* Indicador de deslizamiento */}
-          <View style={styles.modalIndicator} />
-
-          {/* Fecha */}
-          <Text style={styles.modalDate}>
-            {new Date().toLocaleDateString('es-ES', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </Text>
-
-          {/* Estados de ánimo */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.moodScrollView}
-          >
-            {Object.entries(moods).map(([mood, { icon, color }]) => (
-              <TouchableOpacity
-                key={mood}
-                style={[
-                  styles.moodOption,
-                  currentEntry.mood === mood && { 
-                    backgroundColor: color + '20',
-                    borderColor: color
-                  }
-                ]}
-                onPress={() => {
-                  setCurrentEntry({ ...currentEntry, mood });
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-              >
-                <MaterialCommunityIcons 
-                  name={icon} 
-                  size={28} 
-                  color={currentEntry.mood === mood ? color : '#A3B8E8'} 
-                />
-                <Text style={[
-                  styles.moodText,
-                  currentEntry.mood === mood && { color }
-                ]}>
-                  {mood.charAt(0).toUpperCase() + mood.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Campo de texto */}
-          <TextInput
-            style={styles.journalInput}
-            multiline
-            placeholder="¿Cómo te sientes hoy?"
-            placeholderTextColor="#A3B8E8"
-            value={currentEntry.content}
-            onChangeText={(content) => setCurrentEntry({ ...currentEntry, content })}
-            textAlignVertical="top"
-          />
-
-          {/* Botones de acción */}
-          <View style={styles.modalActions}>
-            <TouchableOpacity 
-              style={styles.cancelButton}
-              onPress={() => setShowModal(false)}
-            >
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.saveButton}
-              onPress={saveEntry}
-            >
-              <Text style={styles.saveButtonText}>Guardar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   const FadeInView = ({ delay, children }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -416,7 +328,13 @@ const JournalScreen = ({ navigation }) => {
           )}
         </ImageBackground>
         <FloatingNavBar activeTab="journal" />
-        {showModal && renderEntryModal()}
+        <CreateJournalModal
+          visible={showModal}
+          onClose={() => setShowModal(false)}
+          onSave={saveEntry}
+          entry={currentEntry}
+          setEntry={setCurrentEntry}
+        />
       </View>
     </SafeAreaProvider>
   );
