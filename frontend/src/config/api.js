@@ -82,6 +82,7 @@ const makeRequest = (url, options) => {
 // Función auxiliar para obtener headers con autorización
 const getAuthHeaders = async () => {
   const token = await AsyncStorage.getItem('userToken');
+  console.log('Token de autenticación:', token ? 'Presente' : 'No presente');
   return {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -122,17 +123,25 @@ export const api = {
       const queryString = new URLSearchParams(params).toString();
       const url = queryString ? `${API_URL}${endpoint}?${queryString}` : `${API_URL}${endpoint}`;
       
+      console.log('URL completa de la petición:', url);
+      console.log('Headers de la petición:', headers);
+      
       const response = await fetch(url, {
         method: 'GET',
         headers
       });
 
+      console.log('Status de la respuesta:', response.status);
+      console.log('Headers de la respuesta:', response.headers);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Error en la respuesta:', errorData);
         throw new Error(errorData.message || 'Error en la petición');
       }
 
       const data = await response.json();
+      console.log('Datos recibidos en api.get:', data);
       return data;
     } catch (error) {
       console.error(`Error en ${endpoint}:`, error);

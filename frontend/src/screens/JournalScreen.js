@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { api, ENDPOINTS } from '../config/api';
+import { API_URL, ENDPOINTS, api } from '../config/api';
 import CreateJournalModal from '../components/journal/CreateJournalModal';
 import JournalItem from '../components/journal/JournalItem';
 
@@ -40,21 +40,6 @@ const JournalScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
 
-  const moods = {
-    happy: { icon: 'emoticon-happy', color: '#4CAF50' },
-    neutral: { icon: 'emoticon-neutral', color: '#FFC107' },
-    sad: { icon: 'emoticon-sad', color: '#FF5252' },
-    excited: { icon: 'emoticon-excited', color: '#2196F3' },
-    tired: { icon: 'emoticon-tired', color: '#9C27B0' }
-  };
-
-  const categories = [
-    { id: 'personal', label: 'Personal', icon: 'account-heart' },
-    { id: 'trabajo', label: 'Trabajo', icon: 'briefcase' },
-    { id: 'salud', label: 'Salud', icon: 'heart-pulse' },
-    { id: 'metas', label: 'Metas', icon: 'target' }
-  ];
-
   const loadEntries = useCallback(async () => {
     try {
       setLoading(true);
@@ -62,10 +47,10 @@ const JournalScreen = ({ navigation }) => {
         mood: selectedFilter !== 'all' ? selectedFilter : undefined,
         search: searchQuery || undefined
       });
-      setEntries(response);
+      console.log('Respuesta completa de la API:', response);
+      setEntries(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
-      console.error('Error al cargar entradas:', error);
-      Alert.alert('Error', 'No se pudieron cargar las entradas del diario');
+      setEntries([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -84,7 +69,6 @@ const JournalScreen = ({ navigation }) => {
         mood: currentEntry.mood,
         tags: currentEntry.tags || [],
         metadata: {
-          // Opcional: puedes agregar estos campos si los necesitas
           location: null,
           weather: null,
           activity: null
@@ -103,10 +87,14 @@ const JournalScreen = ({ navigation }) => {
         response = await api.post(ENDPOINTS.JOURNAL, entryData);
       }
 
+      // Aseguramos que usamos response.data
+      const savedEntry = response.data;
+
       setEntries(prev => {
+        const safePrev = Array.isArray(prev) ? prev : [];
         const newEntries = currentEntry.id
-          ? prev.map(e => e.id === currentEntry.id ? response : e)
-          : [response, ...prev];
+          ? safePrev.map(e => e.id === currentEntry.id ? savedEntry : e)
+          : [savedEntry, ...safePrev];
         return newEntries;
       });
 
@@ -149,12 +137,10 @@ const JournalScreen = ({ navigation }) => {
     );
   };
 
-  // Nuevo método para cargar el resumen de estados de ánimo
   const loadMoodSummary = async () => {
     try {
-      const summary = await api.get(ENDPOINTS.JOURNAL_MOOD_SUMMARY);
-      // Aquí podrías actualizar un estado para mostrar estadísticas
-      console.log('Resumen de estados de ánimo:', summary);
+      const response = await api.get(ENDPOINTS.JOURNAL_MOOD_SUMMARY);
+      console.log('Resumen de estados de ánimo:', response.data);
     } catch (error) {
       console.error('Error al cargar resumen:', error);
     }
@@ -165,7 +151,6 @@ const JournalScreen = ({ navigation }) => {
     loadMoodSummary();
   }, [loadEntries]);
 
-  // Nuevo efecto para manejar la búsqueda con debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (searchQuery || selectedFilter !== 'all') {
@@ -179,7 +164,7 @@ const JournalScreen = ({ navigation }) => {
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadEntries();
-  }, []);
+  }, [loadEntries]);
 
   const FadeInView = ({ delay, children }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -200,17 +185,17 @@ const JournalScreen = ({ navigation }) => {
     );
   };
 
-  const normalizedEntries = entries.map(e => ({
+  const normalizedEntries = Array.isArray(entries) ? entries.map(e => ({
     ...e,
     id: e.id || e._id
-  }));
+  })) : [];
 
   const Header = () => (
     <View style={styles.header}>
       <View style={styles.headerContent}>
         <Text style={styles.headerTitle}>Mi Diario</Text>
         <Text style={styles.headerSubtitle}>
-          {entries.length} {entries.length === 1 ? 'entrada' : 'entradas'}
+          {entries?.length || 0} {entries?.length === 1 ? 'entrada' : 'entradas'}
         </Text>
       </View>
       <TouchableOpacity 
@@ -273,8 +258,8 @@ const JournalScreen = ({ navigation }) => {
               }
               style={styles.content}
             >
-              {normalizedEntries.length > 0 ? (
-                normalizedEntries.map((entry, index) => (
+              {entries && entries.length > 0 ? (
+                entries.map((entry, index) => (
                   <FadeInView key={entry.id || index} delay={index * 100}>
                     <JournalItem
                       entry={entry}

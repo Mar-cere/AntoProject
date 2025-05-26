@@ -168,7 +168,7 @@ const TaskScreen = ({ route }) => {
           Alert.alert('Error', 'No se pudo eliminar el item completado');
         }
       }, 3500);
-
+      
     } catch (error) {
       console.error('Error al completar item:', error);
       Alert.alert('Error', 'No se pudo actualizar el item');
@@ -220,7 +220,7 @@ const TaskScreen = ({ route }) => {
     <View style={styles.emptyContainer}>
       <Ionicons name="checkmark-done-circle-outline" size={64} color="#A3B8E8" />
       <Text style={styles.emptyText}>No tienes tareas ni recordatorios</Text>
-    </View>
+      </View>
   );
 
   return (

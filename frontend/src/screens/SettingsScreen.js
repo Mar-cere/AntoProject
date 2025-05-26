@@ -353,7 +353,7 @@ const SettingsScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+    </View>
       </Modal>
     </SafeAreaView>
   );
