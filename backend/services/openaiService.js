@@ -12,6 +12,7 @@ import progressTracker from './progressTracker.js';
 import responseGenerator from './responseGenerator.js';
 import mongoose from 'mongoose';
 import Conversation from '../models/Conversation.js';
+import Message from '../models/Message.js';
 
 dotenv.config();
 
@@ -511,6 +512,22 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
     if (!esCoherenteConEmocion(response, emotionalAnalysis)) {
       response = ajustarCoherenciaEmocional(response, emotionalAnalysis);
     }
+
+    // 1. Crear y guardar el mensaje del asistente
+    const assistantMessage = new Message({
+      userId: userId,
+      conversationId: message.conversationId,
+      content: response,
+      role: 'assistant',
+      metadata: { ... }
+    });
+    await assistantMessage.save();
+
+    // 2. Actualizar la conversación con el _id del mensaje
+    await Conversation.findByIdAndUpdate(
+      message.conversationId,
+      { lastMessage: assistantMessage._id }
+    );
 
     return {
       content: response,

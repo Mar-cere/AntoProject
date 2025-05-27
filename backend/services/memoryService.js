@@ -38,7 +38,7 @@ class MemoryService {
    */
   async getRelevantContext(userId, content, currentAnalysis = {}) {
     try {
-      if (!userId || typeof userId !== 'string') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       if (!content || typeof content !== 'string') {

@@ -10,7 +10,7 @@ class GoalTracker {
    */
   async trackProgress(userId, data) {
     try {
-      if (!userId || typeof userId !== 'string' || !data || typeof data !== 'object') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
         throw new Error('userId y data válidos son requeridos');
       }
       const { message, analysis } = data;
@@ -37,7 +37,7 @@ class GoalTracker {
    */
   async updateProgress(userId, data) {
     try {
-      if (!userId || typeof userId !== 'string' || !data || typeof data !== 'object') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
         throw new Error('userId y data válidos son requeridos');
       }
       const { message, context } = data;
@@ -73,7 +73,7 @@ class GoalTracker {
    */
   async initializeUserGoals(userId) {
     try {
-      if (!userId || typeof userId !== 'string') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       return await UserGoals.create({
@@ -123,7 +123,7 @@ class GoalTracker {
    */
   async updateGoalProgress(userId, message, analysis) {
     try {
-      if (!userId || typeof userId !== 'string' || !message || typeof message.content !== 'string') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId)) || !message || typeof message.content !== 'string') {
         throw new Error('userId y mensaje válidos son requeridos');
       }
       const update = {

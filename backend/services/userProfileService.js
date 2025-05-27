@@ -2,6 +2,7 @@ import UserProfile from '../models/UserProfile.js';
 import Message from '../models/Message.js';
 import openaiService from './openaiService.js';
 import emotionalAnalyzer from './emotionalAnalyzer.js';
+import mongoose from 'mongoose';
 
 const PERIODOS = {
   MADRUGADA: { inicio: 0, fin: 5, nombre: 'madrugada' },
@@ -38,7 +39,7 @@ class UserProfileService {
    */
   async getOrCreateProfile(userId) {
     try {
-      if (!userId || typeof userId !== 'string') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof mongoose.Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       let userProfile = await UserProfile.findOne({ userId });
@@ -93,7 +94,7 @@ class UserProfileService {
    */
   async actualizarPerfil(userId, mensaje, analisis) {
     try {
-      if (!userId || typeof userId !== 'string') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof mongoose.Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       if (!mensaje || typeof mensaje !== 'object') {

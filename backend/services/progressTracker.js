@@ -9,7 +9,7 @@ class ProgressTracker {
    */
   async trackProgress(userId, mensaje) {
     try {
-      if (!userId || typeof userId !== 'string') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       if (!mensaje || typeof mensaje !== 'object') {
