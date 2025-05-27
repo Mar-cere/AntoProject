@@ -9,7 +9,13 @@ const conversationSchema = new mongoose.Schema({
   participants: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    validate: {
+      validator: function(participants) {
+        return participants.length > 0 && participants.includes(this.userId);
+      },
+      message: 'La conversación debe tener al menos un participante (el creador)'
+    }
   }],
   createdAt: {
     type: Date,
@@ -23,12 +29,6 @@ const conversationSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'archived'],
     default: 'active'
-  },
-  validate: {
-    validator: function(participants) {
-      return participants.length > 0 && participants.includes(this.userId);
-    },
-    message: 'La conversación debe tener al menos un participante (el creador)'
   },
   lastMessage: {
     type: mongoose.Schema.Types.ObjectId,
