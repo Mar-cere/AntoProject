@@ -110,7 +110,7 @@ router.post('/conversations', protect, async (req, res) => {
       type: 'system',
       isSystemMessage: true,
       metadata: {
-        type: 'welcome',
+        type: 'system',
         timestamp: new Date(),
         context: {
           preferences: userPreferences
