@@ -519,7 +519,11 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
       conversationId: message.conversationId,
       content: response,
       role: 'assistant',
-      metadata: { ... }
+      metadata: {
+        timestamp: new Date(),
+        type: 'text',
+        status: 'sent'
+      }
     });
     await assistantMessage.save();
 
