@@ -22,6 +22,8 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MeditationView from '../components/MeditationView';
 import FloatingNavBar from '../components/FloatingNavBar';
+import { sendImmediateNotification } from '../utils/notifications';
+import * as Notifications from 'expo-notifications';
 
 const PomodoroScreen = () => {
   const navigation = useNavigation();
@@ -204,6 +206,10 @@ const PomodoroScreen = () => {
         });
       }, 1000);
     } else if (timeLeft === 0) {
+      sendImmediateNotification(
+        "¡Pomodoro completado! ⏲️",
+        "¡Tómate un descanso o inicia una nueva sesión!"
+      );
       if (mode === 'meditation') {
         // Sonido suave al finalizar la meditación
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -430,6 +436,20 @@ const PomodoroScreen = () => {
       })
     ]).start();
   }, [isActive]);
+
+  const scheduleNextPomodoroNotification = async (minutes) => {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "¡Hora de volver a concentrarte! 🍅",
+        body: "Inicia una nueva sesión Pomodoro en AntoApp.",
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+      },
+      trigger: {
+        seconds: minutes * 60,
+      },
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>

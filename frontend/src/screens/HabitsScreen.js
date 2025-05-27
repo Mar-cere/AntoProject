@@ -20,6 +20,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
 import CreateHabitModal from '../components/habits/CreateHabitModal';
+import { scheduleHabitNotification, cancelHabitNotifications } from '../utils/notifications';
 
 const API_URL = 'https://antobackend.onrender.com';
 
@@ -132,6 +133,10 @@ const HabitsScreen = ({ route }) => {
       setModalVisible(false);
       resetForm();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Programa la notificación
+      await scheduleHabitNotification(createdHabit);
+
     } catch (error) {
       console.error('Error:', error);
       Alert.alert('Error', error.message || 'No se pudo crear el hábito');
@@ -221,6 +226,7 @@ const HabitsScreen = ({ route }) => {
 
               setHabits(prevHabits => prevHabits.filter(habit => habit._id !== habitId));
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              await cancelHabitNotifications(habitId);
             } catch (error) {
               console.error('Error:', error);
               Alert.alert('Error', 'No se pudo eliminar el hábito');

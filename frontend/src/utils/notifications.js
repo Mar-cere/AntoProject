@@ -204,3 +204,28 @@ export const cancelTaskNotifications = async (taskId) => {
     }
   }
 };
+
+// Programar notificación para un hábito
+export const scheduleHabitNotification = async (habit) => {
+  if (!habit.reminder) return;
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: `¡No olvides tu hábito!`,
+      body: `Recuerda: ${habit.title}`,
+      sound: true,
+      data: { habitId: habit._id }
+    },
+    trigger: new Date(habit.reminder)
+  });
+};
+
+// Cancelar notificaciones de un hábito por id
+export const cancelHabitNotifications = async (habitId) => {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const notif of scheduled) {
+    if (notif.content.data && notif.content.data.habitId === habitId) {
+      await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+    }
+  }
+};

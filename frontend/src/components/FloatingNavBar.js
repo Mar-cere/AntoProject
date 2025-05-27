@@ -104,6 +104,19 @@ const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
           />
         </TouchableOpacity>
       </View>
+
+      {/* Botón Pomodoro */}
+      <TouchableOpacity 
+        style={[styles.button, activeTab === 'pomodoro' && styles.activeButton]} 
+        onPress={() => handleTabPress('Pomodoro', 'pomodoro')}
+      >
+        <View style={styles.iconContainer}>
+          <Text style={[styles.iconText, activeTab === 'pomodoro' && styles.activeIconText]}>⏲️</Text>
+        </View>
+        <Text style={[styles.text, activeTab === 'pomodoro' && styles.activeText]}>
+          Pomodoro
+        </Text>
+      </TouchableOpacity>
       
       {/* Botón Ajustes */}
       <TouchableOpacity 
