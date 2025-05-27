@@ -3,7 +3,6 @@ import UserProfile from './UserProfile.js';
 import TherapeuticRecord from './TherapeuticRecord.js';
 import UserProgress from './UserProgress.js';
 import UserInsight from './UserInsight.js';
-import Journal from './Journal.js';
 import User from './User.js';
 import Habit from './Habit.js';
 import Task from './Task.js';
@@ -16,7 +15,6 @@ const models = {
   TherapeuticRecord,
   UserProgress,
   UserInsight,
-  Journal,
   User,
   Habit,
   Task,
@@ -36,7 +34,6 @@ export {
   TherapeuticRecord,
   UserProgress,
   UserInsight,
-  Journal,
   User,
   Habit,
   Task,
