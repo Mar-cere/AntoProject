@@ -7,6 +7,7 @@ import User from './User.js';
 import Habit from './Habit.js';
 import Task from './Task.js';
 import UserGoals from './UserGoals.js';
+import Conversation from './Conversation.js';
 
 // Validar que todos los modelos estén correctamente exportados
 const models = {
@@ -18,7 +19,8 @@ const models = {
   User,
   Habit,
   Task,
-  UserGoals
+  UserGoals,
+  Conversation,
 };
 
 // Verificar que cada modelo sea válido
@@ -37,7 +39,8 @@ export {
   User,
   Habit,
   Task,
-  UserGoals
+  UserGoals,
+  Conversation,
 };
 
 export default models; 
