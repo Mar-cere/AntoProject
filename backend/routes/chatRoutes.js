@@ -6,7 +6,8 @@ import {
   UserProfile,
   TherapeuticRecord,
   UserProgress,
-  UserInsight
+  UserInsight,
+  Conversation
 } from '../models/index.js';
 import {
   openaiService,
@@ -92,14 +93,20 @@ router.get('/conversations/:conversationId', protect, validarConversationId, asy
 // Crear nueva conversación
 router.post('/conversations', protect, async (req, res) => {
   try {
-    const conversationId = new mongoose.Types.ObjectId().toString();
+    // Crea el documento de conversación
+    const conversation = new Conversation({
+      userId: req.user._id,
+      participants: [req.user._id], // Puedes agregar más participantes si lo deseas
+    });
+    await conversation.save();
+
+    // Crea el mensaje de bienvenida
     const userPreferences = await userProfileService.getPersonalizedPrompt(req.user._id);
-    
     const welcomeMessage = new Message({
       userId: req.user._id,
       content: await openaiService.generarSaludoPersonalizado(userPreferences),
       role: 'assistant',
-      conversationId,
+      conversationId: conversation._id.toString(),
       type: 'system',
       isSystemMessage: true,
       metadata: {
@@ -110,11 +117,10 @@ router.post('/conversations', protect, async (req, res) => {
         }
       }
     });
-
     await welcomeMessage.save();
 
     res.status(201).json({
-      conversationId,
+      conversationId: conversation._id.toString(),
       message: welcomeMessage
     });
   } catch (error) {
