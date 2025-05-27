@@ -35,9 +35,6 @@ const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
         case 'Calendar':
           navigation.navigate('Tasks');
           break;
-        case 'Journal':
-          navigation.navigate('Journal');
-          break;
         case 'Settings':
           navigation.navigate('Settings');
           break;
@@ -107,19 +104,6 @@ const FloatingNavBar = ({ activeTab, onTabPress, animValues = {} }) => {
           />
         </TouchableOpacity>
       </View>
-      
-      {/* Botón Journal */}
-      <TouchableOpacity 
-        style={[styles.button, activeTab === 'journal' && styles.activeButton]} 
-        onPress={() => handleTabPress('Journal', 'journal')}
-      >
-        <View style={styles.iconContainer}>
-          <Text style={[styles.iconText, activeTab === 'journal' && styles.activeIconText]}>📔</Text>
-        </View>
-        <Text style={[styles.text, activeTab === 'journal' && styles.activeText]}>
-          Journal
-        </Text>
-      </TouchableOpacity>
       
       {/* Botón Ajustes */}
       <TouchableOpacity 

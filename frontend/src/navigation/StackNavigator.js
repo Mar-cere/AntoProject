@@ -13,7 +13,6 @@ import NewPasswordScreen from '../screens/NewPasswordScreen';
 import TaskScreen from '../screens/TaskScreen';
 import HabitsScreen from '../screens/HabitsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import JournalScreen from '../screens/JournalScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import HelpScreen from '../screens/HelpScreen';
 import PomodoroScreen from '../screens/PomodoroScreen';
@@ -45,7 +44,6 @@ const StackNavigator = () => {
       <Stack.Screen name="Tasks" component={TaskScreen} />
       <Stack.Screen name="Habits" component={HabitsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="Journal" component={JournalScreen} />
       <Stack.Screen 
         name="EditProfile" 
         component={EditProfileScreen}

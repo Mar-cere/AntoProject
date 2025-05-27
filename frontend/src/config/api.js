@@ -32,13 +32,6 @@ export const ENDPOINTS = {
   HABIT_BY_ID: (id) => `/api/habits/${id}`,
   HABIT_COMPLETE: (id) => `/api/habits/${id}/complete`,
 
-  // Journal (Nuevo)
-  JOURNAL: '/api/journal',
-  JOURNAL_BY_ID: (id) => `/api/journal/${id}`,
-  JOURNAL_MOOD_SUMMARY: '/api/journal/mood-summary',
-  JOURNAL_BY_TAGS: '/api/journal/by-tags',
-  JOURNAL_PRIVACY: (id) => `/api/journal/${id}/privacy`,
-
   // Chat
   CHAT: '/api/chat',
   CHAT_MESSAGES: '/api/chat/messages',

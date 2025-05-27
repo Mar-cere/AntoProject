@@ -6,7 +6,6 @@ import { Ionicons } from "@expo/vector-icons";
 // Importar pantallas principales
 import HomeScreen from "../screens/HomeScreen";
 import ChatScreen from "../screens/ChatScreen";
-import JournalScreen from "../screens/JournalScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import RegisterScreen from "../screens/RegisterScreen";
@@ -22,7 +21,6 @@ const SecondaryStack = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
-      <Stack.Screen name="Journal" component={JournalScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="FaQ" component={FaQScreen} />
     </Stack.Navigator>
@@ -38,7 +36,6 @@ export default function TabNavigator() {
           let iconName;
           if (route.name === "Inicio") iconName = "home-outline";
           else if (route.name === "Chat") iconName = "chatbubble-outline";
-          else if (route.name === "Journal") iconName = "book-outline";
           else if (route.name === "Perfil") iconName = "person-outline";
           else if (route.name === "Ajustes") iconName = "settings-outline";
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -50,7 +47,6 @@ export default function TabNavigator() {
     >
       <Tab.Screen name="Inicio" component={HomeScreen} />
       <Tab.Screen name="Chat" component={SecondaryStack} />
-      <Tab.Screen name="Journal" component={JournalScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
       <Tab.Screen name="Ajustes" component={SettingsScreen} />
       <Tab.Screen name="FaQ" component={FaQScreen} />
