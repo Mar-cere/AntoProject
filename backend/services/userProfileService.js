@@ -31,8 +31,16 @@ const DIMENSIONES_ANALISIS = {
 };
 
 class UserProfileService {
+  /**
+   * Obtiene o crea el perfil de usuario.
+   * @param {string} userId - ID del usuario.
+   * @returns {Promise<Object>} Perfil de usuario.
+   */
   async getOrCreateProfile(userId) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
       let userProfile = await UserProfile.findOne({ userId });
       
       if (!userProfile) {
@@ -59,7 +67,7 @@ class UserProfileService {
 
       return userProfile;
     } catch (error) {
-      console.error('Error en getOrCreateProfile:', error);
+      console.error('[UserProfileService] Error en getOrCreateProfile:', error, { userId });
       // Retornar un perfil por defecto en caso de error
       return {
         userId,
@@ -76,8 +84,21 @@ class UserProfileService {
     }
   }
 
+  /**
+   * Actualiza el perfil del usuario con un nuevo mensaje y análisis.
+   * @param {string} userId - ID del usuario.
+   * @param {Object} mensaje - Mensaje recibido.
+   * @param {Object} analisis - Análisis del mensaje.
+   * @returns {Promise<Object|null>} Perfil actualizado o null si hay error.
+   */
   async actualizarPerfil(userId, mensaje, analisis) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
+      if (!mensaje || typeof mensaje !== 'object') {
+        throw new Error('mensaje válido es requerido');
+      }
       const actualizacion = {
         $push: {
           'patrones.emocionales': {
@@ -105,7 +126,7 @@ class UserProfileService {
         }
       );
     } catch (error) {
-      console.error('Error actualizando perfil:', error);
+      console.error('[UserProfileService] Error actualizando perfil:', error, { userId, mensaje, analisis });
       return null;
     }
   }

@@ -1,8 +1,20 @@
 import UserProgress from '../models/UserProgress.js';
 
 class ProgressTracker {
+  /**
+   * Registra el progreso de una sesión para el usuario.
+   * @param {string} userId - ID del usuario.
+   * @param {Object} mensaje - Mensaje recibido (debe tener metadata.context).
+   * @returns {Promise<Object|null>} Progreso actualizado o null si hay error.
+   */
   async trackProgress(userId, mensaje) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
+      if (!mensaje || typeof mensaje !== 'object') {
+        throw new Error('mensaje válido es requerido');
+      }
       const progressEntry = {
         timestamp: new Date(),
         emotionalState: {
@@ -19,7 +31,6 @@ class ProgressTracker {
           responseQuality: 3
         }
       };
-
       const userProgress = await UserProgress.findOneAndUpdate(
         { userId },
         {
@@ -28,16 +39,23 @@ class ProgressTracker {
         },
         { new: true, upsert: true }
       );
-
       return userProgress;
     } catch (error) {
-      console.error('Error en seguimiento de progreso:', error);
+      console.error('[ProgressTracker] Error en seguimiento de progreso:', error, { userId, mensaje });
       return null;
     }
   }
 
+  /**
+   * Genera un reporte de progreso para el usuario.
+   * @param {string} userId - ID del usuario.
+   * @returns {Promise<Object|null>} Reporte de progreso o null si hay error.
+   */
   async generarReporte(userId) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
       const progress = await UserProgress.findOne({ userId });
       if (!progress || !progress.entries || progress.entries.length === 0) {
         return {
@@ -47,7 +65,6 @@ class ProgressTracker {
           commonTopics: []
         };
       }
-
       return {
         totalSessions: progress.entries.length,
         averageIntensity: this.calcularIntensidadPromedio(progress.entries),
@@ -55,7 +72,7 @@ class ProgressTracker {
         commonTopics: this.obtenerTemasComunes(progress.entries)
       };
     } catch (error) {
-      console.error('Error generando reporte:', error);
+      console.error('[ProgressTracker] Error generando reporte:', error, { userId });
       return null;
     }
   }

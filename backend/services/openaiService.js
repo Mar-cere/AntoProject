@@ -11,6 +11,7 @@ import emotionalAnalyzer from './emotionalAnalyzer.js';
 import progressTracker from './progressTracker.js';
 import responseGenerator from './responseGenerator.js';
 import mongoose from 'mongoose';
+import Conversation from '../models/Conversation.js';
 
 dotenv.config();
 
@@ -506,6 +507,11 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
       })
     ]);
 
+    // Validar coherencia emocional
+    if (!esCoherenteConEmocion(response, emotionalAnalysis)) {
+      response = ajustarCoherenciaEmocional(response, emotionalAnalysis);
+    }
+
     return {
       content: response,
       context: {
@@ -683,7 +689,8 @@ class OpenAIService {
           message: mensaje,
           response: respuestaValidada,
           context: analisisContextual
-        })
+        }),
+        Conversation.findByIdAndUpdate(mensaje.conversationId, { lastMessage: respuestaValidada })
       ]);
 
       return {
@@ -713,6 +720,7 @@ CONTEXTO ACTUAL:
 - Temas recurrentes: ${contexto.memory?.recurringThemes?.join(', ') || 'ninguno'}
 - Estilo comunicativo preferido: ${userStyle}
 - Fase terapéutica: ${contexto.therapeutic?.currentPhase || 'inicial'}
+- Última interacción: ${contexto.memory?.lastInteraction || 'ninguna'}
 
 DIRECTRICES:
 1. Mantén un tono ${userStyle} y profesional
@@ -720,6 +728,7 @@ DIRECTRICES:
 3. Considera el historial y contexto previo
 4. Evita repeticiones exactas de respuestas anteriores
 5. Prioriza la validación emocional cuando sea apropiado
+6. Incluye elementos de apoyo concretos y sugerencias útiles
 
 ESTRUCTURA DE RESPUESTA:
 1. Reconocimiento específico de la situación/emoción
@@ -768,27 +777,10 @@ ESTRUCTURA DE RESPUESTA:
   }
 
   async validarYMejorarRespuesta(respuesta, contexto) {
-    try {
-      // Validaciones básicas
-      if (!respuesta) {
-        return this.getDefaultResponse();
-      }
-
-      // Ajustar coherencia emocional
-      respuesta = this.ajustarCoherenciaEmocional(respuesta, contexto.emotional);
-
-      // Verificar longitud
-      if (respuesta.length < 50) {
-        respuesta = this.expandirRespuesta(respuesta);
-      } else if (respuesta.length > 500) {
-        respuesta = this.reducirRespuesta(respuesta);
-      }
-
-      return respuesta;
-    } catch (error) {
-      console.error('Error en validación y mejora de respuesta:', error);
-      return this.getDefaultResponse();
+    if (this.esRespuestaGenerica(respuesta)) {
+      return this.expandirRespuesta(respuesta);
     }
+    return respuesta;
   }
 
   esRespuestaGenerica(respuesta) {
@@ -921,26 +913,15 @@ ESTRUCTURA DE RESPUESTA:
   async manejarError(error, mensaje) {
     console.error('Error en OpenAI Service:', error);
     
-    // Intentar generar una respuesta de fallback contextualizada
-    try {
-      return {
-        content: await responseGenerator.generateFallbackResponse(mensaje),
-        context: {
-          error: true,
-          errorType: error.name,
-          timestamp: new Date()
-        }
-      };
-    } catch (fallbackError) {
-      return {
-        content: "Lo siento, ha ocurrido un error. ¿Podrías intentarlo de nuevo?",
-        context: {
-          error: true,
-          errorType: 'CRITICAL',
-          timestamp: new Date()
-        }
-      };
-    }
+    return {
+      content: "Lo siento, ha ocurrido un error. Por favor, intenta de nuevo o contacta a soporte si el problema persiste.",
+      context: {
+        error: true,
+        errorType: error.name,
+        errorMessage: error.message,
+        timestamp: new Date()
+      }
+    };
   }
 
   getTimeOfDay() {

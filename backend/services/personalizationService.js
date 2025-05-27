@@ -36,23 +36,37 @@ const ESTILOS_COMUNICACION = {
 };
 
 class PersonalizationService {
+  /**
+   * Obtiene el perfil de usuario o crea uno por defecto si no existe.
+   * @param {string} userId - ID del usuario.
+   * @returns {Promise<Object>} Perfil de usuario.
+   */
   async getUserProfile(userId) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
       let profile = await UserProfile.findOne({ userId });
-      
       if (!profile) {
         profile = await this.createDefaultProfile(userId);
       }
-
       return profile;
     } catch (error) {
-      console.error('Error obteniendo perfil de usuario:', error);
+      console.error('[PersonalizationService] Error obteniendo perfil de usuario:', error, { userId });
       return this.getDefaultProfile(userId);
     }
   }
 
+  /**
+   * Crea un perfil de usuario por defecto.
+   * @param {string} userId - ID del usuario.
+   * @returns {Promise<Object>} Perfil creado.
+   */
   async createDefaultProfile(userId) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
       return await UserProfile.create({
         userId,
         preferences: {
@@ -73,11 +87,16 @@ class PersonalizationService {
         }
       });
     } catch (error) {
-      console.error('Error creando perfil por defecto:', error);
+      console.error('[PersonalizationService] Error creando perfil por defecto:', error, { userId });
       return this.getDefaultProfile(userId);
     }
   }
 
+  /**
+   * Devuelve un perfil por defecto (no persistente).
+   * @param {string} userId - ID del usuario.
+   * @returns {Object} Perfil por defecto.
+   */
   getDefaultProfile(userId) {
     return {
       userId,
@@ -100,8 +119,16 @@ class PersonalizationService {
     };
   }
 
+  /**
+   * Obtiene el prompt personalizado para el usuario.
+   * @param {string} userId - ID del usuario.
+   * @returns {Promise<Object>} Prompt personalizado.
+   */
   async getPersonalizedPrompt(userId) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
       const profile = await this.getUserProfile(userId);
       return {
         style: profile.preferences?.communicationStyle || 'neutral',
@@ -110,7 +137,7 @@ class PersonalizationService {
         triggers: profile.preferences?.triggerTopics || []
       };
     } catch (error) {
-      console.error('Error obteniendo prompt personalizado:', error);
+      console.error('[PersonalizationService] Error obteniendo prompt personalizado:', error, { userId });
       return {
         style: 'neutral',
         responseLength: 'MEDIUM',

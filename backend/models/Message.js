@@ -7,12 +7,15 @@ const messageSchema = new mongoose.Schema({
     required: true
   },
   conversationId: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Conversation',
     required: true
   },
   content: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    minlength: 1
   },
   role: {
     type: String,
@@ -36,8 +39,15 @@ const messageSchema = new mongoose.Schema({
     },
     context: {
       emotional: {
-        mainEmotion: String,
-        intensity: Number,
+        mainEmotion: {
+          type: String,
+          enum: ['feliz', 'triste', 'ansioso', 'enojado', 'neutral', 'otro']
+        },
+        intensity: {
+          type: Number,
+          min: 0,
+          max: 10
+        },
         secondary: [String]
       },
       contextual: {
@@ -57,6 +67,7 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ userId: 1, conversationId: 1 });
 messageSchema.index({ 'metadata.timestamp': -1 });
 messageSchema.index({ conversationId: 1, 'metadata.timestamp': -1 });
+messageSchema.index({ role: 1 });
 
 const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
 

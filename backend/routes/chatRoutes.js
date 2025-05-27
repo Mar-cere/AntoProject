@@ -44,8 +44,18 @@ const validarConversationId = (req, res, next) => {
   next();
 };
 
+const validarConversacion = async (req, res, next) => {
+  const { conversationId } = req.params;
+  const conversation = await Conversation.findOne({ _id: conversationId, userId: req.user._id });
+  if (!conversation) {
+    return res.status(404).json({ message: 'Conversación no encontrada' });
+  }
+  req.conversation = conversation;
+  next();
+};
+
 // Obtener mensajes de una conversación
-router.get('/conversations/:conversationId', protect, validarConversationId, async (req, res) => {
+router.get('/conversations/:conversationId', protect, validarConversationId, validarConversacion, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { 
@@ -148,6 +158,11 @@ router.post('/messages', protect, async (req, res) => {
       });
     }
 
+    const messageCount = await Message.countDocuments({ conversationId });
+    if (messageCount >= LIMITE_MENSAJES) {
+      return res.status(400).json({ message: 'Límite de mensajes alcanzado' });
+    }
+
     logs.push(`[${Date.now() - startTime}ms] Iniciando procesamiento de mensaje`);
 
     // 1. Crear mensaje del usuario
@@ -182,7 +197,7 @@ router.post('/messages', protect, async (req, res) => {
         // 3. Análisis y generación de respuesta
         logs.push(`[${Date.now() - startTime}ms] Realizando análisis del mensaje`);
         const [emotionalAnalysis, contextualAnalysis] = await Promise.all([
-          emotionalAnalyzer.analyzeEmotion(content),
+          emotionalAnalyzer.analyzeEmotion(content, conversationHistory),
           contextAnalyzer.analizarMensaje(userMessage, conversationHistory)
         ]);
 
@@ -202,6 +217,11 @@ router.post('/messages', protect, async (req, res) => {
           }
         );
 
+        // Validar coherencia emocional
+        if (!openaiService.esCoherenteConEmocion(response.content, emotionalAnalysis)) {
+          response.content = openaiService.ajustarCoherenciaEmocional(response.content, emotionalAnalysis);
+        }
+
         // 6. Crear y guardar mensaje del asistente
         assistantMessage = new Message({
           userId: req.user._id,
@@ -215,7 +235,7 @@ router.post('/messages', protect, async (req, res) => {
             context: {
               emotional: emotionalAnalysis,
               contextual: contextualAnalysis,
-              response: JSON.stringify(response.context) // Convertir a string
+              response: JSON.stringify(response.context)
             }
           }
         });
@@ -236,9 +256,9 @@ router.post('/messages', protect, async (req, res) => {
           userProfileService.actualizarPerfil(req.user._id, userMessage, {
             emotional: emotionalAnalysis,
             contextual: contextualAnalysis
-          })
+          }),
+          Conversation.findByIdAndUpdate(conversationId, { lastMessage: assistantMessage._id })
         ]).catch(error => {
-          // Log error pero no fallar la respuesta principal
           console.warn('Error en actualizaciones secundarias:', error);
           logs.push(`[${Date.now() - startTime}ms] Advertencia: Error en actualizaciones secundarias`);
         });
@@ -315,6 +335,8 @@ router.post('/messages', protect, async (req, res) => {
 // Obtener todas las conversaciones del usuario con estadísticas
 router.get('/conversations', protect, async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
     const conversations = await Message.aggregate([
       { $match: { userId: req.user._id } },
       { 
@@ -333,7 +355,9 @@ router.get('/conversations', protect, async (req, res) => {
           }
         }
       },
-      { $sort: { updatedAt: -1 } }
+      { $sort: { updatedAt: -1 } },
+      { $skip: skip },
+      { $limit: parseInt(limit) }
     ]);
 
     res.json({ 
@@ -364,6 +388,11 @@ router.patch('/messages/status', protect, async (req, res) => {
       return res.status(400).json({
         message: 'Estado de mensaje inválido'
       });
+    }
+
+    const messages = await Message.find({ _id: { $in: messageIds }, userId: req.user._id });
+    if (messages.length !== messageIds.length) {
+      return res.status(400).json({ message: 'Algunos mensajes no existen o no pertenecen al usuario' });
     }
 
     const result = await Message.updateMany(

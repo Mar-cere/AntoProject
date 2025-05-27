@@ -29,8 +29,21 @@ class MemoryService {
     };
   }
 
+  /**
+   * Obtiene el contexto relevante para un usuario y mensaje.
+   * @param {string} userId - ID del usuario.
+   * @param {string} content - Contenido del mensaje.
+   * @param {Object} currentAnalysis - Análisis actual (opcional).
+   * @returns {Promise<Object>} Contexto relevante.
+   */
   async getRelevantContext(userId, content, currentAnalysis = {}) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
+      if (!content || typeof content !== 'string') {
+        throw new Error('content válido es requerido');
+      }
       const recentInteractions = await this.getRecentInteractions(userId);
       const interactionContext = this.analyzeInteractionContext(recentInteractions);
       const currentPeriod = this.getCurrentPeriod();
@@ -52,7 +65,7 @@ class MemoryService {
         }
       };
     } catch (error) {
-      console.error('Error obteniendo contexto:', error);
+      console.error('[MemoryService] Error obteniendo contexto:', error, { userId, content });
       return this.getDefaultContext();
     }
   }
@@ -69,15 +82,30 @@ class MemoryService {
     return 'NIGHT';
   }
 
+  /**
+   * Obtiene las interacciones recientes de un usuario.
+   * @param {string} userId - ID del usuario.
+   * @param {number} limit - Límite de interacciones (opcional).
+   * @returns {Promise<Array>} Lista de interacciones.
+   */
   async getRecentInteractions(userId, limit = 10) {
     try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('userId válido es requerido');
+      }
+      // Aquí deberías implementar la lógica real de obtención de interacciones
       return [];
     } catch (error) {
-      console.error('Error obteniendo interacciones recientes:', error);
+      console.error('[MemoryService] Error obteniendo interacciones recientes:', error, { userId });
       return [];
     }
   }
 
+  /**
+   * Analiza el contexto de las interacciones.
+   * @param {Array} interactions - Lista de interacciones.
+   * @returns {Object} Contexto analizado.
+   */
   analyzeInteractionContext(interactions) {
     const context = {
       timing: {},
@@ -88,7 +116,7 @@ class MemoryService {
       topics: []
     };
 
-    if (!interactions || interactions.length === 0) {
+    if (!Array.isArray(interactions) || interactions.length === 0) {
       return context;
     }
 
@@ -114,9 +142,15 @@ class MemoryService {
     return 'NIGHT';
   }
 
+  /**
+   * Extrae los temas recientes de las interacciones.
+   * @param {Array} interactions - Lista de interacciones.
+   * @returns {Array} Temas recientes.
+   */
   extractRecentTopics(interactions) {
     const topics = new Set();
     
+    if (!Array.isArray(interactions)) return [];
     interactions.forEach(interaction => {
       if (interaction?.metadata?.topics) {
         interaction.metadata.topics.forEach(topic => topics.add(topic));

@@ -19,31 +19,41 @@ class ResponseGenerator {
     };
   }
 
+  /**
+   * Genera una respuesta de respaldo según el contexto y tipo.
+   * @param {Object} context - Contexto del mensaje o usuario.
+   * @param {string} type - Tipo de respuesta ('general', 'error', 'emotional').
+   * @returns {Promise<string>} Respuesta generada.
+   */
   async generateResponse(context, type = 'general') {
     try {
+      if (!type || typeof type !== 'string') type = 'general';
       const responses = this.fallbackResponses[type] || this.fallbackResponses.general;
       return responses[Math.floor(Math.random() * responses.length)];
     } catch (error) {
-      console.error('Error generando respuesta:', error);
+      console.error('[ResponseGenerator] Error generando respuesta:', error, { context, type });
       return this.fallbackResponses.error[0];
     }
   }
 
+  /**
+   * Genera una respuesta de respaldo basada en el contenido del mensaje.
+   * @param {Object} mensaje - Mensaje recibido.
+   * @returns {Promise<string>} Respuesta generada.
+   */
   async generateFallbackResponse(mensaje) {
     try {
-      if (!mensaje?.content) {
+      if (!mensaje || typeof mensaje.content !== 'string') {
         return this.fallbackResponses.error[0];
       }
-
       // Detectar si el mensaje tiene contenido emocional
       const tieneContenidoEmocional = /(?:triste|feliz|enojad[oa]|ansios[oa]|preocupad[oa]|mal|bien)/i.test(mensaje.content);
-
       return await this.generateResponse(
         mensaje,
         tieneContenidoEmocional ? 'emotional' : 'general'
       );
     } catch (error) {
-      console.error('Error generando respuesta fallback:', error);
+      console.error('[ResponseGenerator] Error generando respuesta fallback:', error, mensaje);
       return this.fallbackResponses.error[0];
     }
   }
