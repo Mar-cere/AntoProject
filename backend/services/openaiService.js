@@ -950,6 +950,23 @@ ESTRUCTURA DE RESPUESTA:
     if (hora >= 18 && hora < 22) return 'noche';
     return 'noche';
   }
+
+  async generarSaludoPersonalizado(userPreferences = {}) {
+    // Determina el momento del día
+    const hour = new Date().getHours();
+    let timeOfDay = 'morning';
+    if (hour >= 12 && hour < 18) timeOfDay = 'afternoon';
+    else if (hour >= 18 && hour < 22) timeOfDay = 'evening';
+    else if (hour >= 22 || hour < 5) timeOfDay = 'night';
+
+    // Usa las variaciones de saludo que ya tienes
+    const greetings = GREETING_VARIATIONS[timeOfDay] || GREETING_VARIATIONS.morning;
+    // Elige uno aleatorio
+    const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+
+    // Puedes personalizar aún más usando userPreferences si lo deseas
+    return greeting;
+  }
 }
 
 export default new OpenAIService(); 
