@@ -104,7 +104,7 @@ router.get('/conversations/:conversationId', protect, validarConversationId, val
 router.post('/conversations', protect, async (req, res) => {
   try {
     // Fuerza el tipo ObjectId para userId y participants
-    const userId = mongoose.Types.ObjectId(req.user._id);
+    const userId = new mongoose.Types.ObjectId(req.user._id);
     const conversation = new Conversation({
       userId,
       participants: [userId], // Siempre como ObjectId
