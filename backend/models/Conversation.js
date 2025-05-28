@@ -9,17 +9,7 @@ const conversationSchema = new mongoose.Schema({
   participants: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    validate: {
-      validator: function(participants) {
-        return (
-          Array.isArray(participants) &&
-          participants.length > 0 &&
-          participants.map(id => id.toString()).includes(this.userId.toString())
-        );
-      },
-      message: 'La conversación debe tener al menos un participante (el creador)'
-    }
+    required: true
   }],
   createdAt: {
     type: Date,
@@ -45,6 +35,18 @@ const conversationSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+// Middleware para validar que el creador esté en participants
+conversationSchema.pre('validate', function(next) {
+  if (
+    !Array.isArray(this.participants) ||
+    this.participants.length === 0 ||
+    !this.participants.map(id => id.toString()).includes(this.userId.toString())
+  ) {
+    this.invalidate('participants', 'La conversación debe tener al menos un participante (el creador)');
+  }
+  next();
 });
 
 const Conversation = mongoose.models.Conversation || mongoose.model('Conversation', conversationSchema);
