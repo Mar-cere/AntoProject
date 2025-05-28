@@ -103,17 +103,18 @@ router.get('/conversations/:conversationId', protect, validarConversationId, val
 // Crear nueva conversación
 router.post('/conversations', protect, async (req, res) => {
   try {
-    // Crea el documento de conversación
+    // Fuerza el tipo ObjectId para userId y participants
+    const userId = mongoose.Types.ObjectId(req.user._id);
     const conversation = new Conversation({
-      userId: req.user._id,
-      participants: [req.user._id], // Puedes agregar más participantes si lo deseas
+      userId,
+      participants: [userId], // Siempre como ObjectId
     });
     await conversation.save();
 
     // Crea el mensaje de bienvenida
-    const userPreferences = await userProfileService.getPersonalizedPrompt(req.user._id);
+    const userPreferences = await userProfileService.getPersonalizedPrompt(userId);
     const welcomeMessage = new Message({
-      userId: req.user._id,
+      userId,
       content: await openaiService.generarSaludoPersonalizado(userPreferences),
       role: 'assistant',
       conversationId: conversation._id.toString(),
