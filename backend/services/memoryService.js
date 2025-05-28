@@ -91,7 +91,7 @@ class MemoryService {
    */
   async getRecentInteractions(userId, limit = 10) {
     try {
-      if (!userId || typeof userId !== 'string') {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof mongoose.Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       // Aquí deberías implementar la lógica real de obtención de interacciones

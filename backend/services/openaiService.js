@@ -522,7 +522,11 @@ const generateAIResponse = async (message, conversationHistory, userId) => {
       metadata: {
         timestamp: new Date(),
         type: 'text',
-        status: 'sent'
+        status: 'sent',
+        context: {
+          emotional: emotionalAnalysis,
+          contextual: conversationState
+        }
       }
     });
     await assistantMessage.save();
@@ -692,6 +696,25 @@ class OpenAIService {
       );
 
       // 6. Actualizar Registros
+      // Primero crear y guardar el mensaje del asistente
+      const assistantMessage = new Message({
+        userId: mensaje.userId,
+        conversationId: mensaje.conversationId,
+        content: respuestaValidada,
+        role: 'assistant',
+        metadata: {
+          timestamp: new Date(),
+          type: 'text',
+          status: 'sent',
+          context: {
+            emotional: analisisEmocional,
+            contextual: analisisContextual
+          }
+        }
+      });
+      await assistantMessage.save();
+
+      // Luego actualizar los registros en paralelo
       await Promise.all([
         this.actualizarRegistros(mensaje.userId, {
           mensaje,
@@ -711,7 +734,9 @@ class OpenAIService {
           response: respuestaValidada,
           context: analisisContextual
         }),
-        Conversation.findByIdAndUpdate(mensaje.conversationId, { lastMessage: respuestaValidada })
+        Conversation.findByIdAndUpdate(mensaje.conversationId, { 
+          lastMessage: assistantMessage._id 
+        })
       ]);
 
       return {
