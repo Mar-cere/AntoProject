@@ -12,7 +12,11 @@ const conversationSchema = new mongoose.Schema({
     required: true,
     validate: {
       validator: function(participants) {
-        return participants.length > 0 && participants.includes(this.userId);
+        return (
+          Array.isArray(participants) &&
+          participants.length > 0 &&
+          participants.map(id => id.toString()).includes(this.userId.toString())
+        );
       },
       message: 'La conversación debe tener al menos un participante (el creador)'
     }
