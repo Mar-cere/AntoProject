@@ -1,4 +1,5 @@
 import UserGoals from '../models/UserGoals.js';
+import mongoose from 'mongoose';
 import UserProgress from '../models/UserProgress.js';
 
 class GoalTracker {
@@ -37,7 +38,7 @@ class GoalTracker {
    */
   async updateProgress(userId, data) {
     try {
-      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof mongoose.Types.ObjectId))) {
         throw new Error('userId y data válidos son requeridos');
       }
       const { message, context } = data;
@@ -73,7 +74,7 @@ class GoalTracker {
    */
   async initializeUserGoals(userId) {
     try {
-      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof mongoose.Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       return await UserGoals.create({

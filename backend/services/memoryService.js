@@ -1,4 +1,5 @@
 import UserInsight from '../models/UserInsight.js';
+import mongoose from 'mongoose';
 
 const DEFAULT_CONTEXT = {
   emotionalTrend: {
@@ -38,7 +39,7 @@ class MemoryService {
    */
   async getRelevantContext(userId, content, currentAnalysis = {}) {
     try {
-      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
+      if (!userId || (typeof userId !== 'string' && !(userId instanceof mongoose.Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       if (!content || typeof content !== 'string') {

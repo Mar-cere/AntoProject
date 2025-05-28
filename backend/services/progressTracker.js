@@ -1,4 +1,5 @@
 import UserProgress from '../models/UserProgress.js';
+import mongoose from 'mongoose';
 
 class ProgressTracker {
   /**
@@ -9,7 +10,7 @@ class ProgressTracker {
    */
   async trackProgress(userId, mensaje) {
     try {
-      if (!userId || (typeof userId !== 'string' && !(userId instanceof require('mongoose').Types.ObjectId))) {
+        if (!userId || (typeof userId !== 'string' && !(userId instanceof mongoose.Types.ObjectId))) {
         throw new Error('userId válido es requerido');
       }
       if (!mensaje || typeof mensaje !== 'object') {
