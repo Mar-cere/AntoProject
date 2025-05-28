@@ -103,11 +103,11 @@ router.get('/conversations/:conversationId', protect, validarConversationId, val
 // Crear nueva conversación
 router.post('/conversations', protect, async (req, res) => {
   try {
-    // Fuerza el tipo ObjectId para userId y participants
-    const userId = new mongoose.Types.ObjectId(req.user._id);
+    // Usa el ObjectId tal cual viene de req.user._id
+    const userId = req.user._id;
     const conversation = new Conversation({
       userId,
-      participants: [userId], // Siempre como ObjectId
+      participants: [userId], // Mismo valor y tipo
     });
     await conversation.save();
 
