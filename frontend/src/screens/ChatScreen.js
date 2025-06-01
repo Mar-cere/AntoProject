@@ -14,7 +14,7 @@ import {
   StatusBar,
   Dimensions
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -329,6 +329,16 @@ const ChatScreen = () => {
       </Animated.View>
     );
   };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Al entrar, puedes cargar mensajes
+      return () => {
+        // Al salir, limpia los mensajes
+        setMessages([]);
+      };
+    }, [])
+  );
 
   return (
     <View style={styles.container}>

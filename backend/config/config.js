@@ -2,6 +2,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Validación de variables críticas
+const requiredEnv = ['OPENAI_API_KEY', 'MONGODB_URI', 'JWT_SECRET'];
+const missing = requiredEnv.filter((key) => !process.env[key]);
+if (missing.length > 0) {
+  throw new Error(`Faltan variables de entorno críticas: ${missing.join(', ')}`);
+}
+
 export default {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,

@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
 
 export const setupSocketIO = (server) => {
   const io = new Server(server, {
@@ -17,8 +18,13 @@ export const setupSocketIO = (server) => {
     if (!token) {
       return next(new Error('Autenticación requerida'));
     }
-    // Aquí puedes verificar el token si lo necesitas
-    next();
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = payload;
+      next();
+    } catch (err) {
+      return next(new Error('Token inválido'));
+    }
   });
 
   // Manejo de eventos de conexión
