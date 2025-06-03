@@ -142,8 +142,8 @@ const HabitCard = memo(() => {
       }
 
       const data = await response.json();
-      // data ahora es { success: true, data: [...] }
-      const habitsArray = data.data || [];
+      // Acceso correcto al array de hábitos:
+      const habitsArray = data.data?.habits || [];
       const topHabits = habitsArray
         .sort((a, b) => (b.progress?.streak || 0) - (a.progress?.streak || 0))
         .slice(0, 3);
