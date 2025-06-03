@@ -1,60 +1,23 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
-export const authenticateToken = async (req, res, next) => {
-  try {
-    // 1. Obtener el token
-    const authHeader = req.header('Authorization');
-    console.log('Auth header recibido:', authHeader);
+export function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('Token no proporcionado o formato inválido');
-      return res.status(401).json({ message: 'No autorizado - Token no proporcionado o formato inválido' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    console.log('Token extraído:', token);
-
-    // 2. Verificar el token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log('Token decodificado:', decoded);
-    } catch (jwtError) {
-      console.error('Error al verificar token:', jwtError);
-      if (jwtError.name === 'TokenExpiredError') {
-        return res.status(401).json({ message: 'Token expirado' });
-      }
-      return res.status(401).json({ message: 'Token inválido' });
-    }
-
-    // 3. Buscar usuario
-    const user = await User.findOne({ id: decoded.userId });
-    console.log('Buscando usuario con ID:', decoded.userId);
-
-    if (!user) {
-      console.log('Usuario no encontrado para el ID:', decoded.userId);
-      return res.status(404).json({ message: 'Usuario no encontrado' });
-    }
-
-    console.log('Usuario autenticado:', user.email);
-
-    // 4. Actualizar último acceso
-    user.lastLogin = new Date();
-    await user.save();
-
-    // 5. Adjuntar usuario y token a la request
-    req.user = user;
-    req.token = token;
-    next();
-  } catch (error) {
-    console.error('Error inesperado en autenticación:', error);
-    res.status(500).json({ 
-      message: 'Error interno del servidor durante la autenticación',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+  if (!token) {
+    return res.status(401).json({ message: 'Token no proporcionado' });
   }
-};
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ message: 'Token inválido' });
+    }
+    // Asignar ambos campos para compatibilidad
+    req.user = { _id: decoded.userId, userId: decoded.userId };
+    next();
+  });
+}
 
 // Middleware simplificado para validar token sin buscar usuario
 export const validateToken = async (req, res, next) => {

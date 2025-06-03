@@ -108,9 +108,12 @@ userSchema.pre('save', function(next) {
 // Método para sanitizar el usuario antes de enviarlo
 userSchema.methods.toJSON = function() {
   const obj = this.toObject();
+  obj.id = obj._id;
   delete obj.password;
   delete obj.salt;
   delete obj.__v;
+  delete obj.resetPasswordCode;
+  delete obj.resetPasswordExpires;
   return obj;
 };
 
