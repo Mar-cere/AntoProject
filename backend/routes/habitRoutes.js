@@ -2,40 +2,65 @@ import express from 'express';
 import Habit from '../models/Habit.js';
 import { authenticateToken } from '../middleware/auth.js';
 import Joi from 'joi';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
 // Middleware de autenticación para todas las rutas
 router.use(authenticateToken);
 
-// Esquema de validación
+// Middleware para validar ObjectId
+const validateObjectId = (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: 'ID de hábito inválido' });
+  }
+  next();
+};
+
+// Esquemas de validación
+const notificationSchema = Joi.object({
+  enabled: Joi.boolean().default(true),
+  time: Joi.date().required(),
+  days: Joi.array().items(Joi.number().min(0).max(6)).default([0,1,2,3,4,5,6]),
+  message: Joi.string().max(200)
+});
+
 const habitSchema = Joi.object({
-  title: Joi.string().required().max(100),
-  description: Joi.string().max(500),
+  title: Joi.string().required().max(100).trim(),
+  description: Joi.string().max(500).trim(),
   icon: Joi.string().required().valid(
     'exercise', 'meditation', 'reading', 'water', 
     'sleep', 'study', 'diet', 'coding', 'workout',
     'yoga', 'journal', 'music', 'art', 'language'
   ),
-  frequency: Joi.string().valid('daily', 'weekly', 'monthly'),
-  reminder: Joi.object({
-    time: Joi.date().required(),
-    enabled: Joi.boolean(),
-    notifications: Joi.array().items(
-      Joi.object({
-        enabled: Joi.boolean(),
-        time: Joi.date(),
-        sent: Joi.boolean()
-      })
-    )
-  }),
-  priority: Joi.string().valid('low', 'medium', 'high')
+  frequency: Joi.string().valid('daily', 'weekly', 'monthly').required(),
+  reminder: notificationSchema,
+  priority: Joi.string().valid('low', 'medium', 'high').default('medium'),
+  category: Joi.string().max(50).trim(),
+  tags: Joi.array().items(Joi.string().max(30).trim()),
+  color: Joi.string().pattern(/^#[0-9A-F]{6}$/i),
+  goal: Joi.object({
+    target: Joi.number().min(1),
+    unit: Joi.string().max(20),
+    period: Joi.string().valid('day', 'week', 'month')
+  })
 });
 
 // Obtener todos los hábitos del usuario con filtros
 router.get('/', async (req, res) => {
   try {
-    const { status, frequency, priority, search, overdue } = req.query;
+    const { 
+      status, 
+      frequency, 
+      priority, 
+      search, 
+      overdue,
+      category,
+      page = 1,
+      limit = 10,
+      sort = '-createdAt'
+    } = req.query;
+
     const query = { userId: req.user._id };
 
     // Filtrar por estado (active/archived)
@@ -53,6 +78,11 @@ router.get('/', async (req, res) => {
       query.priority = priority;
     }
 
+    // Filtrar por categoría
+    if (category) {
+      query.category = category;
+    }
+
     // Filtrar por vencidos
     if (overdue === 'true') {
       query['status.isOverdue'] = true;
@@ -66,21 +96,75 @@ router.get('/', async (req, res) => {
       ];
     }
 
-    const habits = await Habit.find(query)
-      .sort({ 
-        'status.archived': 1,
-        'status.isOverdue': -1,
-        priority: -1,
-        createdAt: -1 
-      });
-    
-    res.json({ success: true, data: habits });
+    // Validar y procesar parámetros de paginación
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Validar y procesar parámetros de ordenamiento
+    const sortOptions = ['createdAt', '-createdAt', 'priority', '-priority', 'title', '-title'];
+    const sortField = sortOptions.includes(sort) ? sort : '-createdAt';
+
+    const [habits, total] = await Promise.all([
+      Habit.find(query)
+        .sort(sortField)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Habit.countDocuments(query)
+    ]);
+
+    // Calcular estadísticas adicionales
+    const stats = await Habit.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          totalHabits: { $sum: 1 },
+          activeHabits: {
+            $sum: { $cond: [{ $eq: ['$status.archived', false] }, 1, 0] }
+          },
+          completedToday: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$status.archived', false] },
+                    { $in: [new Date().toISOString().split('T')[0], '$progress.completedDates'] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        habits,
+        pagination: {
+          total,
+          page: pageNum,
+          pages: Math.ceil(total / limitNum),
+          limit: limitNum
+        },
+        stats: stats[0] || {
+          totalHabits: 0,
+          activeHabits: 0,
+          completedToday: 0
+        }
+      }
+    });
   } catch (error) {
     console.error('Error al obtener hábitos:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al obtener los hábitos', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -94,13 +178,23 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ 
         success: false,
         message: 'Datos inválidos', 
-        error: error.details[0].message 
+        errors: error.details.map(detail => detail.message)
       });
     }
 
     const habit = new Habit({
       ...value,
       userId: req.user._id,
+      status: {
+        archived: false,
+        isOverdue: false
+      },
+      progress: {
+        streak: 0,
+        completedDates: [],
+        weeklyProgress: [],
+        monthlyProgress: []
+      },
       reminder: {
         ...value.reminder,
         lastNotified: null
@@ -108,20 +202,23 @@ router.post('/', async (req, res) => {
     });
 
     await habit.save();
-    res.status(201).json({ success: true, data: habit });
+    res.status(201).json({ 
+      success: true, 
+      data: habit,
+      message: 'Hábito creado exitosamente'
+    });
   } catch (error) {
     console.error('Error al crear hábito:', error);
     res.status(400).json({ 
       success: false,
       message: 'Error al crear el hábito', 
-      error: error.message,
-      validationErrors: error.errors 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 // Actualizar hábito
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateObjectId, async (req, res) => {
   try {
     // Validar datos de entrada
     const { error, value } = habitSchema.validate(req.body, { stripUnknown: true });
@@ -129,13 +226,16 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ 
         success: false,
         message: 'Datos inválidos', 
-        error: error.details[0].message 
+        errors: error.details.map(detail => detail.message)
       });
     }
 
     const habit = await Habit.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      { ...value, updatedAt: new Date() },
+      { 
+        ...value,
+        updatedAt: new Date()
+      },
       { new: true, runValidators: true }
     );
 
@@ -145,20 +245,24 @@ router.put('/:id', async (req, res) => {
         message: 'Hábito no encontrado' 
       });
     }
-    res.json({ success: true, data: habit });
+
+    res.json({ 
+      success: true, 
+      data: habit,
+      message: 'Hábito actualizado exitosamente'
+    });
   } catch (error) {
     console.error('Error al actualizar hábito:', error);
     res.status(400).json({ 
       success: false,
       message: 'Error al actualizar el hábito', 
-      error: error.message,
-      validationErrors: error.errors 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 // Eliminar hábito
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateObjectId, async (req, res) => {
   try {
     const habit = await Habit.findOneAndDelete({
       _id: req.params.id,
@@ -171,22 +275,24 @@ router.delete('/:id', async (req, res) => {
         message: 'Hábito no encontrado' 
       });
     }
+
     res.json({ 
       success: true,
-      message: 'Hábito eliminado correctamente' 
+      message: 'Hábito eliminado correctamente',
+      data: { id: habit._id }
     });
   } catch (error) {
     console.error('Error al eliminar hábito:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al eliminar el hábito', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 // Marcar hábito como completado/no completado
-router.patch('/:id/toggle', async (req, res) => {
+router.patch('/:id/toggle', validateObjectId, async (req, res) => {
   try {
     const habit = await Habit.findOne({
       _id: req.params.id,
@@ -208,13 +314,17 @@ router.patch('/:id/toggle', async (req, res) => {
     }
 
     await habit.toggleComplete();
-    res.json({ success: true, data: habit });
+    res.json({ 
+      success: true, 
+      data: habit,
+      message: 'Estado del hábito actualizado exitosamente'
+    });
   } catch (error) {
     console.error('Error al actualizar estado del hábito:', error);
     res.status(400).json({ 
       success: false,
       message: 'Error al actualizar el hábito', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -222,7 +332,9 @@ router.patch('/:id/toggle', async (req, res) => {
 // Obtener estadísticas
 router.get('/stats', async (req, res) => {
   try {
-    const stats = await Habit.getStats(req.user._id);
+    const { period = 'month' } = req.query;
+    const stats = await Habit.getStats(req.user._id, period);
+    
     res.json({ 
       success: true,
       data: stats[0] || {
@@ -231,7 +343,8 @@ router.get('/stats', async (req, res) => {
         totalCompletions: 0,
         averageStreak: 0,
         bestStreak: 0,
-        overdueHabits: 0
+        overdueHabits: 0,
+        completionRate: 0
       }
     });
   } catch (error) {
@@ -239,7 +352,7 @@ router.get('/stats', async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: 'Error al obtener estadísticas', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -248,10 +361,35 @@ router.get('/stats', async (req, res) => {
 router.get('/weekly-progress', async (req, res) => {
   try {
     const { week, year } = req.query;
+    
+    if (!week || !year) {
+      return res.status(400).json({
+        success: false,
+        message: 'Semana y año son requeridos'
+      });
+    }
+
+    const weekNum = parseInt(week);
+    const yearNum = parseInt(year);
+
+    if (isNaN(weekNum) || weekNum < 1 || weekNum > 53) {
+      return res.status(400).json({
+        success: false,
+        message: 'Número de semana inválido'
+      });
+    }
+
+    if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Año inválido'
+      });
+    }
+
     const habits = await Habit.find({
       userId: req.user._id,
       'progress.weeklyProgress': {
-        $elemMatch: { week: parseInt(week), year: parseInt(year) }
+        $elemMatch: { week: weekNum, year: yearNum }
       }
     });
 
@@ -260,18 +398,27 @@ router.get('/weekly-progress', async (req, res) => {
       title: habit.title,
       icon: habit.icon,
       completedDays: habit.progress.weeklyProgress.find(
-        wp => wp.week === parseInt(week) && wp.year === parseInt(year)
+        wp => wp.week === weekNum && wp.year === yearNum
       )?.completedDays || 0,
-      streak: habit.progress.streak
+      streak: habit.progress.streak,
+      goal: habit.goal
     }));
 
-    res.json({ success: true, data: weeklyProgress });
+    res.json({ 
+      success: true, 
+      data: {
+        week: weekNum,
+        year: yearNum,
+        habits: weeklyProgress,
+        totalCompleted: weeklyProgress.reduce((sum, h) => sum + h.completedDays, 0)
+      }
+    });
   } catch (error) {
     console.error('Error al obtener progreso semanal:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al obtener progreso semanal', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -280,10 +427,35 @@ router.get('/weekly-progress', async (req, res) => {
 router.get('/monthly-progress', async (req, res) => {
   try {
     const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mes y año son requeridos'
+      });
+    }
+
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({
+        success: false,
+        message: 'Número de mes inválido'
+      });
+    }
+
+    if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Año inválido'
+      });
+    }
+
     const habits = await Habit.find({
       userId: req.user._id,
       'progress.monthlyProgress': {
-        $elemMatch: { month: parseInt(month), year: parseInt(year) }
+        $elemMatch: { month: monthNum, year: yearNum }
       }
     });
 
@@ -292,26 +464,43 @@ router.get('/monthly-progress', async (req, res) => {
       title: habit.title,
       icon: habit.icon,
       completedDays: habit.progress.monthlyProgress.find(
-        mp => mp.month === parseInt(month) && mp.year === parseInt(year)
+        mp => mp.month === monthNum && mp.year === yearNum
       )?.completedDays || 0,
-      streak: habit.progress.streak
+      streak: habit.progress.streak,
+      goal: habit.goal
     }));
 
-    res.json({ success: true, data: monthlyProgress });
+    res.json({ 
+      success: true, 
+      data: {
+        month: monthNum,
+        year: yearNum,
+        habits: monthlyProgress,
+        totalCompleted: monthlyProgress.reduce((sum, h) => sum + h.completedDays, 0)
+      }
+    });
   } catch (error) {
     console.error('Error al obtener progreso mensual:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al obtener progreso mensual', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 // Actualizar recordatorio
-router.patch('/:id/reminder', async (req, res) => {
+router.patch('/:id/reminder', validateObjectId, async (req, res) => {
   try {
-    const { enabled, time, notifications } = req.body;
+    const { error, value } = notificationSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Datos inválidos',
+        errors: error.details.map(detail => detail.message)
+      });
+    }
+
     const habit = await Habit.findOne({
       _id: req.params.id,
       userId: req.user._id
@@ -324,34 +513,24 @@ router.patch('/:id/reminder', async (req, res) => {
       });
     }
 
-    if (time) {
-      const reminderTime = new Date(time);
-      if (isNaN(reminderTime)) {
-        return res.status(400).json({ 
-          success: false,
-          message: 'Hora de recordatorio inválida' 
-        });
-      }
-      habit.reminder.time = reminderTime;
-    }
+    habit.reminder = {
+      ...habit.reminder,
+      ...value,
+      lastNotified: null
+    };
 
-    if (typeof enabled === 'boolean') {
-      habit.reminder.enabled = enabled;
-    }
-
-    if (notifications) {
-      habit.reminder.notifications = notifications;
-    }
-
-    habit.reminder.lastNotified = null;
     await habit.save();
-    res.json({ success: true, data: habit });
+    res.json({ 
+      success: true, 
+      data: habit,
+      message: 'Recordatorio actualizado exitosamente'
+    });
   } catch (error) {
     console.error('Error al actualizar recordatorio:', error);
     res.status(400).json({ 
       success: false,
       message: 'Error al actualizar el recordatorio', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

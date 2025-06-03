@@ -4,41 +4,76 @@ import { authenticateToken } from '../middleware/auth.js';
 import User from '../models/User.js';
 import crypto from 'crypto';
 import mailer from '../config/mailer.js';
+import rateLimit from 'express-rate-limit';
+import Joi from 'joi';
 
 const router = express.Router();
 
+// Rate limiters
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5, // 5 intentos
+  message: 'Demasiados intentos de inicio de sesión. Por favor, intente más tarde.'
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 3, // 3 intentos
+  message: 'Demasiados intentos de recuperación de contraseña. Por favor, intente más tarde.'
+});
+
+// Esquemas de validación
+const registerSchema = Joi.object({
+  email: Joi.string().email().required().trim().lowercase(),
+  password: Joi.string()
+    .min(8)
+    .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])'))
+    .required()
+    .messages({
+      'string.pattern.base': 'La contraseña debe contener al menos una letra mayúscula, una minúscula, un número y un carácter especial'
+    }),
+  username: Joi.string().min(3).max(30).required().trim(),
+  name: Joi.string().max(100).trim()
+});
+
+const loginSchema = Joi.object({
+  email: Joi.string().email().required().trim().lowercase(),
+  password: Joi.string().required()
+});
+
 // Health check endpoint
 router.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
 });
 
 // Registro de usuario
 router.post('/register', async (req, res) => {
   try {
     console.log('📝 Iniciando registro de usuario...');
-    const { email, password, username, name } = req.body;
-
-    // Log de datos recibidos
-    console.log('📬 Datos recibidos:', {
-      email,
-      username,
-      hasPassword: !!password,
-      name: name ? name.trim() : null
-    });
-
-    // Validar campos requeridos
-    if (!email || !password || !username) {
-      console.log('❌ Campos faltantes');
+    
+    // Validar datos de entrada
+    const { error, value } = registerSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
       return res.status(400).json({ 
-        message: 'Todos los campos son requeridos' 
+        message: 'Datos inválidos',
+        errors: error.details.map(detail => detail.message)
       });
     }
+
+    const { email, password, username, name } = value;
 
     // Verificar si el usuario ya existe con timeout
     console.log('🔍 Verificando usuario existente...');
     const existingUserPromise = User.findOne({ 
-      $or: [{ email }, { username }] 
-    }).maxTimeMS(5000); // 5 segundos máximo para la búsqueda
+      $or: [
+        { email: email.toLowerCase() }, 
+        { username: username.toLowerCase() }
+      ] 
+    }).maxTimeMS(5000);
 
     const existingUser = await existingUserPromise;
 
@@ -57,13 +92,14 @@ router.post('/register', async (req, res) => {
     // Crear nuevo usuario
     console.log('👤 Creando nuevo usuario...');
     const userData = {
-      email,
-      username,
+      email: email.toLowerCase(),
+      username: username.toLowerCase(),
       password: hash,
       salt,
       preferences: {
         theme: 'light',
-        notifications: true
+        notifications: true,
+        language: 'es'
       },
       stats: {
         tasksCompleted: 0,
@@ -94,7 +130,7 @@ router.post('/register', async (req, res) => {
     // Generar token
     console.log('🎟️ Generando token...');
     const token = jwt.sign(
-      { userId: user.id },
+      { userId: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -145,20 +181,23 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     console.log('Recibida petición de login');
-    const { email, password } = req.body;
-
-    // Validar campos requeridos
-    if (!email || !password) {
+    
+    // Validar datos de entrada
+    const { error, value } = loginSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
       return res.status(400).json({
-        message: 'Email y contraseña son requeridos'
+        message: 'Datos inválidos',
+        errors: error.details.map(detail => detail.message)
       });
     }
 
+    const { email, password } = value;
+
     // Buscar usuario
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     console.log('Usuario encontrado:', user ? 'Sí' : 'No');
 
     if (!user || !user.comparePassword(password)) {
@@ -169,13 +208,14 @@ router.post('/login', async (req, res) => {
 
     // Generar token
     const token = jwt.sign(
-      { userId: user.id },
+      { userId: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Actualizar último login
+    // Actualizar último login y actividad
     user.lastLogin = new Date();
+    user.stats.lastActive = new Date();
     await user.save();
 
     res.json({
@@ -192,15 +232,28 @@ router.post('/login', async (req, res) => {
 });
 
 // Ruta para recuperar contraseña
-router.post('/recover-password', async (req, res) => {
+router.post('/recover-password', passwordResetLimiter, async (req, res) => {
     try {
         const { email } = req.body;
         
+        if (!email) {
+            return res.status(400).json({
+                message: 'El email es requerido'
+            });
+        }
+
         // Verificar si el usuario existe
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) {
             return res.status(404).json({ 
                 message: 'No existe una cuenta con este correo electrónico' 
+            });
+        }
+
+        // Verificar si ya hay un código activo
+        if (user.resetPasswordCode && user.resetPasswordExpires > Date.now()) {
+            return res.status(400).json({
+                message: 'Ya existe un código de recuperación activo. Por favor, espere a que expire.'
             });
         }
 
@@ -216,7 +269,8 @@ router.post('/recover-password', async (req, res) => {
         await mailer.sendVerificationCode(email, verificationCode);
 
         res.json({ 
-            message: 'Se ha enviado un código de verificación a tu correo' 
+            message: 'Se ha enviado un código de verificación a tu correo',
+            expiresIn: 600 // 10 minutos en segundos
         });
 
     } catch (error) {
@@ -227,13 +281,20 @@ router.post('/recover-password', async (req, res) => {
     }
 });
 
-router.post('/verify-code', async (req, res) => {
+router.post('/verify-code', passwordResetLimiter, async (req, res) => {
   try {
     const { email, code } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({
+        message: 'Email y código son requeridos'
+      });
+    }
+
     console.log('Verificando código para:', email, 'Código recibido:', code);
 
     // Buscar usuario
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       console.log('Usuario no encontrado');
       return res.status(404).json({ message: 'No existe una cuenta con este correo electrónico' });
@@ -252,14 +313,17 @@ router.post('/verify-code', async (req, res) => {
       return res.status(400).json({ message: 'Código inválido o expirado' });
     }
 
-    res.json({ message: 'Código verificado correctamente' });
+    res.json({ 
+      message: 'Código verificado correctamente',
+      expiresIn: Math.floor((user.resetPasswordExpires - Date.now()) / 1000)
+    });
   } catch (error) {
     console.error('Error al verificar código:', error);
     res.status(500).json({ message: 'Error al verificar el código' });
   }
 });
 
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', passwordResetLimiter, async (req, res) => {
   try {
     const { email, code, newPassword } = req.body;
 
@@ -268,8 +332,17 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'Todos los campos son requeridos' });
     }
 
+    // Validar contraseña
+    const { error } = registerSchema.extract('password').validate(newPassword);
+    if (error) {
+      return res.status(400).json({
+        message: 'Contraseña inválida',
+        errors: error.details.map(detail => detail.message)
+      });
+    }
+
     // Buscar usuario
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(404).json({ message: 'No existe una cuenta con este correo electrónico' });
     }
@@ -284,14 +357,20 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'Código inválido o expirado' });
     }
 
-    // Hashear la nueva contraseña igual que en el registro
+    // Hashear la nueva contraseña
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.pbkdf2Sync(newPassword, salt, 1000, 64, 'sha512').toString('hex');
+    
+    // Actualizar usuario
     user.password = hash;
     user.salt = salt;
     user.resetPasswordCode = undefined;
     user.resetPasswordExpires = undefined;
+    user.lastPasswordChange = new Date();
     await user.save();
+
+    // Invalidar tokens existentes
+    // TODO: Implementar sistema de blacklist de tokens si es necesario
 
     res.json({ message: 'Contraseña restablecida correctamente' });
   } catch (error) {
