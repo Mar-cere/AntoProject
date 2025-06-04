@@ -16,6 +16,8 @@ El chat de Anto es el corazón de la experiencia. Está diseñado para simular u
 - **Detección de Crisis:** Si se detectan patrones de riesgo, el sistema puede sugerir recursos de ayuda o activar protocolos de emergencia.
 - **Seguimiento de Progreso:** El usuario puede visualizar su evolución emocional y recibir insights personalizados sobre su estado de ánimo y hábitos conversacionales.
 
+---
+
 #### **Servicios Integrados en el Chat**
 
 El ecosistema de Anto integra múltiples servicios inteligentes y modulares para potenciar la experiencia conversacional y el acompañamiento emocional:
