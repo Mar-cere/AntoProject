@@ -395,5 +395,36 @@ export const userService = {
       console.error('Error al restablecer contraseña:', error);
       throw error;
     }
+  },
+
+  logout: async () => {
+    try {
+      const response = await apiClient.post('/api/auth/logout');
+      await AsyncStorage.removeItem('userToken');
+      return response.data;
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      throw error;
+    }
   }
+};
+
+export const loginUser = async (credentials) => {
+  const response = await axios.post(`${API_BASE_URL}/auth/login`, credentials);
+  return response.data;
+};
+
+export const registerUser = async (userData) => {
+  const response = await axios.post(`${API_BASE_URL}/auth/register`, userData);
+  return response.data;
+};
+
+export const logoutUser = async () => {
+  const response = await axios.post(`${API_BASE_URL}/auth/logout`);
+  return response.data;
+};
+
+export const updateUser = async (userId, userData) => {
+  const response = await axios.put(`${API_BASE_URL}/users/${userId}`, userData);
+  return response.data;
 };
