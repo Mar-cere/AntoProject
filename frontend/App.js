@@ -6,6 +6,7 @@ import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import notifications from './src/data/notifications';
+import { AuthProvider } from './src/context/AuthContext';
 
 function getRandomNotificationByTime(hour) {
   let pool = [];
@@ -126,10 +127,12 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer ref={navigationRef}>
-        <StackNavigator />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <AuthProvider>
+      <SafeAreaProvider>
+        <NavigationContainer ref={navigationRef}>
+          <StackNavigator />
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </AuthProvider>
   );
 }
