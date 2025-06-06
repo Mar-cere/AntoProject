@@ -12,6 +12,7 @@ import {
   Pressable,
   Image,
   Linking,
+  Platform,
 } from "react-native";
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from "@react-navigation/native";
@@ -27,17 +28,25 @@ import {
 } from '../utils/notifications';
 import notifications from '../data/notifications';
 import * as Notifications from 'expo-notifications';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useAuth } from '../context/AuthContext';
+import { updateUser } from '../services/userService';
 
 const SettingsScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { user, updateUser: updateUserContext } = useAuth();
 
   // Estado para las preferencias
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [language, setLanguage] = useState("Español");
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [morningTime, setMorningTime] = useState(new Date().setHours(8, 0, 0, 0));
+  const [eveningTime, setEveningTime] = useState(new Date().setHours(19, 0, 0, 0));
+  const [showMorningPicker, setShowMorningPicker] = useState(false);
+  const [showEveningPicker, setShowEveningPicker] = useState(false);
 
   // Guardar preferencias
   const savePreference = async (key, value) => {
@@ -74,18 +83,61 @@ const SettingsScreen = () => {
   // Idiomas disponibles
   const languages = ["Español", "Inglés"];
 
+  useEffect(() => {
+    if (user?.notificationPreferences) {
+      const { morning, evening } = user.notificationPreferences;
+      setMorningTime(new Date().setHours(morning.hour, morning.minute, 0, 0));
+      setEveningTime(new Date().setHours(evening.hour, evening.minute, 0, 0));
+    }
+  }, [user]);
+
   const handleNotificationToggle = async (value) => {
     setNotificationsEnabled(value);
     savePreference("notifications", value);
     
     if (value) {
-      const token = await registerForPushNotificationsAsync();
-      if (token) {
-        // Programar una notificación diaria a las 10:00 AM
-        await scheduleDailyNotification(10, 0);
-      }
+      const morningDate = new Date(morningTime);
+      const eveningDate = new Date(eveningTime);
+      await scheduleDailyNotification(morningDate.getHours(), morningDate.getMinutes());
+      await scheduleDailyNotification(eveningDate.getHours(), eveningDate.getMinutes());
     } else {
       await cancelAllNotifications();
+    }
+  };
+
+  const handleTimeChange = (event, selectedTime, isMorning) => {
+    if (Platform.OS === 'android') {
+      setShowMorningPicker(false);
+      setShowEveningPicker(false);
+    }
+    if (selectedTime) {
+      if (isMorning) {
+        setMorningTime(selectedTime.getTime());
+      } else {
+        setEveningTime(selectedTime.getTime());
+      }
+    }
+  };
+
+  const saveNotificationPreferences = async () => {
+    const morningDate = new Date(morningTime);
+    const eveningDate = new Date(eveningTime);
+    const preferences = {
+      morning: {
+        hour: morningDate.getHours(),
+        minute: morningDate.getMinutes()
+      },
+      evening: {
+        hour: eveningDate.getHours(),
+        minute: eveningDate.getMinutes()
+      }
+    };
+    try {
+      await updateUser(user._id, { notificationPreferences: preferences });
+      updateUserContext({ ...user, notificationPreferences: preferences });
+      Alert.alert('Éxito', 'Preferencias de notificaciones guardadas');
+    } catch (error) {
+      Alert.alert('Error', 'No se pudieron guardar las preferencias');
     }
   };
 
@@ -296,6 +348,46 @@ const SettingsScreen = () => {
           <MaterialCommunityIcons name="information" size={24} color="#1ADDDB" />
           <Text style={styles.itemText}>Información de la aplicación</Text>
         </TouchableOpacity>
+
+        {notificationsEnabled && (
+          <>
+            <View style={styles.setting}>
+              <Text>Hora de notificación matutina</Text>
+              <TouchableOpacity onPress={() => setShowMorningPicker(true)}>
+                <Text>{new Date(morningTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              </TouchableOpacity>
+              {showMorningPicker && (
+                <DateTimePicker
+                  value={new Date(morningTime)}
+                  mode="time"
+                  is24Hour={true}
+                  display="default"
+                  onChange={(event, date) => handleTimeChange(event, date, true)}
+                />
+              )}
+            </View>
+            
+            <View style={styles.setting}>
+              <Text>Hora de notificación vespertina</Text>
+              <TouchableOpacity onPress={() => setShowEveningPicker(true)}>
+                <Text>{new Date(eveningTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              </TouchableOpacity>
+              {showEveningPicker && (
+                <DateTimePicker
+                  value={new Date(eveningTime)}
+                  mode="time"
+                  is24Hour={true}
+                  display="default"
+                  onChange={(event, date) => handleTimeChange(event, date, false)}
+                />
+              )}
+            </View>
+            
+            <TouchableOpacity style={styles.button} onPress={saveNotificationPreferences}>
+              <Text style={styles.buttonText}>Guardar preferencias</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {/* Modal de Logout */}
@@ -353,7 +445,7 @@ const SettingsScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-    </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -487,6 +579,25 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "500",
+  },
+  setting: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  button: {
+    backgroundColor: '#1ADDDB',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 

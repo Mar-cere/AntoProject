@@ -75,13 +75,12 @@ const getRandomNotification = () => {
 // Función para programar notificaciones diarias
 export const scheduleDailyNotification = async (hour, minute) => {
   await Notifications.cancelAllScheduledNotificationsAsync();
-  
   const notification = getRandomNotification();
-  
   await Notifications.scheduleNotificationAsync({
     content: {
       title: notification.title,
       body: notification.body,
+      data: { type: 'daily' },
       sound: true,
       priority: Notifications.AndroidNotificationPriority.HIGH,
       android: {
@@ -98,6 +97,25 @@ export const scheduleDailyNotification = async (hour, minute) => {
       minute,
       repeats: true,
     },
+  });
+  // Programar una notificación inmediata para que el usuario reciba una notificación al activar
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: notification.title,
+      body: notification.body,
+      data: { type: 'daily' },
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+      android: {
+        channelId: 'anto-notifications',
+        smallIcon: 'notification-icon',
+        color: '#1ADDDB',
+      },
+      ios: {
+        sound: true,
+      },
+    },
+    trigger: null,
   });
 };
 

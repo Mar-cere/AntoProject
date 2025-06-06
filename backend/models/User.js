@@ -87,6 +87,16 @@ const userSchema = new mongoose.Schema({
   resetPasswordCode: String,
   resetPasswordExpires: Date,
   avatar: { type: String, default: null },
+  notificationPreferences: {
+    morning: {
+      hour: { type: Number, default: 8 },
+      minute: { type: Number, default: 0 }
+    },
+    evening: {
+      hour: { type: Number, default: 19 },
+      minute: { type: Number, default: 0 }
+    }
+  },
 }, {
   timestamps: true
 });
