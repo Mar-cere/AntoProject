@@ -37,14 +37,22 @@ const SettingsScreen = () => {
   const insets = useSafeAreaInsets();
   const { user, updateUser: updateUserContext } = useAuth();
 
-  // Estado para las preferencias
+  // Estado para las preferencias (usar siempre objetos Date)
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [language, setLanguage] = useState("Español");
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [morningTime, setMorningTime] = useState(new Date().setHours(8, 0, 0, 0));
-  const [eveningTime, setEveningTime] = useState(new Date().setHours(19, 0, 0, 0));
+  const [morningTime, setMorningTime] = useState(() => {
+    const d = new Date();
+    d.setHours(8, 0, 0, 0);
+    return d;
+  });
+  const [eveningTime, setEveningTime] = useState(() => {
+    const d = new Date();
+    d.setHours(19, 0, 0, 0);
+    return d;
+  });
   const [showMorningPicker, setShowMorningPicker] = useState(false);
   const [showEveningPicker, setShowEveningPicker] = useState(false);
 
@@ -86,8 +94,12 @@ const SettingsScreen = () => {
   useEffect(() => {
     if (user?.notificationPreferences) {
       const { morning, evening } = user.notificationPreferences;
-      setMorningTime(new Date().setHours(morning.hour, morning.minute, 0, 0));
-      setEveningTime(new Date().setHours(evening.hour, evening.minute, 0, 0));
+      const morningDate = new Date();
+      morningDate.setHours(morning.hour, morning.minute, 0, 0);
+      setMorningTime(morningDate);
+      const eveningDate = new Date();
+      eveningDate.setHours(evening.hour, evening.minute, 0, 0);
+      setEveningTime(eveningDate);
     }
   }, [user]);
 
@@ -112,29 +124,32 @@ const SettingsScreen = () => {
     }
     if (selectedTime) {
       if (isMorning) {
-        setMorningTime(selectedTime.getTime());
+        setMorningTime(selectedTime);
       } else {
-        setEveningTime(selectedTime.getTime());
+        setEveningTime(selectedTime);
       }
     }
   };
 
   const saveNotificationPreferences = async () => {
-    const morningDate = new Date(morningTime);
-    const eveningDate = new Date(eveningTime);
     const preferences = {
       morning: {
-        hour: morningDate.getHours(),
-        minute: morningDate.getMinutes()
+        hour: morningTime.getHours(),
+        minute: morningTime.getMinutes()
       },
       evening: {
-        hour: eveningDate.getHours(),
-        minute: eveningDate.getMinutes()
+        hour: eveningTime.getHours(),
+        minute: eveningTime.getMinutes()
       }
     };
     try {
       await updateUser(user._id, { notificationPreferences: preferences });
       updateUserContext({ ...user, notificationPreferences: preferences });
+      if (notificationsEnabled) {
+        await cancelAllNotifications();
+        await scheduleDailyNotification(preferences.morning.hour, preferences.morning.minute);
+        await scheduleDailyNotification(preferences.evening.hour, preferences.evening.minute);
+      }
       Alert.alert('Éxito', 'Preferencias de notificaciones guardadas');
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar las preferencias');
@@ -354,11 +369,11 @@ const SettingsScreen = () => {
             <View style={styles.setting}>
               <Text>Hora de notificación matutina</Text>
               <TouchableOpacity onPress={() => setShowMorningPicker(true)}>
-                <Text>{new Date(morningTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                <Text>{morningTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
               </TouchableOpacity>
               {showMorningPicker && (
                 <DateTimePicker
-                  value={new Date(morningTime)}
+                  value={morningTime}
                   mode="time"
                   is24Hour={true}
                   display="default"
@@ -370,11 +385,11 @@ const SettingsScreen = () => {
             <View style={styles.setting}>
               <Text>Hora de notificación vespertina</Text>
               <TouchableOpacity onPress={() => setShowEveningPicker(true)}>
-                <Text>{new Date(eveningTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                <Text>{eveningTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
               </TouchableOpacity>
               {showEveningPicker && (
                 <DateTimePicker
-                  value={new Date(eveningTime)}
+                  value={eveningTime}
                   mode="time"
                   is24Hour={true}
                   display="default"
