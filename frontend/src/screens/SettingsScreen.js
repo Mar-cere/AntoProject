@@ -103,13 +103,31 @@ const SettingsScreen = () => {
     }
   }, [user]);
 
+  // Sincronizar estado de notificaciones con AsyncStorage al montar
+  useEffect(() => {
+    const loadNotificationPreference = async () => {
+      try {
+        const value = await AsyncStorage.getItem('notifications');
+        if (value !== null) {
+          setNotificationsEnabled(JSON.parse(value));
+        }
+      } catch (e) {
+        console.log('Error cargando preferencia de notificaciones:', e);
+      }
+    };
+    loadNotificationPreference();
+  }, []);
+
   const handleNotificationToggle = async (value) => {
     setNotificationsEnabled(value);
-    savePreference("notifications", value);
-    
+    try {
+      await AsyncStorage.setItem('notifications', JSON.stringify(value));
+    } catch (e) {
+      console.log('Error guardando preferencia de notificaciones:', e);
+    }
     if (value) {
-      const morningDate = new Date(morningTime);
-      const eveningDate = new Date(eveningTime);
+      const morningDate = morningTime;
+      const eveningDate = eveningTime;
       await scheduleDailyNotification(morningDate.getHours(), morningDate.getMinutes());
       await scheduleDailyNotification(eveningDate.getHours(), eveningDate.getMinutes());
     } else {
@@ -258,6 +276,102 @@ const SettingsScreen = () => {
           />
         </View>
 
+        {notificationsEnabled && (
+          <>
+            <View style={styles.timeSelectorContainer}>
+              <Text style={styles.timeSelectorLabel}>Hora de notificación matutina</Text>
+              <TouchableOpacity 
+                style={styles.timeSelectorButton}
+                onPress={() => setShowMorningPicker(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="clock-outline" size={24} color="#1ADDDB" />
+                <Text style={styles.timeSelectorText}>
+                  {morningTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </TouchableOpacity>
+              {showMorningPicker && (
+                <Modal
+                  transparent={true}
+                  animationType="fade"
+                  visible={showMorningPicker}
+                  onRequestClose={() => setShowMorningPicker(false)}
+                >
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <View style={{ backgroundColor: '#22335C', borderRadius: 12, padding: 16 }}>
+                      <DateTimePicker
+                        value={morningTime}
+                        mode="time"
+                        is24Hour={true}
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(event, date) => {
+                          handleTimeChange(event, date, true);
+                          setShowMorningPicker(false);
+                        }}
+                        textColor="#FFFFFF"
+                        themeVariant="dark"
+                      />
+                      <TouchableOpacity onPress={() => setShowMorningPicker(false)} style={{ marginTop: 12, alignSelf: 'flex-end' }}>
+                        <Text style={{ color: '#1ADDDB', fontWeight: 'bold' }}>Cerrar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </Modal>
+              )}
+            </View>
+            
+            <View style={styles.timeSelectorContainer}>
+              <Text style={styles.timeSelectorLabel}>Hora de notificación vespertina</Text>
+              <TouchableOpacity 
+                style={styles.timeSelectorButton}
+                onPress={() => setShowEveningPicker(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="clock-outline" size={24} color="#1ADDDB" />
+                <Text style={styles.timeSelectorText}>
+                  {eveningTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </TouchableOpacity>
+              {showEveningPicker && (
+                <Modal
+                  transparent={true}
+                  animationType="fade"
+                  visible={showEveningPicker}
+                  onRequestClose={() => setShowEveningPicker(false)}
+                >
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <View style={{ backgroundColor: '#22335C', borderRadius: 12, padding: 16 }}>
+                      <DateTimePicker
+                        value={eveningTime}
+                        mode="time"
+                        is24Hour={true}
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(event, date) => {
+                          handleTimeChange(event, date, false);
+                          setShowEveningPicker(false);
+                        }}
+                        textColor="#FFFFFF"
+                        themeVariant="dark"
+                      />
+                      <TouchableOpacity onPress={() => setShowEveningPicker(false)} style={{ marginTop: 12, alignSelf: 'flex-end' }}>
+                        <Text style={{ color: '#1ADDDB', fontWeight: 'bold' }}>Cerrar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </Modal>
+              )}
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.saveButton} 
+              onPress={saveNotificationPreferences}
+            >
+              <MaterialCommunityIcons name="content-save" size={24} color="#FFFFFF" />
+              <Text style={styles.saveButtonText}>Guardar preferencias</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
         <View style={styles.item}>
           <MaterialCommunityIcons name="theme-light-dark" size={24} color="#1ADDDB" />
           <Text style={styles.itemText}>Tema oscuro</Text>
@@ -363,46 +477,6 @@ const SettingsScreen = () => {
           <MaterialCommunityIcons name="information" size={24} color="#1ADDDB" />
           <Text style={styles.itemText}>Información de la aplicación</Text>
         </TouchableOpacity>
-
-        {notificationsEnabled && (
-          <>
-            <View style={styles.setting}>
-              <Text>Hora de notificación matutina</Text>
-              <TouchableOpacity onPress={() => setShowMorningPicker(true)}>
-                <Text>{morningTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-              </TouchableOpacity>
-              {showMorningPicker && (
-                <DateTimePicker
-                  value={morningTime}
-                  mode="time"
-                  is24Hour={true}
-                  display="default"
-                  onChange={(event, date) => handleTimeChange(event, date, true)}
-                />
-              )}
-            </View>
-            
-            <View style={styles.setting}>
-              <Text>Hora de notificación vespertina</Text>
-              <TouchableOpacity onPress={() => setShowEveningPicker(true)}>
-                <Text>{eveningTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-              </TouchableOpacity>
-              {showEveningPicker && (
-                <DateTimePicker
-                  value={eveningTime}
-                  mode="time"
-                  is24Hour={true}
-                  display="default"
-                  onChange={(event, date) => handleTimeChange(event, date, false)}
-                />
-              )}
-            </View>
-            
-            <TouchableOpacity style={styles.button} onPress={saveNotificationPreferences}>
-              <Text style={styles.buttonText}>Guardar preferencias</Text>
-            </TouchableOpacity>
-          </>
-        )}
       </ScrollView>
 
       {/* Modal de Logout */}
@@ -595,24 +669,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
   },
-  setting: {
+  timeSelectorContainer: {
+    backgroundColor: "rgba(29, 43, 95, 0.8)",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "rgba(26, 221, 219, 0.1)",
+  },
+  timeSelectorLabel: {
+    color: "#A3B8E8",
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  timeSelectorButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  button: {
-    backgroundColor: '#1ADDDB',
-    padding: 15,
+    backgroundColor: "#22335C",
     borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    marginTop: 8,
   },
-  buttonText: {
-    color: '#fff',
+  timeSelectorText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    marginLeft: 12,
     fontWeight: 'bold',
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: "#1ADDDB",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginLeft: 8,
   },
 });
 
