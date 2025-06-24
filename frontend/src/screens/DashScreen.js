@@ -19,17 +19,9 @@ import { API_URL } from '../config/api';
 import DashboardScroll from '../components/DashboardScroll';
 import PomodoroCard from '../components/PomodoroCard';
 import { getGreetingByHourAndDayAndName } from '../utils/greetings';
+// import { copilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 
 const screenWidth = Dimensions.get('window').width;
-
-// Constante para caché
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutos
-const CACHE_KEYS = {
-  TASKS: '@app_tasks_cache',
-  HABITS: '@app_habits_cache',
-  ACHIEVEMENTS: '@app_achievements_cache',
-  TIMESTAMP: '@app_cache_timestamp'
-};
 
 // Componente para mostrar errores con opciones de recuperación
 const ErrorMessage = ({ message, onRetry, onDismiss }) => (
@@ -64,115 +56,143 @@ const fetchAvatarUrl = async (publicId, token) => {
   }
 };
 
+// const WalkthroughableView = walkthroughable(View);
+
 const DashScreen = () => {
   const navigation = useNavigation();
-  
-  const [state, setState] = useState({
-    loading: true,
-    error: null,
-    refreshing: false,
-    userData: null,
-    tasks: [],
-    habits: [],
-    greeting: ''
-  });
-
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [habits, setHabits] = useState([]);
+  const [greeting, setGreeting] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
+  const [refreshAnim] = useState(new Animated.Value(0));
+  // const [showingTutorial, setShowingTutorial] = useState(false);
+
+  // Mostrar tutorial solo la primera vez
+  // useEffect(() => {
+  //   const checkTutorial = async () => {
+  //     const seen = await AsyncStorage.getItem('hasSeenTutorial');
+  //     if (!seen) {
+  //       setTimeout(() => {
+  //         props.start();
+  //         setShowingTutorial(true);
+  //       }, 800); // Espera a que cargue la UI
+  //     }
+  //   };
+  //   if (!loading) checkTutorial();
+  // }, [loading]);
+
+  // Cuando termine el tutorial, guardar la bandera
+  // useEffect(() => {
+  //   if (!props.copilotEvents) return;
+  //   const handleStop = () => {
+  //     AsyncStorage.setItem('hasSeenTutorial', 'true');
+  //     setShowingTutorial(false);
+  //   };
+  //   props.copilotEvents.on('stop', handleStop);
+  //   return () => {
+  //     props.copilotEvents.off('stop', handleStop);
+  //   };
+  // }, [props.copilotEvents]);
 
   // Función para cargar datos
   const loadData = useCallback(async (forceRefresh = false) => {
-    if (!forceRefresh && state.refreshing) return;
-
+    if (!forceRefresh && refreshing) return;
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         navigation.navigate('SignIn');
         return;
       }
-
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       };
-
       // Función para manejar respuestas
-      const fetchWithSafeResponse = async (url) => {
+      const fetchWithSafeResponse = async (url, label) => {
         try {
           const response = await fetch(url, { headers });
           if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`Error ${label}: status ${response.status}`);
           }
           const text = await response.text();
           return text ? JSON.parse(text) : [];
         } catch (error) {
           console.error(`Error fetching ${url}:`, error);
+          setError(`No se pudo cargar ${label}. Intenta de nuevo.`);
           return [];
         }
       };
-
-      const [userData, tasks, habits, achievements] = await Promise.all([
-        fetchWithSafeResponse(`${API_URL}/api/users/me`),
-        fetchWithSafeResponse(`${API_URL}/api/tasks`),
-        fetchWithSafeResponse(`${API_URL}/api/habits`),
+      const [userData, tasks, habits] = await Promise.all([
+        fetchWithSafeResponse(`${API_URL}/api/users/me`, 'usuario'),
+        fetchWithSafeResponse(`${API_URL}/api/tasks`, 'tareas'),
+        fetchWithSafeResponse(`${API_URL}/api/habits`, 'hábitos'),
       ]);
-
-      console.log('userData.avatar:', userData?.avatar);
-
-      // Obtener la URL firmada del avatar si existe
       let avatarUrl = null;
       if (userData?.avatar) {
         avatarUrl = await fetchAvatarUrl(userData.avatar, token);
       }
-
-      // Actualizar el saludo
+      setAvatarUrl(avatarUrl);
+      setUserData(userData || {});
+      setTasks(Array.isArray(tasks) ? tasks : []);
+      setHabits(Array.isArray(habits) ? habits : []);
       const now = new Date();
-      const greeting = getGreetingByHourAndDayAndName({
+      setGreeting(getGreetingByHourAndDayAndName({
         hour: now.getHours(),
         dayIndex: now.getDay(),
         userName: userData?.username || ""
-      });
-
-      setAvatarUrl(avatarUrl);
-
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        refreshing: false,
-        userData: userData || {},
-        tasks: Array.isArray(tasks) ? tasks : [],
-        habits: Array.isArray(habits) ? habits : [],
-        greeting,
-        error: null
       }));
-
+      setLoading(false);
+      setRefreshing(false);
+      setError(null);
     } catch (error) {
       console.error('Error en loadData:', error);
-      setState(prev => ({
-        ...prev,
-        error: 'Error al cargar los datos',
-        loading: false,
-        refreshing: false
-      }));
+      setError('Error al cargar los datos');
+      setLoading(false);
+      setRefreshing(false);
     }
-  }, [navigation]);
+  }, [navigation, refreshing]);
 
   // Efecto para carga inicial
   useEffect(() => {
-    if (state.loading) {
+    if (loading) {
       loadData();
     }
-  }, [loadData, state.loading]);
+  }, [loadData, loading]);
+
+  // Animación al refrescar
+  const triggerRefreshAnim = () => {
+    Animated.sequence([
+      Animated.timing(refreshAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.ease)
+      }),
+      Animated.timing(refreshAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.ease)
+      })
+    ]).start();
+  };
 
   // Componente de carga
-  if (state.loading) {
+  if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color="#1ADDDB" />
+        <Text style={styles.loadingText}>Cargando tu panel...</Text>
       </View>
     );
   }
 
-  console.log('Avatar en header:', avatarUrl);
+  // Avatar por defecto
+  const avatarToShow = avatarUrl || require('../images/avatar.png');
 
   return (
     <View style={styles.container}>
@@ -183,57 +203,98 @@ const DashScreen = () => {
         imageStyle={styles.imageStyle}
       >
         <ParticleBackground />
-        
+        {/* <CopilotStep text="¡Bienvenido! Aquí verás tu saludo y avatar." order={1} name="header"> */}
+        {/* <WalkthroughableView style={styles.headerFixed}> */}
         <View style={styles.headerFixed}>
           <Header 
-            greeting={state.greeting}
-            userAvatar={avatarUrl}
+            greeting={greeting}
+            userAvatar={avatarToShow}
           />
         </View>
-
+        {/* </WalkthroughableView> */}
+        {/* </CopilotStep> */}
         <DashboardScroll 
-          refreshing={state.refreshing}
+          refreshing={refreshing}
           onRefresh={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setState(prev => ({ ...prev, refreshing: true }));
+            setRefreshing(true);
+            triggerRefreshAnim();
             loadData(true);
           }}
+          contentContainerStyle={{ paddingBottom: 120 }}
         >
+          {/* <CopilotStep text="Aquí encontrarás una frase motivacional diaria." order={2} name="quote"> */}
+          {/* <WalkthroughableView> */}
           <QuoteSection />
-          
-          {state.error && (
+          {/* </WalkthroughableView> */}
+          {/* </CopilotStep> */}
+          {error && (
             <ErrorMessage 
-              message={state.error}
+              message={error}
               onRetry={() => loadData(true)}
-              onDismiss={() => setState(prev => ({ ...prev, error: null }))}
+              onDismiss={() => setError(null)}
             />
           )}
-          
-          <TaskCard 
-            tasks={state.tasks}
-            onComplete={async (taskId) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              loadData(true);
-            }}
-          />
-          
-          <HabitCard 
-            habits={state.habits}
-            onUpdate={async (habitId) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              loadData(true);
-            }}
-          />
-          
-          <PomodoroCard />
-
+          {/* <CopilotStep text="Gestiona tus tareas diarias aquí." order={3} name="tasks"> */}
+          {/* <WalkthroughableView> */}
+          <Animated.View style={{
+            transform: [{ scale: refreshAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }],
+            opacity: refreshAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] })
+          }}>
+            <TaskCard 
+              tasks={tasks}
+              onComplete={async (taskId) => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                loadData(true);
+              }}
+              accessibilityLabel="Lista de tareas"
+            />
+          </Animated.View>
+          {/* </WalkthroughableView> */}
+          {/* </CopilotStep> */}
+          {/* <CopilotStep text="Aquí puedes seguir tus hábitos y rachas." order={4} name="habits"> */}
+          {/* <WalkthroughableView> */}
+          <Animated.View style={{
+            transform: [{ scale: refreshAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }],
+            opacity: refreshAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] })
+          }}>
+            <HabitCard 
+              habits={habits}
+              onUpdate={async (habitId) => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                loadData(true);
+              }}
+              accessibilityLabel="Lista de hábitos"
+            />
+          </Animated.View>
+          {/* </WalkthroughableView> */}
+          {/* </CopilotStep> */}
+          {/* <CopilotStep text="Utiliza el temporizador Pomodoro para concentrarte." order={5} name="pomodoro"> */}
+          {/* <WalkthroughableView> */}
+          <PomodoroCard accessibilityLabel="Pomodoro" />
+          {/* </WalkthroughableView> */}
+          {/* </CopilotStep> */}
         </DashboardScroll>
-        
-        <FloatingNavBar activeTab="home" />
+        {/* <CopilotStep text="Navega entre las secciones principales aquí." order={6} name="navbar"> */}
+        {/* <WalkthroughableView> */}
+        <FloatingNavBar activeTab="home" accessibilityLabel="Barra de navegación" />
+        {/* </WalkthroughableView> */}
+        {/* </CopilotStep> */}
       </ImageBackground>
     </View>
   );
 };
+
+// export default memo(copilot({
+//   overlay: 'svg',
+//   animated: true,
+//   tooltipStyle: { borderRadius: 16, padding: 16 },
+//   stepNumberTextStyle: { color: '#1ADDDB', fontWeight: 'bold' },
+//   tooltipTextStyle: { color: '#030A24', fontSize: 16 },
+//   backdropColor: 'rgba(3,10,36,0.7)'
+// })(DashScreen));
+
+export default memo(DashScreen);
 
 const styles = StyleSheet.create({
   container: {
@@ -361,5 +422,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
-export default memo(DashScreen);

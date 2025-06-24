@@ -10,7 +10,9 @@ import {
   Alert,
   ImageBackground,
   RefreshControl,
-  SafeAreaView
+  SafeAreaView,
+  Animated,
+  Easing
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,12 +38,6 @@ const ProfileScreen = ({ navigation }) => {
       lastActive: null
     },
   });
-  const [stats, setStats] = useState({
-    tasksCompleted: 0,
-    habitsActive: 0,
-    currentStreak: 0,
-    bestStreak: 0,
-  });
   const [detailedStats, setDetailedStats] = useState({
     totalTasks: 0,
     tasksCompleted: 0,
@@ -54,6 +50,7 @@ const ProfileScreen = ({ navigation }) => {
     lastActive: null
   });
   const [avatarUrl, setAvatarUrl] = useState(null);
+  const [refreshAnim] = useState(new Animated.Value(0));
 
   const loadUserData = useCallback(async () => {
     try {
@@ -69,27 +66,30 @@ const ProfileScreen = ({ navigation }) => {
             lastActive: new Date()
           }
         }));
-
-        // Calculamos estadísticas detalladas
-        setDetailedStats({
-          ...detailedStats,
+        // Calcular estadísticas detalladas de forma completa
+        setDetailedStats(prev => ({
+          ...prev,
           currentStreak: parsedUserData.stats?.habitsStreak ?? 0,
-          lastActive: parsedUserData.stats?.lastActive ?? null
-        });
-
+          bestStreak: parsedUserData.stats?.bestStreak ?? 0,
+          lastActive: parsedUserData.stats?.lastActive ?? null,
+          tasksCompleted: parsedUserData.stats?.tasksCompleted ?? 0,
+          habitsActive: parsedUserData.stats?.habitsActive ?? 0,
+          habitsCompleted: parsedUserData.stats?.habitsCompleted ?? 0,
+          tasksThisWeek: parsedUserData.stats?.tasksThisWeek ?? 0,
+          totalTasks: parsedUserData.stats?.totalTasks ?? 0,
+          totalHabits: parsedUserData.stats?.totalHabits ?? 0,
+        }));
         if (parsedUserData.avatar) {
           const url = await fetchAvatarUrl(parsedUserData.avatar, token);
-          setAvatarUrl(url);
+          setAvatarUrl(url || require('../images/avatar.png'));
         } else {
-          setAvatarUrl(null);
+          setAvatarUrl(require('../images/avatar.png'));
         }
-
-        console.log('userData.avatar:', parsedUserData.avatar);
-        console.log('avatarUrl:', avatarUrl);
       }
     } catch (error) {
       console.error('Error al cargar datos del perfil:', error);
       Alert.alert('Error', 'No se pudieron cargar los datos del perfil');
+      setAvatarUrl(require('../images/avatar.png'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -114,10 +114,28 @@ const ProfileScreen = ({ navigation }) => {
     loadUserData();
   }, []);
 
+  const triggerRefreshAnim = () => {
+    Animated.sequence([
+      Animated.timing(refreshAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.ease)
+      }),
+      Animated.timing(refreshAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.ease)
+      })
+    ]).start();
+  };
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
+    triggerRefreshAnim();
     loadUserData();
-  }, []);
+  }, [loadUserData]);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -184,6 +202,7 @@ const ProfileScreen = ({ navigation }) => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1ADDDB" />
+        <Text style={styles.loadingText}>Cargando perfil...</Text>
       </View>
     );
   }
@@ -205,12 +224,14 @@ const ProfileScreen = ({ navigation }) => {
               progressBackgroundColor="rgba(29, 43, 95, 0.8)"
             />
           }
+          contentContainerStyle={{ paddingBottom: 48 }}
         >
           {/* Header Mejorado */}
           <View style={styles.header}>
             <TouchableOpacity 
               style={styles.headerButton}
               onPress={() => navigation.goBack()}
+              accessibilityLabel="Volver"
             >
               <MaterialCommunityIcons name="arrow-left" size={24} color="#FFFFFF" />
             </TouchableOpacity>
@@ -218,6 +239,7 @@ const ProfileScreen = ({ navigation }) => {
             <TouchableOpacity 
               style={styles.headerButton}
               onPress={() => navigation.navigate('Settings')}
+              accessibilityLabel="Ir a configuración"
             >
               <MaterialCommunityIcons name="cog" size={24} color="#FFFFFF" />
             </TouchableOpacity>
@@ -226,16 +248,22 @@ const ProfileScreen = ({ navigation }) => {
           {/* Perfil Principal */}
           <View style={styles.profileSection}>
             <View style={styles.avatarContainer}>
-              {avatarUrl ? (
-                <Image 
-                  source={{ uri: avatarUrl }} 
-                  style={styles.avatar}
-                />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <MaterialCommunityIcons name="account" size={40} color="#A3B8E8" />
-                </View>
-              )}
+              <Animated.View style={{
+                transform: [{ scale: refreshAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }],
+                opacity: refreshAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] })
+              }}>
+                {avatarUrl ? (
+                  <Image 
+                    source={typeof avatarUrl === 'string' ? { uri: avatarUrl } : avatarUrl} 
+                    style={styles.avatar}
+                  />
+                ) : (
+                  <Image 
+                    source={require('../images/avatar.png')} 
+                    style={styles.avatar}
+                  />
+                )}
+              </Animated.View>
             </View>
             <Text style={styles.userName}>{userData.username}</Text>
             <Text style={styles.userEmail}>{userData.email}</Text>
@@ -281,6 +309,7 @@ const ProfileScreen = ({ navigation }) => {
             <TouchableOpacity 
               style={styles.optionButton}
               onPress={() => navigation.navigate('EditProfile')}
+              accessibilityLabel="Editar perfil"
             >
               <MaterialCommunityIcons name="account-edit" size={24} color="#1ADDDB" />
               <Text style={styles.optionText}>Editar Perfil</Text>
@@ -290,6 +319,7 @@ const ProfileScreen = ({ navigation }) => {
             <TouchableOpacity 
               style={styles.optionButton}
               onPress={() => navigation.navigate('Help')}
+              accessibilityLabel="Ayuda"
             >
               <MaterialCommunityIcons name="help-circle" size={24} color="#1ADDDB" />
               <Text style={styles.optionText}>Ayuda</Text>
@@ -301,6 +331,7 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity 
             style={styles.logoutButton}
             onPress={handleLogout}
+            accessibilityLabel="Cerrar sesión"
           >
             <MaterialCommunityIcons name="logout" size={24} color="#FF6B6B" />
             <Text style={styles.logoutText}>Cerrar Sesión</Text>
@@ -327,6 +358,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#030A24',
+  },
+  loadingText: {
+    color: '#A3B8E8',
+    fontSize: 18,
+    marginTop: 10,
   },
   header: {
     flexDirection: 'row',

@@ -36,6 +36,7 @@ const EditProfileScreen = ({ navigation }) => {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [errors, setErrors] = useState({});
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [avatarAnim] = useState(new Animated.Value(1));
 
   const { checkSession } = useSession();
 
@@ -280,7 +281,6 @@ const EditProfileScreen = ({ navigation }) => {
       Alert.alert('Permiso requerido', 'Se necesita acceso a la galería para cambiar la foto de perfil.');
       return;
     }
-
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -289,7 +289,6 @@ const EditProfileScreen = ({ navigation }) => {
         quality: 0.7,
       });
       console.log('Resultado del picker:', result);
-
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const publicId = await uploadImageToCloudinary(result.assets[0].uri);
         setFormData(prev => ({
@@ -300,6 +299,11 @@ const EditProfileScreen = ({ navigation }) => {
         const url = await fetchAvatarUrl(publicId, token);
         setAvatarUrl(url);
         setHasChanges(true);
+        // Animación sutil al cambiar avatar
+        Animated.sequence([
+          Animated.timing(avatarAnim, { toValue: 1.1, duration: 150, useNativeDriver: true }),
+          Animated.timing(avatarAnim, { toValue: 1, duration: 150, useNativeDriver: true })
+        ]).start();
       }
     } catch (e) {
       console.log('Error al abrir picker:', e);
@@ -341,6 +345,7 @@ const EditProfileScreen = ({ navigation }) => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1ADDDB" />
+        <Text style={styles.loadingText}>Cargando perfil...</Text>
       </View>
     );
   }
@@ -356,6 +361,7 @@ const EditProfileScreen = ({ navigation }) => {
           <TouchableOpacity 
             style={styles.headerButton}
             onPress={() => navigation.goBack()}
+            accessibilityLabel="Volver"
           >
             <MaterialCommunityIcons name="arrow-left" size={24} color="#FFFFFF" />
           </TouchableOpacity>
@@ -365,6 +371,7 @@ const EditProfileScreen = ({ navigation }) => {
               style={[styles.headerButton, saving && styles.disabledButton]}
               onPress={handleSave}
               disabled={saving}
+              accessibilityLabel="Guardar cambios"
             >
               <MaterialCommunityIcons 
                 name="content-save" 
@@ -376,28 +383,35 @@ const EditProfileScreen = ({ navigation }) => {
             <TouchableOpacity 
               style={styles.headerButton}
               onPress={() => setEditing(true)}
+              accessibilityLabel="Editar perfil"
             >
               <MaterialCommunityIcons name="pencil" size={24} color="#1ADDDB" />
             </TouchableOpacity>
           )}
         </View>
 
-        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <Animated.View style={[styles.content, { opacity: fadeAnim, paddingBottom: 48 }]}>
           <View style={styles.profileHeader}>
             <TouchableOpacity
               style={styles.avatarContainer}
               onPress={handleAvatarChange}
               disabled={!editing}
               activeOpacity={editing ? 0.7 : 1}
+              accessibilityLabel="Cambiar foto de perfil"
             >
-              {avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
-                  style={{ width: 100, height: 100, borderRadius: 50 }}
-                />
-              ) : (
-                <MaterialCommunityIcons name="account-circle" size={80} color="#1ADDDB" />
-              )}
+              <Animated.View style={{ transform: [{ scale: avatarAnim }] }}>
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={{ width: 100, height: 100, borderRadius: 50 }}
+                  />
+                ) : (
+                  <Image
+                    source={require('../images/avatar.png')}
+                    style={{ width: 100, height: 100, borderRadius: 50 }}
+                  />
+                )}
+              </Animated.View>
               {editing && (
                 <View style={{
                   position: 'absolute',
@@ -510,9 +524,9 @@ const EditProfileScreen = ({ navigation }) => {
         </Animated.View>
 
         {saveSuccess && (
-          <View style={styles.saveSuccessIndicator}>
-            <MaterialCommunityIcons name="check-circle" size={20} color="#4CAF50" />
-            <Text style={styles.saveSuccessText}>Guardado</Text>
+          <View style={styles.saveSuccessIndicatorImproved}>
+            <MaterialCommunityIcons name="check-circle" size={24} color="#4CAF50" />
+            <Text style={styles.saveSuccessTextImproved}>¡Guardado!</Text>
           </View>
         )}
       </ImageBackground>
@@ -675,22 +689,6 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.5,
   },
-  saveSuccessIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    position: 'absolute',
-    top: 60,
-    right: 16,
-  },
-  saveSuccessText: {
-    color: '#4CAF50',
-    marginLeft: 4,
-    fontSize: 14,
-  },
   inputFocused: {
     borderColor: '#1ADDDB',
     borderWidth: 2,
@@ -715,6 +713,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
+  },
+  loadingText: {
+    color: '#A3B8E8',
+    fontSize: 18,
+    marginTop: 10,
+  },
+  saveSuccessIndicatorImproved: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    position: 'absolute',
+    top: '45%',
+    alignSelf: 'center',
+    zIndex: 10,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  saveSuccessTextImproved: {
+    color: '#4CAF50',
+    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 
