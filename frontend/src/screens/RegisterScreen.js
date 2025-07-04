@@ -113,8 +113,8 @@ const RegisterScreen = ({ navigation }) => {
     if (field === 'password') {
       if (!value) {
         updatedErrors.password = 'La contraseña es obligatoria';
-      } else if (value.length < 6) {
-        updatedErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+      } else if (value.length < 8) {
+        updatedErrors.password = 'La contraseña debe tener al menos 8 caracteres';
       } else {
         delete updatedErrors.password;
       }
@@ -162,8 +162,8 @@ const RegisterScreen = ({ navigation }) => {
     
     if (!formData.password) {
       newErrors.password = 'La contraseña es obligatoria';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'La contraseña debe tener al menos 8 caracteres';
     }
     
     if (!formData.confirmPassword) {

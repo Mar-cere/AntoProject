@@ -27,10 +27,9 @@ const registerSchema = Joi.object({
   email: Joi.string().email().required().trim().lowercase(),
   password: Joi.string()
     .min(8)
-    .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])'))
     .required()
     .messages({
-      'string.pattern.base': 'La contraseña debe contener al menos una letra mayúscula, una minúscula, un número y un carácter especial'
+      'string.min': 'La contraseña debe tener al menos 8 caracteres'
     }),
   username: Joi.string().min(3).max(30).required().trim(),
   name: Joi.string().max(100).trim()
