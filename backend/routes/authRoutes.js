@@ -6,38 +6,141 @@ import crypto from 'crypto';
 import mailer from '../config/mailer.js';
 import rateLimit from 'express-rate-limit';
 import Joi from 'joi';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
-// Rate limiters
+// Rate limiters mejorados
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 5, // 5 intentos
-  message: 'Demasiados intentos de inicio de sesión. Por favor, intente más tarde.'
+  message: 'Demasiados intentos de inicio de sesión. Por favor, intente más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 3, // 3 registros por hora
+  message: 'Demasiados intentos de registro. Por favor, intente más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
 const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
   max: 3, // 3 intentos
-  message: 'Demasiados intentos de recuperación de contraseña. Por favor, intente más tarde.'
+  message: 'Demasiados intentos de recuperación de contraseña. Por favor, intente más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
-// Esquemas de validación
+// Esquemas de validación mejorados
 const registerSchema = Joi.object({
-  email: Joi.string().email().required().trim().lowercase(),
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .required()
+    .trim()
+    .lowercase()
+    .messages({
+      'string.email': 'Por favor ingresa un email válido',
+      'any.required': 'El email es requerido'
+    }),
   password: Joi.string()
     .min(8)
     .required()
     .messages({
-      'string.min': 'La contraseña debe tener al menos 8 caracteres'
+      'string.min': 'La contraseña debe tener al menos 8 caracteres',
+      'any.required': 'La contraseña es requerida'
     }),
-  username: Joi.string().min(3).max(30).required().trim(),
-  name: Joi.string().max(100).trim()
+  username: Joi.string()
+    .min(3)
+    .max(20)
+    .pattern(/^[a-z0-9_]+$/)
+    .required()
+    .trim()
+    .lowercase()
+    .messages({
+      'string.min': 'El nombre de usuario debe tener al menos 3 caracteres',
+      'string.max': 'El nombre de usuario debe tener máximo 20 caracteres',
+      'string.pattern.base': 'El nombre de usuario solo puede contener letras minúsculas, números y guiones bajos',
+      'any.required': 'El nombre de usuario es requerido'
+    }),
+  name: Joi.string()
+    .min(2)
+    .max(50)
+    .trim()
+    .optional()
+    .messages({
+      'string.min': 'El nombre debe tener al menos 2 caracteres',
+      'string.max': 'El nombre debe tener máximo 50 caracteres'
+    })
 });
 
 const loginSchema = Joi.object({
-  email: Joi.string().email().required().trim().lowercase(),
-  password: Joi.string().required()
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .required()
+    .trim()
+    .lowercase()
+    .messages({
+      'string.email': 'Por favor ingresa un email válido',
+      'any.required': 'El email es requerido'
+    }),
+  password: Joi.string()
+    .required()
+    .messages({
+      'any.required': 'La contraseña es requerida'
+    })
+});
+
+const passwordResetSchema = Joi.object({
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .required()
+    .trim()
+    .lowercase()
+    .messages({
+      'string.email': 'Por favor ingresa un email válido',
+      'any.required': 'El email es requerido'
+    })
+});
+
+const verifyCodeSchema = Joi.object({
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .required()
+    .trim()
+    .lowercase(),
+  code: Joi.string()
+    .length(6)
+    .pattern(/^[0-9]+$/)
+    .required()
+    .messages({
+      'string.length': 'El código debe tener 6 dígitos',
+      'string.pattern.base': 'El código debe contener solo números',
+      'any.required': 'El código es requerido'
+    })
+});
+
+const resetPasswordSchema = Joi.object({
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .required()
+    .trim()
+    .lowercase(),
+  code: Joi.string()
+    .length(6)
+    .pattern(/^[0-9]+$/)
+    .required(),
+  newPassword: Joi.string()
+    .min(8)
+    .required()
+    .messages({
+      'string.min': 'La nueva contraseña debe tener al menos 8 caracteres',
+      'any.required': 'La nueva contraseña es requerida'
+    })
 });
 
 // Health check endpoint
@@ -45,12 +148,13 @@ router.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    version: '1.3.0'
   });
 });
 
 // Registro de usuario
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     console.log('📝 Iniciando registro de usuario...');
     
@@ -103,7 +207,13 @@ router.post('/register', async (req, res) => {
       stats: {
         tasksCompleted: 0,
         habitsStreak: 0,
+        totalSessions: 0,
         lastActive: new Date()
+      },
+      subscription: {
+        status: 'free',
+        trialStartDate: new Date(),
+        trialEndDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000) // 21 días
       },
       ...(name && name.trim() ? { name: name.trim() } : {})
     };
@@ -126,12 +236,18 @@ router.post('/register', async (req, res) => {
       console.error('No se pudo enviar el correo de bienvenida:', e);
     }
 
-    // Generar token
-    console.log('🎟️ Generando token...');
-    const token = jwt.sign(
+    // Generar tokens
+    console.log('🎟️ Generando tokens...');
+    const accessToken = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user._id, type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: '30d' }
     );
 
     console.log('✅ Usuario registrado exitosamente');
@@ -139,7 +255,8 @@ router.post('/register', async (req, res) => {
     // Responder
     res.status(201).json({
       message: 'Usuario registrado exitosamente',
-      token,
+      accessToken,
+      refreshToken,
       user: user.toJSON()
     });
 
@@ -182,7 +299,7 @@ router.post('/register', async (req, res) => {
 // Login
 router.post('/login', loginLimiter, async (req, res) => {
   try {
-    console.log('Recibida petición de login');
+    console.log('🔐 Recibida petición de login');
     
     // Validar datos de entrada
     const { error, value } = loginSchema.validate(req.body, { stripUnknown: true });
@@ -205,20 +322,35 @@ router.post('/login', loginLimiter, async (req, res) => {
       });
     }
 
-    // Generar token
-    const token = jwt.sign(
+    // Verificar si el usuario está activo
+    if (!user.isActive) {
+      return res.status(403).json({
+        message: 'Tu cuenta ha sido desactivada. Contacta al soporte.'
+      });
+    }
+
+    // Generar tokens
+    const accessToken = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
+    const refreshToken = jwt.sign(
+      { userId: user._id, type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
     // Actualizar último login y actividad
     user.lastLogin = new Date();
     user.stats.lastActive = new Date();
+    user.stats.totalSessions += 1;
     await user.save();
 
     res.json({
-      token,
+      accessToken,
+      refreshToken,
       user: user.toJSON()
     });
 
@@ -230,16 +362,55 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
+// Refresh token
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ message: 'Refresh token es requerido' });
+    }
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
+    
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ message: 'Token inválido' });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: 'Usuario no encontrado o inactivo' });
+    }
+
+    const newAccessToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      accessToken: newAccessToken,
+      user: user.toJSON()
+    });
+
+  } catch (error) {
+    console.error('Error en refresh token:', error);
+    res.status(401).json({ message: 'Token inválido o expirado' });
+  }
+});
+
 // Ruta para recuperar contraseña
 router.post('/recover-password', passwordResetLimiter, async (req, res) => {
     try {
-        const { email } = req.body;
-        
-        if (!email) {
+        const { error, value } = passwordResetSchema.validate(req.body, { stripUnknown: true });
+        if (error) {
             return res.status(400).json({
-                message: 'El email es requerido'
+                message: 'Datos inválidos',
+                errors: error.details.map(detail => detail.message)
             });
         }
+
+        const { email } = value;
 
         // Verificar si el usuario existe
         const user = await User.findOne({ email: email.toLowerCase() });
@@ -282,13 +453,15 @@ router.post('/recover-password', passwordResetLimiter, async (req, res) => {
 
 router.post('/verify-code', passwordResetLimiter, async (req, res) => {
   try {
-    const { email, code } = req.body;
-    
-    if (!email || !code) {
+    const { error, value } = verifyCodeSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
       return res.status(400).json({
-        message: 'Email y código son requeridos'
+        message: 'Datos inválidos',
+        errors: error.details.map(detail => detail.message)
       });
     }
+
+    const { email, code } = value;
 
     console.log('Verificando código para:', email, 'Código recibido:', code);
 
@@ -324,21 +497,15 @@ router.post('/verify-code', passwordResetLimiter, async (req, res) => {
 
 router.post('/reset-password', passwordResetLimiter, async (req, res) => {
   try {
-    const { email, code, newPassword } = req.body;
-
-    // Validar campos
-    if (!email || !code || !newPassword) {
-      return res.status(400).json({ message: 'Todos los campos son requeridos' });
-    }
-
-    // Validar contraseña
-    const { error } = registerSchema.extract('password').validate(newPassword);
+    const { error, value } = resetPasswordSchema.validate(req.body, { stripUnknown: true });
     if (error) {
       return res.status(400).json({
-        message: 'Contraseña inválida',
+        message: 'Datos inválidos',
         errors: error.details.map(detail => detail.message)
       });
     }
+
+    const { email, code, newPassword } = value;
 
     // Buscar usuario
     const user = await User.findOne({ email: email.toLowerCase() });
@@ -368,13 +535,22 @@ router.post('/reset-password', passwordResetLimiter, async (req, res) => {
     user.lastPasswordChange = new Date();
     await user.save();
 
-    // Invalidar tokens existentes
-    // TODO: Implementar sistema de blacklist de tokens si es necesario
-
     res.json({ message: 'Contraseña restablecida correctamente' });
   } catch (error) {
     console.error('Error al restablecer contraseña:', error);
     res.status(500).json({ message: 'Error al restablecer la contraseña' });
+  }
+});
+
+// Logout
+router.post('/logout', authenticateToken, async (req, res) => {
+  try {
+    // En una implementación más robusta, aquí se invalidaría el refresh token
+    // Por ahora, solo respondemos con éxito
+    res.json({ message: 'Sesión cerrada correctamente' });
+  } catch (error) {
+    console.error('Error en logout:', error);
+    res.status(500).json({ message: 'Error al cerrar sesión' });
   }
 });
 

@@ -117,8 +117,8 @@ const SignInScreen = () => {
     if (!formData.password) {
       newErrors.password = 'La contraseña es obligatoria';
       isValid = false;
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'La contraseña debe tener al menos 8 caracteres';
       isValid = false;
     }
 
@@ -149,8 +149,8 @@ const SignInScreen = () => {
     if (field === 'password') {
       if (!value) {
         setErrors(prev => ({ ...prev, password: 'La contraseña es obligatoria' }));
-      } else if (value.length < 6) {
-        setErrors(prev => ({ ...prev, password: 'La contraseña debe tener al menos 6 caracteres' }));
+      } else if (value.length < 8) {
+        setErrors(prev => ({ ...prev, password: 'La contraseña debe tener al menos 8 caracteres' }));
       } else {
         setErrors(prev => ({ ...prev, password: '' }));
       }
@@ -174,15 +174,29 @@ const SignInScreen = () => {
 
       console.log('Respuesta del servidor:', response);
 
-      if (response.token && response.user) {
-        // Guardamos los datos del usuario
+      // Verificar si la respuesta tiene los tokens esperados
+      if (response.accessToken && response.refreshToken && response.user) {
+        // Guardamos los datos del usuario y tokens
+        await Promise.all([
+          AsyncStorage.setItem('userToken', response.accessToken),
+          AsyncStorage.setItem('refreshToken', response.refreshToken),
+          AsyncStorage.setItem('userData', JSON.stringify(response.user)),
+          AsyncStorage.setItem('savedEmail', formData.email)
+        ]);
+
+        // Navegamos al Dashboard y limpiamos el stack de navegación
+        navigation.reset({
+          index: 0,
+          routes: [{ name: ROUTES.DASHBOARD }],
+        });
+      } else if (response.token && response.user) {
+        // Compatibilidad con respuesta anterior (fallback)
         await Promise.all([
           AsyncStorage.setItem('userToken', response.token),
           AsyncStorage.setItem('userData', JSON.stringify(response.user)),
           AsyncStorage.setItem('savedEmail', formData.email)
         ]);
 
-        // Navegamos al Dashboard y limpiamos el stack de navegación
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
@@ -200,8 +214,12 @@ const SignInScreen = () => {
       
       if (error.response?.status === 401) {
         errorMessage = 'Correo o contraseña incorrectos';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Tu cuenta ha sido desactivada. Contacta al soporte.';
       } else if (error.response?.status === 429) {
         errorMessage = 'Demasiados intentos. Por favor, espera un momento';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       } else if (!error.response) {
         errorMessage = 'Error de conexión. Verifica tu internet';
       }

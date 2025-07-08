@@ -20,6 +20,7 @@ const RegisterScreen = ({ navigation }) => {
 
   // Estados
   const [formData, setFormData] = useState({
+    name: '',
     username: '',
     email: '',
     password: '',
@@ -88,6 +89,16 @@ const RegisterScreen = ({ navigation }) => {
     // Validación en tiempo real
     let updatedErrors = { ...errors };
 
+    if (field === 'name') {
+      if (value && value.length < 2) {
+        updatedErrors.name = 'El nombre debe tener al menos 2 caracteres';
+      } else if (value && value.length > 50) {
+        updatedErrors.name = 'El nombre debe tener máximo 50 caracteres';
+      } else {
+        delete updatedErrors.name;
+      }
+    }
+
     if (field === 'username') {
       if (!value.trim()) {
         updatedErrors.username = 'El nombre de usuario es obligatorio';
@@ -145,6 +156,14 @@ const RegisterScreen = ({ navigation }) => {
   // Validación completa del formulario
   const validateForm = () => {
     const newErrors = {};
+    
+    if (formData.name && formData.name.trim()) {
+      if (formData.name.length < 2) {
+        newErrors.name = 'El nombre debe tener al menos 2 caracteres';
+      } else if (formData.name.length > 50) {
+        newErrors.name = 'El nombre debe tener máximo 50 caracteres';
+      }
+    }
     
     if (!formData.username.trim()) {
       newErrors.username = 'El nombre de usuario es obligatorio';
@@ -222,7 +241,8 @@ const RegisterScreen = ({ navigation }) => {
       const userData = {
         email: formData.email.toLowerCase().trim(),
         username: formData.username.toLowerCase().trim(),
-        password: formData.password
+        password: formData.password,
+        ...(formData.name && formData.name.trim() ? { name: formData.name.trim() } : {})
       };
 
       console.log('Enviando datos:', {
@@ -248,8 +268,28 @@ const RegisterScreen = ({ navigation }) => {
         throw new Error(data.message || 'Error en el registro');
       }
 
-      if (data.token) {
-        await AsyncStorage.setItem('userToken', data.token);
+      // Verificar si la respuesta tiene los tokens esperados
+      if (data.accessToken && data.refreshToken && data.user) {
+        // Guardamos los datos del usuario y tokens
+        await Promise.all([
+          AsyncStorage.setItem('userToken', data.accessToken),
+          AsyncStorage.setItem('refreshToken', data.refreshToken),
+          AsyncStorage.setItem('userData', JSON.stringify(data.user)),
+          AsyncStorage.setItem('savedEmail', formData.email)
+        ]);
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: ROUTES.DASHBOARD }],
+        });
+      } else if (data.token && data.user) {
+        // Compatibilidad con respuesta anterior (fallback)
+        await Promise.all([
+          AsyncStorage.setItem('userToken', data.token),
+          AsyncStorage.setItem('userData', JSON.stringify(data.user)),
+          AsyncStorage.setItem('savedEmail', formData.email)
+        ]);
+
         navigation.reset({
           index: 0,
           routes: [{ name: ROUTES.DASHBOARD }],
@@ -267,8 +307,14 @@ const RegisterScreen = ({ navigation }) => {
           '1. Verifica tu conexión a internet\n' +
           '2. Intenta nuevamente en unos momentos\n' +
           '3. Si el problema persiste, contacta al soporte';
-      } else if (error.message.includes('already exists')) {
+      } else if (error.message.includes('already exists') || error.message.includes('ya está en uso')) {
         errorMessage = 'El email o nombre de usuario ya está registrado';
+      } else if (error.message.includes('Datos inválidos')) {
+        errorMessage = 'Por favor, verifica que todos los campos sean correctos';
+      } else if (error.message.includes('Demasiados intentos')) {
+        errorMessage = 'Demasiados intentos de registro. Por favor, espera un momento';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       }
       
       Alert.alert(
@@ -302,6 +348,26 @@ const RegisterScreen = ({ navigation }) => {
           >
             <Text style={styles.title}>Crear Cuenta</Text>
             <Text style={styles.subtitle}>Por favor, llena los campos para registrarte.</Text>
+
+            {/* Campo de Nombre (Opcional) */}
+            <View style={globalStyles.inputWrapper}>
+              <View style={[
+                globalStyles.inputContainer, 
+                errors.name && globalStyles.inputError
+              ]}>
+                <Ionicons name="person" size={20} color={colors.primary} style={globalStyles.inputIcon} />
+                <TextInput
+                  style={globalStyles.input}
+                  placeholder="Nombre completo (opcional)"
+                  placeholderTextColor={colors.accent}
+                  autoCapitalize="words"
+                  onChangeText={(text) => handleInputChange('name', text)}
+                  value={formData.name}
+                  accessibilityLabel="Nombre completo"
+                />
+              </View>
+              {errors.name ? <Text style={globalStyles.errorText}>{errors.name}</Text> : null}
+            </View>
 
             {/* Campo de Username */}
             <View style={globalStyles.inputWrapper}>

@@ -4,8 +4,26 @@ import { authenticateToken } from '../middleware/auth.js';
 import cloudinary from 'cloudinary';
 import Joi from 'joi';
 import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
+
+// Rate limiters
+const updateProfileLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // 10 actualizaciones
+  message: 'Demasiadas actualizaciones de perfil. Por favor, intente más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const avatarLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 5, // 5 cambios de avatar
+  message: 'Demasiados cambios de avatar. Por favor, intente más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -13,18 +31,83 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Esquemas de validación
+// Esquemas de validación mejorados
 const updateProfileSchema = Joi.object({
-  name: Joi.string().max(100).trim(),
-  username: Joi.string().min(3).max(30).trim(),
-  email: Joi.string().email().trim().lowercase(),
+  name: Joi.string()
+    .min(2)
+    .max(50)
+    .trim()
+    .optional()
+    .messages({
+      'string.min': 'El nombre debe tener al menos 2 caracteres',
+      'string.max': 'El nombre debe tener máximo 50 caracteres'
+    }),
+  username: Joi.string()
+    .min(3)
+    .max(20)
+    .pattern(/^[a-z0-9_]+$/)
+    .trim()
+    .lowercase()
+    .optional()
+    .messages({
+      'string.min': 'El nombre de usuario debe tener al menos 3 caracteres',
+      'string.max': 'El nombre de usuario debe tener máximo 20 caracteres',
+      'string.pattern.base': 'El nombre de usuario solo puede contener letras minúsculas, números y guiones bajos'
+    }),
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .trim()
+    .lowercase()
+    .optional()
+    .messages({
+      'string.email': 'Por favor ingresa un email válido'
+    }),
   preferences: Joi.object({
-    theme: Joi.string().valid('light', 'dark', 'system'),
+    theme: Joi.string().valid('light', 'dark', 'auto'),
     notifications: Joi.boolean(),
     language: Joi.string().valid('es', 'en'),
-    timezone: Joi.string()
-  }),
+    privacy: Joi.object({
+      profileVisibility: Joi.string().valid('public', 'private', 'friends')
+    })
+  }).optional(),
+  notificationPreferences: Joi.object({
+    enabled: Joi.boolean(),
+    morning: Joi.object({
+      enabled: Joi.boolean(),
+      hour: Joi.number().min(0).max(23),
+      minute: Joi.number().min(0).max(59)
+    }),
+    evening: Joi.object({
+      enabled: Joi.boolean(),
+      hour: Joi.number().min(0).max(23),
+      minute: Joi.number().min(0).max(59)
+    }),
+    types: Joi.object({
+      dailyReminders: Joi.boolean(),
+      habitReminders: Joi.boolean(),
+      taskReminders: Joi.boolean(),
+      motivationalMessages: Joi.boolean()
+    })
+  }).optional(),
   avatar: Joi.string()
+    .uri()
+    .optional()
+    .messages({
+      'string.uri': 'El avatar debe ser una URL válida'
+    })
+});
+
+const updatePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required().messages({
+    'any.required': 'La contraseña actual es requerida'
+  }),
+  newPassword: Joi.string()
+    .min(8)
+    .required()
+    .messages({
+      'string.min': 'La nueva contraseña debe tener al menos 8 caracteres',
+      'any.required': 'La nueva contraseña es requerida'
+    })
 });
 
 // Middleware para validar ObjectId
@@ -38,7 +121,7 @@ const validateObjectId = (req, res, next) => {
 // Ruta para obtener datos del usuario actual
 router.get('/me', authenticateToken, validateObjectId, async (req, res) => {
   try {
-    const user = await User.findOne({ _id: req.user._id })
+    const user = await User.findById(req.user._id)
       .select('-password -salt -__v -resetPasswordCode -resetPasswordExpires')
       .lean();
     
@@ -46,13 +129,21 @@ router.get('/me', authenticateToken, validateObjectId, async (req, res) => {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({ message: 'Tu cuenta ha sido desactivada' });
+    }
+
     // Calcular tiempo desde último login
     const lastLogin = user.lastLogin ? new Date(user.lastLogin) : null;
     const timeSinceLastLogin = lastLogin ? Math.floor((Date.now() - lastLogin.getTime()) / 1000) : null;
 
+    // Calcular días desde el registro
+    const daysSinceRegistration = Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+
     res.json({
       ...user,
-      timeSinceLastLogin
+      timeSinceLastLogin,
+      daysSinceRegistration
     });
   } catch (error) {
     console.error('Error al obtener usuario:', error);
@@ -63,8 +154,41 @@ router.get('/me', authenticateToken, validateObjectId, async (req, res) => {
   }
 });
 
+// Obtener estadísticas del usuario
+router.get('/me/stats', authenticateToken, validateObjectId, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('stats subscription createdAt')
+      .lean();
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const daysSinceRegistration = Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Calcular estadísticas adicionales
+    const stats = {
+      ...user.stats,
+      daysSinceRegistration,
+      averageTasksPerDay: daysSinceRegistration > 0 ? (user.stats.tasksCompleted / daysSinceRegistration).toFixed(2) : 0,
+      subscriptionStatus: user.subscription.status,
+      isInTrial: user.subscription.trialStartDate && user.subscription.trialEndDate && 
+                new Date() >= user.subscription.trialStartDate && new Date() <= user.subscription.trialEndDate
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error al obtener estadísticas:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener estadísticas',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Actualizar perfil del usuario
-router.put('/me', authenticateToken, validateObjectId, async (req, res) => {
+router.put('/me', authenticateToken, validateObjectId, updateProfileLimiter, async (req, res) => {
   try {
     // Validar datos de entrada
     const { error, value } = updateProfileSchema.validate(req.body, { stripUnknown: true });
@@ -75,9 +199,13 @@ router.put('/me', authenticateToken, validateObjectId, async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ _id: req.user._id });
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ message: 'Tu cuenta ha sido desactivada' });
     }
 
     // Verificar unicidad de email y username si se están actualizando
@@ -102,6 +230,11 @@ router.put('/me', authenticateToken, validateObjectId, async (req, res) => {
           ...user.preferences,
           ...value.preferences
         };
+      } else if (key === 'notificationPreferences') {
+        user.notificationPreferences = {
+          ...user.notificationPreferences,
+          ...value.notificationPreferences
+        };
       } else {
         user[key] = value[key];
       }
@@ -112,11 +245,7 @@ router.put('/me', authenticateToken, validateObjectId, async (req, res) => {
     await user.save();
 
     // Devolver usuario actualizado sin datos sensibles
-    const updatedUser = user.toObject();
-    delete updatedUser.password;
-    delete updatedUser.salt;
-    delete updatedUser.resetPasswordCode;
-    delete updatedUser.resetPasswordExpires;
+    const updatedUser = user.toJSON();
 
     res.json({
       message: 'Perfil actualizado correctamente',
@@ -131,8 +260,56 @@ router.put('/me', authenticateToken, validateObjectId, async (req, res) => {
   }
 });
 
+// Cambiar contraseña
+router.put('/me/password', authenticateToken, validateObjectId, updateProfileLimiter, async (req, res) => {
+  try {
+    const { error, value } = updatePasswordSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({
+        message: 'Datos inválidos',
+        errors: error.details.map(detail => detail.message)
+      });
+    }
+
+    const { currentPassword, newPassword } = value;
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Verificar contraseña actual
+    if (!user.comparePassword(currentPassword)) {
+      return res.status(400).json({ message: 'La contraseña actual es incorrecta' });
+    }
+
+    // Verificar que la nueva contraseña sea diferente
+    if (user.comparePassword(newPassword)) {
+      return res.status(400).json({ message: 'La nueva contraseña debe ser diferente a la actual' });
+    }
+
+    // Hashear nueva contraseña
+    const crypto = require('crypto');
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(newPassword, salt, 1000, 64, 'sha512').toString('hex');
+    
+    user.password = hash;
+    user.salt = salt;
+    user.lastPasswordChange = new Date();
+    await user.save();
+
+    res.json({ message: 'Contraseña actualizada correctamente' });
+  } catch (error) {
+    console.error('Error al cambiar contraseña:', error);
+    res.status(500).json({ 
+      message: 'Error al cambiar la contraseña',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Obtener URL firmada para avatar
-router.get('/avatar-url/:publicId', authenticateToken, async (req, res) => {
+router.get('/avatar-url/:publicId', authenticateToken, avatarLimiter, async (req, res) => {
   try {
     const { publicId } = req.params;
 
@@ -175,16 +352,16 @@ router.get('/avatar-url/:publicId', authenticateToken, async (req, res) => {
 // Eliminar cuenta (soft delete)
 router.delete('/me', authenticateToken, validateObjectId, async (req, res) => {
   try {
-    const user = await User.findOne({ _id: req.user._id });
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
     // Soft delete
-    user.status = 'deleted';
-    user.deletedAt = new Date();
+    user.isActive = false;
     user.email = `${user.email}_deleted_${Date.now()}`;
     user.username = `${user.username}_deleted_${Date.now()}`;
+    user.deletedAt = new Date();
     await user.save();
 
     res.json({ 
@@ -195,6 +372,53 @@ router.delete('/me', authenticateToken, validateObjectId, async (req, res) => {
     console.error('Error al eliminar cuenta:', error);
     res.status(500).json({ 
       message: 'Error al eliminar la cuenta',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener información de suscripción
+router.get('/me/subscription', authenticateToken, validateObjectId, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('subscription')
+      .lean();
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const subscription = user.subscription;
+    
+    // Calcular días restantes de prueba
+    let trialDaysLeft = 0;
+    if (subscription.trialStartDate && subscription.trialEndDate) {
+      const now = new Date();
+      const trialEnd = new Date(subscription.trialEndDate);
+      if (now < trialEnd) {
+        trialDaysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    // Calcular días restantes de suscripción
+    let subscriptionDaysLeft = 0;
+    if (subscription.subscriptionEndDate) {
+      const now = new Date();
+      const subEnd = new Date(subscription.subscriptionEndDate);
+      if (now < subEnd) {
+        subscriptionDaysLeft = Math.ceil((subEnd - now) / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    res.json({
+      ...subscription,
+      trialDaysLeft,
+      subscriptionDaysLeft
+    });
+  } catch (error) {
+    console.error('Error al obtener información de suscripción:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener información de suscripción',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
