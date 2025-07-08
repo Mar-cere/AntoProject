@@ -157,6 +157,10 @@ const TaskScreen = ({ route }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Error response:', errorData);
+        if (errorData.errors && errorData.errors.length > 0) {
+          throw new Error(`Datos inválidos: ${errorData.errors.join(', ')}`);
+        }
         throw new Error(errorData.message || 'Error al crear la tarea');
       }
 

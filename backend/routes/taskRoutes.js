@@ -52,11 +52,7 @@ const subtaskSchema = Joi.object({
 
 const notificationSchema = Joi.object({
   enabled: Joi.boolean().default(true),
-  reminderTime: Joi.date().when('enabled', {
-    is: true,
-    then: Joi.required(),
-    otherwise: Joi.optional()
-  }),
+  reminderTime: Joi.date().optional(),
   repeatReminder: Joi.boolean().default(false),
   reminderInterval: Joi.number()
     .min(5)
@@ -103,10 +99,10 @@ const taskSchema = Joi.object({
       'string.max': 'La descripción debe tener máximo 500 caracteres'
     }),
   dueDate: Joi.date()
-    .min('now')
+    .min(new Date())
     .required()
     .messages({
-      'date.min': 'La fecha de vencimiento no puede ser anterior a hoy',
+      'date.min': 'La fecha de vencimiento no puede ser anterior a la actual',
       'any.required': 'La fecha de vencimiento es requerida'
     }),
   priority: Joi.string()

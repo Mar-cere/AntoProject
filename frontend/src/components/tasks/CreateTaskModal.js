@@ -142,26 +142,27 @@ const CreateTaskModal = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const notifications = [{
-        enabled: notificationEnabled,
-        time: formData.dueDate
-      }];
-
       const dataToSubmit = {
         title: formData.title.trim(),
         dueDate: formData.dueDate,
         itemType: formData.itemType,
-        notifications,
+        notifications: {
+          enabled: notificationEnabled,
+          reminderTime: formData.dueDate,
+          repeatReminder: false,
+          reminderInterval: 30
+        },
         ...(isTask && {
           description: formData.description?.trim() || '',
-          priority: formData.priority || 'medium',
-          completed: false
+          priority: formData.priority || 'medium'
         }),
       };
 
       await onSubmit(dataToSubmit);
     } catch (error) {
+      console.error('Error en handleSubmit:', error);
       setIsSubmitting(false);
+      Alert.alert('Error', error.message || 'Error al crear la tarea');
     }
   }, [validateForm, formData, notificationEnabled, isTask, onSubmit]);
 
@@ -200,40 +201,38 @@ const CreateTaskModal = ({
       transparent={true}
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-      >
-        <Animated.View 
-          style={[
-            styles.modalContent,
-            {
-              transform: [{
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [300, 0],
-                })
-              }]
-            }
-          ]}
-        >
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
+      <View style={styles.modalContainer}>
+        <TouchableOpacity 
+          style={styles.overlay} 
+          activeOpacity={1} 
+          onPress={handleClose}
+        />
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {isTask ? 'Nueva Tarea' : 'Nuevo Recordatorio'}
+            </Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={handleClose}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={24} color="#A3B8E8" />
+            </TouchableOpacity>
+          </View>
+          
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardContainer}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {isTask ? 'Nueva Tarea' : 'Nuevo Recordatorio'}
-              </Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={handleClose}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={24} color="#A3B8E8" />
-              </TouchableOpacity>
-            </View>
-
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
+              overScrollMode="never"
+            >
             <View style={styles.typeSelector}>
               <TouchableOpacity
                 style={[
@@ -443,30 +442,33 @@ const CreateTaskModal = ({
               />
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                !isTask && styles.reminderSubmitButton,
-                isSubmitting && styles.submitButtonDisabled
-              ]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-              activeOpacity={0.8}
-            >
-              {isSubmitting ? (
-                <View style={styles.loadingContainer}>
-                  <Ionicons name="hourglass-outline" size={20} color="#FFFFFF" />
-                  <Text style={styles.submitButtonText}>Creando...</Text>
-                </View>
-              ) : (
-                <Text style={styles.submitButtonText}>
-                  {isTask ? 'Crear Tarea' : 'Crear Recordatorio'}
-                </Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.submitButtonContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  !isTask && styles.reminderSubmitButton,
+                  isSubmitting && styles.submitButtonDisabled
+                ]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+                activeOpacity={0.8}
+              >
+                {isSubmitting ? (
+                  <View style={styles.loadingContainer}>
+                    <Ionicons name="hourglass-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.submitButtonText}>Creando...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.submitButtonText}>
+                    {isTask ? 'Crear Tarea' : 'Crear Recordatorio'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </ScrollView>
-        </Animated.View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+        </View>
+      </View>
     </Modal>
   );
 };
@@ -475,23 +477,37 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
     backgroundColor: 'rgba(29, 43, 95, 0.95)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '90%',
+    maxHeight: '85%',
+    minHeight: '50%',
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
     gap: 16,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   modalTitle: {
     fontSize: 22,
@@ -676,12 +692,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+  submitButtonContainer: {
+    marginTop: 16,
+    paddingBottom: 8,
+  },
   submitButton: {
     backgroundColor: '#1ADDDB',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
     shadowColor: '#1ADDDB',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
