@@ -304,6 +304,142 @@ router.post('/', createTaskLimiter, async (req, res) => {
 
 
 
+// Obtener tareas pendientes
+router.get('/pending', async (req, res) => {
+  try {
+    const { type, limit = 10 } = req.query;
+    
+    const tasks = await Task.getPendingItems(req.user._id, type, {
+      limit: parseInt(limit),
+      sort: { dueDate: 1 }
+    });
+    
+    res.json({ success: true, data: tasks });
+  } catch (error) {
+    console.error('Error al obtener tareas pendientes:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener las tareas pendientes',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener tareas vencidas
+router.get('/overdue', async (req, res) => {
+  try {
+    const tasks = await Task.getOverdueItems(req.user._id);
+    res.json({ success: true, data: tasks });
+  } catch (error) {
+    console.error('Error al obtener tareas vencidas:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener las tareas vencidas',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener recordatorios próximos
+router.get('/reminders/upcoming', async (req, res) => {
+  try {
+    const { hours = 24 } = req.query;
+    const reminders = await Task.getUpcomingReminders(req.user._id, parseInt(hours));
+    res.json({ success: true, data: reminders });
+  } catch (error) {
+    console.error('Error al obtener recordatorios próximos:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener los recordatorios próximos',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener estadísticas
+router.get('/stats', async (req, res) => {
+  try {
+    const stats = await Task.getStats(req.user._id);
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('Error al obtener estadísticas:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener estadísticas',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener items por fecha
+router.get('/date/:date', async (req, res) => {
+  try {
+    const { type } = req.query;
+    const date = new Date(req.params.date);
+    
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({ message: 'Fecha inválida' });
+    }
+    
+    const items = await Task.getItemsByDate(req.user._id, date, type);
+    res.json({ success: true, data: items });
+  } catch (error) {
+    console.error('Error al obtener items por fecha:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener items por fecha',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Buscar tareas por texto
+router.get('/search/:query', async (req, res) => {
+  try {
+    const { query } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const tasks = await Task.find({
+      userId: req.user._id,
+      $or: [
+        { title: { $regex: query, $options: 'i' } },
+        { description: { $regex: query, $options: 'i' } },
+        { category: { $regex: query, $options: 'i' } },
+        { tags: { $in: [new RegExp(query, 'i')] } }
+      ],
+      deletedAt: { $exists: false }
+    })
+    .sort({ dueDate: 1 })
+    .limit(parseInt(limit))
+    .skip(skip);
+    
+    const total = await Task.countDocuments({
+      userId: req.user._id,
+      $or: [
+        { title: { $regex: query, $options: 'i' } },
+        { description: { $regex: query, $options: 'i' } },
+        { category: { $regex: query, $options: 'i' } },
+        { tags: { $in: [new RegExp(query, 'i')] } }
+      ],
+      deletedAt: { $exists: false }
+    });
+    
+    res.json({
+      success: true,
+      data: tasks,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error al buscar tareas:', error);
+    res.status(500).json({ 
+      message: 'Error al buscar tareas',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Obtener una tarea específica
 router.get('/:id', validateObjectId, async (req, res) => {
   try {
@@ -558,142 +694,6 @@ router.patch('/:id/subtasks/:subtaskIndex/complete', validateObjectId, async (re
     console.error('Error al completar subtarea:', error);
     res.status(400).json({ 
       message: error.message || 'Error al completar la subtarea',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Obtener tareas pendientes
-router.get('/pending', async (req, res) => {
-  try {
-    const { type, limit = 10 } = req.query;
-    
-    const tasks = await Task.getPendingItems(req.user._id, type, {
-      limit: parseInt(limit),
-      sort: { dueDate: 1 }
-    });
-    
-    res.json({ success: true, data: tasks });
-  } catch (error) {
-    console.error('Error al obtener tareas pendientes:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener las tareas pendientes',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Obtener tareas vencidas
-router.get('/overdue', async (req, res) => {
-  try {
-    const tasks = await Task.getOverdueItems(req.user._id);
-    res.json({ success: true, data: tasks });
-  } catch (error) {
-    console.error('Error al obtener tareas vencidas:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener las tareas vencidas',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Obtener recordatorios próximos
-router.get('/reminders/upcoming', async (req, res) => {
-  try {
-    const { hours = 24 } = req.query;
-    const reminders = await Task.getUpcomingReminders(req.user._id, parseInt(hours));
-    res.json({ success: true, data: reminders });
-  } catch (error) {
-    console.error('Error al obtener recordatorios próximos:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener los recordatorios próximos',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Obtener estadísticas
-router.get('/stats', async (req, res) => {
-  try {
-    const stats = await Task.getStats(req.user._id);
-    res.json({ success: true, data: stats });
-  } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener estadísticas',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Obtener items por fecha
-router.get('/date/:date', async (req, res) => {
-  try {
-    const { type } = req.query;
-    const date = new Date(req.params.date);
-    
-    if (isNaN(date.getTime())) {
-      return res.status(400).json({ message: 'Fecha inválida' });
-    }
-    
-    const items = await Task.getItemsByDate(req.user._id, date, type);
-    res.json({ success: true, data: items });
-  } catch (error) {
-    console.error('Error al obtener items por fecha:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener items por fecha',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Buscar tareas por texto
-router.get('/search/:query', async (req, res) => {
-  try {
-    const { query } = req.params;
-    const { page = 1, limit = 20 } = req.query;
-    
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const tasks = await Task.find({
-      userId: req.user._id,
-      $or: [
-        { title: { $regex: query, $options: 'i' } },
-        { description: { $regex: query, $options: 'i' } },
-        { category: { $regex: query, $options: 'i' } },
-        { tags: { $in: [new RegExp(query, 'i')] } }
-      ],
-      deletedAt: { $exists: false }
-    })
-    .sort({ dueDate: 1 })
-    .limit(parseInt(limit))
-    .skip(skip);
-    
-    const total = await Task.countDocuments({
-      userId: req.user._id,
-      $or: [
-        { title: { $regex: query, $options: 'i' } },
-        { description: { $regex: query, $options: 'i' } },
-        { category: { $regex: query, $options: 'i' } },
-        { tags: { $in: [new RegExp(query, 'i')] } }
-      ],
-      deletedAt: { $exists: false }
-    });
-    
-    res.json({
-      success: true,
-      data: tasks,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    });
-  } catch (error) {
-    console.error('Error al buscar tareas:', error);
-    res.status(500).json({ 
-      message: 'Error al buscar tareas',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
