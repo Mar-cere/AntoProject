@@ -1,6 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, FlatList, Alert, StatusBar, Platform, Text } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { 
+  View, StyleSheet, TouchableOpacity, FlatList, Alert, StatusBar, Platform, Text, RefreshControl 
+} from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,10 +23,12 @@ const TaskScreen = ({ route }) => {
   const [state, setState] = useState({
     items: [],
     loading: true,
+    refreshing: false,
     filterType: 'all',
     modalVisible: false,
     selectedItem: null,
-    detailModalVisible: false
+    detailModalVisible: false,
+    error: null
   });
 
   const [formData, setFormData] = useState({
@@ -38,16 +42,37 @@ const TaskScreen = ({ route }) => {
   });
 
   const navigation = useNavigation();
+  const flatListRef = useRef(null);
 
   // Cargar items desde la API
-  const loadItems = useCallback(async () => {
+  const loadItems = useCallback(async (isRefresh = false) => {
     try {
-      setState(prev => ({ ...prev, loading: true }));
+      if (isRefresh) {
+        setState(prev => ({ ...prev, refreshing: true }));
+      } else {
+        setState(prev => ({ ...prev, loading: true }));
+      }
+      setState(prev => ({ ...prev, error: null }));
+
       const token = await AsyncStorage.getItem('userToken');
+      
+      if (!token) {
+        throw new Error('No se encontró token de autenticación');
+      }
+
       const response = await fetch(`${API_URL}/api/tasks`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       });
-      if (!response.ok) throw new Error('Error al obtener las tareas');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al obtener las tareas');
+      }
+
       const data = await response.json();
       const sortedItems = data.sort((a, b) => {
         if (a.itemType !== b.itemType) {
@@ -55,18 +80,41 @@ const TaskScreen = ({ route }) => {
         }
         return new Date(a.dueDate) - new Date(b.dueDate);
       });
+
       setState(prev => ({
         ...prev,
         items: sortedItems,
-        loading: false
+        loading: false,
+        refreshing: false
       }));
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los items');
-      setState(prev => ({ ...prev, loading: false }));
-    }
-  }, []);
+      console.error('Error cargando tareas:', error);
+      setState(prev => ({ 
+        ...prev, 
+        loading: false, 
+        refreshing: false,
+        error: error.message 
+      }));
 
-  useEffect(() => { loadItems(); }, [loadItems]);
+      if (error.message.includes('401') || error.message.includes('403')) {
+        Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente');
+        await AsyncStorage.removeItem('userToken');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'SignIn' }],
+        });
+      } else {
+        Alert.alert('Error', 'No se pudieron cargar los items');
+      }
+    }
+  }, [navigation]);
+
+  // Recargar cuando la pantalla se enfoca
+  useFocusEffect(
+    useCallback(() => {
+      loadItems();
+    }, [loadItems])
+  );
 
   useEffect(() => {
     const { mode, task, taskId } = route.params || {};
@@ -81,6 +129,11 @@ const TaskScreen = ({ route }) => {
   const handleSubmit = async (data) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
+      
+      if (!token) {
+        throw new Error('No se encontró token de autenticación');
+      }
+
       const requestData = {
         title: data.title,
         description: data.description,
@@ -90,6 +143,7 @@ const TaskScreen = ({ route }) => {
         repeat: data.repeat,
         notifications: data.notifications
       };
+
       const response = await fetch(`${API_URL}/api/tasks`, {
         method: 'POST',
         headers: {
@@ -99,23 +153,45 @@ const TaskScreen = ({ route }) => {
         },
         body: JSON.stringify(requestData)
       });
-      if (!response.ok) throw new Error('Error al crear la tarea');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al crear la tarea');
+      }
+
       const responseJson = await response.json();
       setState(prev => ({ ...prev, modalVisible: false }));
+      
+      // Programar notificación
       await scheduleTaskNotification(responseJson.data);
-      loadItems();
-      Alert.alert('Éxito', data.itemType === 'task' ? 'Tarea creada correctamente' : 'Recordatorio creado correctamente');
+      
+      // Recargar lista
+      await loadItems();
+      
+      // Feedback háptico
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      Alert.alert(
+        'Éxito', 
+        data.itemType === 'task' ? 'Tarea creada correctamente' : 'Recordatorio creado correctamente'
+      );
     } catch (error) {
+      console.error('Error creando tarea:', error);
       Alert.alert('Error', error.message);
     }
   };
 
-  // Función unificada para marcar como completado (tanto tareas como recordatorios)
+  // Función unificada para marcar como completado
   const handleToggleComplete = async (id) => {
     if (!id) return;
 
     try {
       const token = await AsyncStorage.getItem('userToken');
+      
+      if (!token) {
+        throw new Error('No se encontró token de autenticación');
+      }
+
       const response = await fetch(`${API_URL}/api/tasks/${id}/complete`, {
         method: 'PATCH',
         headers: { 
@@ -188,18 +264,30 @@ const TaskScreen = ({ route }) => {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem('userToken');
+              
+              if (!token) {
+                throw new Error('No se encontró token de autenticación');
+              }
+
               const response = await fetch(`${API_URL}/api/tasks/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              if (!response.ok) throw new Error('Error al eliminar tarea');
+              
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Error al eliminar tarea');
+              }
+
               setState(prev => ({
                 ...prev,
                 items: prev.items.filter(item => item._id !== id)
               }));
+              
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               await cancelTaskNotifications(id);
             } catch (error) {
+              console.error('Error eliminando tarea:', error);
               Alert.alert('Error', 'No se pudo eliminar la tarea');
             }
           }
@@ -208,6 +296,11 @@ const TaskScreen = ({ route }) => {
     );
   };
 
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    loadItems(true);
+  }, [loadItems]);
+
   // Filtrado de items
   const filteredItems = Array.isArray(state.items)
     ? state.items.filter(item =>
@@ -215,13 +308,43 @@ const TaskScreen = ({ route }) => {
       )
     : [];
 
+  // Renderizar item individual
+  const renderItem = useCallback(({ item }) => (
+    <TaskItem
+      key={item._id}
+      item={item}
+      onPress={item => setState(prev => ({ ...prev, selectedItem: item, detailModalVisible: true }))}
+      onToggleComplete={handleToggleComplete}
+      onDelete={handleDeleteItem}
+    />
+  ), [handleToggleComplete, handleDeleteItem]);
+
   // Mensaje si no hay tareas
-  const renderEmpty = () => (
+  const renderEmpty = useCallback(() => (
     <View style={styles.emptyContainer}>
       <Ionicons name="checkmark-done-circle-outline" size={64} color="#A3B8E8" />
-      <Text style={styles.emptyText}>No tienes tareas ni recordatorios</Text>
-      </View>
-  );
+      <Text style={styles.emptyText}>
+        {state.filterType === 'all' 
+          ? 'No tienes tareas ni recordatorios' 
+          : state.filterType === 'task' 
+            ? 'No tienes tareas pendientes'
+            : 'No tienes recordatorios pendientes'
+        }
+      </Text>
+      <TouchableOpacity
+        style={styles.addFirstButton}
+        onPress={() => setState(prev => ({ ...prev, modalVisible: true }))}
+      >
+        <Ionicons name="add" size={20} color="#1ADDDB" />
+        <Text style={styles.addFirstButtonText}>
+          Agregar {state.filterType === 'task' ? 'tarea' : state.filterType === 'reminder' ? 'recordatorio' : 'item'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ), [state.filterType]);
+
+  // Key extractor optimizado
+  const keyExtractor = useCallback((item) => item._id, []);
 
   return (
     <View style={styles.container}>
@@ -230,26 +353,30 @@ const TaskScreen = ({ route }) => {
         onFilterChange={type => setState(prev => ({ ...prev, filterType: type }))}
       />
       <FlatList
+        ref={flatListRef}
         data={filteredItems}
-        renderItem={({ item }) => (
-          <TaskItem
-            key={item._id}
-            item={item}
-            onPress={item => setState(prev => ({ ...prev, selectedItem: item, detailModalVisible: true }))}
-            onToggleComplete={handleToggleComplete}
-            onDelete={handleDeleteItem}
-          />
-        )}
-        keyExtractor={item => item._id}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
-        refreshing={state.loading}
-        onRefresh={loadItems}
+        refreshControl={
+          <RefreshControl
+            refreshing={state.refreshing}
+            onRefresh={onRefresh}
+            colors={['#1ADDDB']}
+            tintColor="#1ADDDB"
+          />
+        }
         ListEmptyComponent={renderEmpty}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={10}
       />
       <TouchableOpacity
         style={styles.fab}
         onPress={() => setState(prev => ({ ...prev, modalVisible: true }))}
+        activeOpacity={0.8}
       >
         <Ionicons name="add" size={24} color="#FFFFFF" />
       </TouchableOpacity>
@@ -266,8 +393,16 @@ const TaskScreen = ({ route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030A24' },
-  listContainer: { padding: 16, gap: 12, paddingBottom: 100 },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#030A24' 
+  },
+  listContainer: { 
+    padding: 16, 
+    gap: 12, 
+    paddingBottom: 100,
+    flexGrow: 1
+  },
   fab: {
     position: 'absolute',
     right: 16,
@@ -289,12 +424,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 64,
     opacity: 0.7,
+    flex: 1,
+    justifyContent: 'center',
   },
   emptyText: {
     color: '#A3B8E8',
     fontSize: 16,
     marginTop: 12,
     textAlign: 'center',
+    marginBottom: 24,
+  },
+  addFirstButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.2)',
+  },
+  addFirstButtonText: {
+    color: '#1ADDDB',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

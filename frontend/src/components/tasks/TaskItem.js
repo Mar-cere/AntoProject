@@ -1,32 +1,45 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import React, { useEffect, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
 const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
   const isTask = item.itemType === 'task';
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
   
-  // Función para verificar si está caducado (tanto tareas como recordatorios)
-  const isOverdue = () => {
+  // Función para verificar si está caducado
+  const isOverdue = useCallback(() => {
     return new Date(item.dueDate) < new Date();
-  };
+  }, [item.dueDate]);
 
   // Función para determinar el estado del ítem
-  const getItemState = () => {
+  const getItemState = useCallback(() => {
     if (item.completed) return 'completed';
     if (isOverdue()) return 'overdue';
     return 'pending';
-  };
+  }, [item.completed, isOverdue]);
 
   const itemState = getItemState();
 
+  // Animación de entrada
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 7,
+    }).start();
+  }, []);
+
+  // Animación cuando se completa
   useEffect(() => {
     if (item.completed) {
-      // Animación unificada para tareas y recordatorios
       Animated.sequence([
-        // Primero reducimos la opacidad a 0.7
+        // Primero reducimos la opacidad a 0.8
         Animated.timing(fadeAnim, {
-          toValue: 0.7,
+          toValue: 0.8,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -34,13 +47,59 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
         Animated.delay(2000),
         // Reducimos más la opacidad
         Animated.timing(fadeAnim, {
-          toValue: 0.4,
+          toValue: 0.5,
           duration: 500,
           useNativeDriver: true,
         })
       ]).start();
     }
-  }, [item.completed]);
+  }, [item.completed, fadeAnim]);
+
+  const handlePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress(item);
+  }, [onPress, item]);
+
+  const handleToggleComplete = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await onToggleComplete(item._id);
+  }, [onToggleComplete, item._id]);
+
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      'Confirmar eliminación',
+      `¿Estás seguro de que deseas eliminar este ${isTask ? 'tarea' : 'recordatorio'}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            onDelete(item._id);
+          }
+        }
+      ]
+    );
+  }, [onDelete, item._id, isTask]);
+
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 5,
+    }).start();
+  }, [scaleAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 5,
+    }).start();
+  }, [scaleAnim]);
 
   if (!item) {
     console.warn('TaskItem: item es undefined');
@@ -48,15 +107,33 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
   }
 
   return (
-    <Animated.View style={{ opacity: fadeAnim }}>
+    <Animated.View 
+      style={[
+        styles.container,
+        {
+          opacity: fadeAnim,
+          transform: [
+            { scale: scaleAnim },
+            {
+              translateX: slideAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [50, 0],
+              })
+            }
+          ]
+        }
+      ]}
+    >
       <TouchableOpacity
         style={[
           styles.itemCard,
           itemState === 'completed' && styles.completedItem,
           itemState === 'overdue' && styles.overdueItem
         ]}
-        onPress={() => onPress(item)}
-        activeOpacity={0.7}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.8}
       >
         <View style={styles.itemHeader}>
           <View style={styles.itemTitleContainer}>
@@ -64,31 +141,46 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
               styles.iconContainer,
               { 
                 backgroundColor: itemState === 'overdue' 
-                  ? 'rgba(255, 107, 107, 0.1)' 
+                  ? 'rgba(255, 107, 107, 0.15)' 
                   : isTask 
-                    ? 'rgba(26, 221, 219, 0.1)' 
-                    : 'rgba(255, 107, 107, 0.1)'
+                    ? 'rgba(26, 221, 219, 0.15)' 
+                    : 'rgba(255, 107, 107, 0.15)'
               }
             ]}>
               <Ionicons 
                 name={isTask ? 'checkbox-outline' : 'alarm-outline'} 
-                size={18} 
+                size={20} 
                 color={itemState === 'overdue' ? '#FF6B6B' : isTask ? '#1ADDDB' : '#FF6B6B'} 
               />
             </View>
-            <Text style={[
-              styles.itemTitle,
-              itemState === 'completed' && styles.completedTitle,
-              itemState === 'overdue' && styles.overdueTitle
-            ]} numberOfLines={1}>
-              {item.title}
-            </Text>
+            <View style={styles.titleContainer}>
+              <Text style={[
+                styles.itemTitle,
+                itemState === 'completed' && styles.completedTitle,
+                itemState === 'overdue' && styles.overdueTitle
+              ]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              {item.description && (
+                <Text style={[
+                  styles.itemDescription,
+                  itemState === 'completed' && styles.completedDescription,
+                  itemState === 'overdue' && styles.overdueDescription
+                ]} numberOfLines={1}>
+                  {item.description}
+                </Text>
+              )}
+            </View>
           </View>
           <View style={styles.itemActions}>
             {itemState === 'pending' && (
               <TouchableOpacity
-                style={styles.completeButton}
-                onPress={() => onToggleComplete(item._id)}
+                style={[
+                  styles.completeButton,
+                  item.completed && styles.completedButton
+                ]}
+                onPress={handleToggleComplete}
+                activeOpacity={0.7}
               >
                 <Ionicons 
                   name={item.completed ? 'checkmark-circle' : 'ellipse-outline'} 
@@ -99,82 +191,80 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
             )}
             <TouchableOpacity
               style={styles.deleteButton}
-              onPress={() => onDelete(item._id)}
+              onPress={handleDelete}
+              activeOpacity={0.7}
             >
               <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.itemDetails}>
-          {item.description ? (
-            <Text style={[
-              styles.itemDescription,
-              itemState === 'completed' && styles.completedDescription,
-              itemState === 'overdue' && styles.overdueDescription
-            ]} numberOfLines={2}>
-              {item.description}
-            </Text>
-          ) : null}
-          
-          <View style={styles.itemFooter}>
-            <View style={styles.itemMetadata}>
+        <View style={styles.itemFooter}>
+          <View style={styles.itemMetadata}>
+            <View style={[
+              styles.dateContainer,
+              itemState === 'overdue' && styles.overdueDateContainer
+            ]}>
+              <Ionicons 
+                name="calendar-outline" 
+                size={14} 
+                color={itemState === 'overdue' ? '#FF6B6B' : '#A3B8E8'} 
+              />
+              <Text style={[
+                styles.itemDate,
+                itemState === 'overdue' && styles.overdueDate
+              ]}>
+                {new Date(item.dueDate).toLocaleDateString('es-ES', {
+                  day: '2-digit',
+                  month: 'short'
+                })}
+              </Text>
+            </View>
+            <View style={[
+              styles.timeContainer,
+              itemState === 'overdue' && styles.overdueDateContainer
+            ]}>
+              <Ionicons 
+                name="time-outline" 
+                size={14} 
+                color={itemState === 'overdue' ? '#FF6B6B' : '#A3B8E8'} 
+              />
+              <Text style={[
+                styles.itemDate,
+                itemState === 'overdue' && styles.overdueDate
+              ]}>
+                {new Date(item.dueDate).toLocaleTimeString('es-ES', { 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  hour12: true 
+                })}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.badgeContainer}>
+            {isTask && itemState === 'pending' && (
               <View style={[
-                styles.dateContainer,
-                itemState === 'overdue' && styles.overdueDateContainer
+                styles.priorityBadge,
+                { backgroundColor: getPriorityColor(item.priority) }
               ]}>
                 <Ionicons 
-                  name="calendar-outline" 
+                  name={getPriorityIcon(item.priority)} 
                   size={12} 
-                  color={itemState === 'overdue' ? '#FF6B6B' : '#A3B8E8'} 
+                  color="#FFFFFF" 
                 />
-                <Text style={[
-                  styles.itemDate,
-                  itemState === 'overdue' && styles.overdueDate
-                ]}>
-                  {new Date(item.dueDate).toLocaleDateString()}
+                <Text style={styles.priorityText}>
+                  {getPriorityText(item.priority)}
                 </Text>
               </View>
-              <View style={[
-                styles.timeContainer,
-                itemState === 'overdue' && styles.overdueDateContainer
-              ]}>
-                <Ionicons 
-                  name="time-outline" 
-                  size={12} 
-                  color={itemState === 'overdue' ? '#FF6B6B' : '#A3B8E8'} 
-                />
-                <Text style={[
-                  styles.itemDate,
-                  itemState === 'overdue' && styles.overdueDate
-                ]}>
-                  {new Date(item.dueDate).toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: true 
-                  })}
+            )}
+            {itemState === 'overdue' && (
+              <View style={styles.overdueBadge}>
+                <Ionicons name="alert-circle" size={12} color="#FF6B6B" />
+                <Text style={styles.overdueText}>
+                  {isTask ? 'Caducada' : 'Pasado'}
                 </Text>
               </View>
-            </View>
-            <View style={styles.badgeContainer}>
-              {isTask && itemState === 'pending' && (
-                <View style={[
-                  styles.priorityBadge,
-                  { backgroundColor: getPriorityColor(item.priority) }
-                ]}>
-                  <Text style={styles.priorityText}>
-                    {getPriorityText(item.priority)}
-                  </Text>
-                </View>
-              )}
-              {itemState === 'overdue' && (
-                <View style={styles.overdueBadge}>
-                  <Text style={styles.overdueText}>
-                    {isTask ? 'Caducada' : 'Pasado'}
-                  </Text>
-                </View>
-              )}
-            </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -183,13 +273,20 @@ const TaskItem = ({ item, onPress, onToggleComplete, onDelete }) => {
 };
 
 const styles = StyleSheet.create({
+  container: {
+    marginBottom: 8,
+  },
   itemCard: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(26, 221, 219, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   completedItem: {
     opacity: 0.7,
@@ -199,39 +296,54 @@ const styles = StyleSheet.create({
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
   itemTitleContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
     flex: 1,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 2,
+  },
+  titleContainer: {
+    flex: 1,
+    gap: 4,
   },
   itemTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-    flex: 1,
+    lineHeight: 20,
   },
   completedTitle: {
     color: '#A3B8E8',
     textDecorationLine: 'line-through',
   },
+  itemDescription: {
+    fontSize: 14,
+    color: '#A3B8E8',
+    lineHeight: 18,
+    opacity: 0.8,
+  },
+  completedDescription: {
+    color: '#A3B8E8',
+    opacity: 0.5,
+  },
   itemActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   completeButton: {
-    padding: 4,
+    padding: 6,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
@@ -239,27 +351,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(76, 175, 80, 0.1)',
   },
   deleteButton: {
-    padding: 4,
+    padding: 6,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
-  },
-  itemDetails: {
-    gap: 12,
-  },
-  itemDescription: {
-    fontSize: 14,
-    color: '#A3B8E8',
-    lineHeight: 20,
-  },
-  completedDescription: {
-    color: '#A3B8E8',
-    opacity: 0.7,
   },
   itemFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
   },
   itemMetadata: {
     flexDirection: 'row',
@@ -271,32 +370,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   timeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   itemDate: {
     fontSize: 12,
     color: '#A3B8E8',
+    fontWeight: '500',
   },
   priorityBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 12,
   },
   priorityText: {
     fontSize: 12,
     color: '#FFFFFF',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   overdueItem: {
     borderColor: 'rgba(255, 107, 107, 0.3)',
@@ -317,15 +420,18 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
   },
   overdueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: 'rgba(255, 107, 107, 0.2)',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 12,
   },
   overdueText: {
     color: '#FF6B6B',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   badgeContainer: {
     flexDirection: 'row',
@@ -340,6 +446,15 @@ const getPriorityColor = (priority) => {
     case 'medium': return '#FFD93D';
     case 'low': return '#6BCB77';
     default: return '#95A5A6';
+  }
+};
+
+const getPriorityIcon = (priority) => {
+  switch (priority) {
+    case 'high': return 'alert-circle';
+    case 'medium': return 'alert';
+    case 'low': return 'checkmark-circle';
+    default: return 'help-circle';
   }
 };
 

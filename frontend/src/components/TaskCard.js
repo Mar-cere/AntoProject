@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { 
-  View, Text, TouchableOpacity, ActivityIndicator, Alert, Animated, StyleSheet 
+  View, Text, TouchableOpacity, ActivityIndicator, Alert, Animated, StyleSheet, RefreshControl, ScrollView 
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,33 +11,33 @@ import * as Haptics from 'expo-haptics';
 const API_URL = 'https://antobackend.onrender.com';
 
 const TaskItem = memo(({ item, onPress }) => {
-  const scaleAnim = new Animated.Value(1);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
   const isTask = item.itemType === 'task';
   const isOverdue = new Date(item.dueDate) < new Date();
 
-  const handlePressIn = () => {
+  const handlePressIn = useCallback(() => {
     Animated.spring(scaleAnim, {
       toValue: 0.95,
       useNativeDriver: true,
     }).start();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
+  }, [scaleAnim]);
 
-  const handlePressOut = () => {
+  const handlePressOut = useCallback(() => {
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
     }).start();
-  };
+  }, [scaleAnim]);
 
-  const getPriorityData = (priority) => {
+  const getPriorityData = useCallback((priority) => {
     const priorities = {
       high: { color: cardColors.error, icon: 'alert-circle', label: 'Alta' },
       medium: { color: cardColors.warning, icon: 'alert', label: 'Media' },
       low: { color: cardColors.success, icon: 'check-circle', label: 'Baja' },
     };
     return priorities[priority] || priorities.medium;
-  };
+  }, []);
 
   const priorityData = getPriorityData(item.priority);
 
@@ -172,14 +172,24 @@ const TaskCard = memo(() => {
   const navigation = useNavigation();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   // Cargar tareas
-  const loadItems = useCallback(async () => {
+  const loadItems = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+      
       const token = await AsyncStorage.getItem('userToken');
       
-      console.log('Intentando cargar items pendientes con token:', token);
+      if (!token) {
+        throw new Error('No se encontró token de autenticación');
+      }
 
       const response = await fetch(`${API_URL}/api/tasks/pending`, {
         method: 'GET',
@@ -190,46 +200,49 @@ const TaskCard = memo(() => {
         }
       });
 
-      console.log('Response status:', response.status);
-      const responseText = await response.text();
-      console.log('Response body:', responseText);
-
       if (!response.ok) {
-        throw new Error(`Error del servidor: ${response.status} - ${responseText}`);
+        const errorText = await response.text();
+        throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
       }
 
-      const data = JSON.parse(responseText);
-      // data ahora es { success: true, data: [...] }
+      const data = await response.json();
       const itemsArray = data.data || [];
+      
+      // Ordenar: recordatorios primero, luego por fecha
       const sortedItems = itemsArray.sort((a, b) => {
         if (a.itemType !== b.itemType) {
           return a.itemType === 'reminder' ? -1 : 1;
         }
         return new Date(a.dueDate) - new Date(b.dueDate);
       });
+      
       setItems(sortedItems);
     } catch (error) {
-      console.error('Error completo:', error);
+      console.error('Error cargando tareas:', error);
+      setError(error.message);
+      
       if (error.message.includes('401') || error.message.includes('403')) {
-        // Si es error de autenticación, redirigir al login
         Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente');
-        // Limpiar el token
         await AsyncStorage.removeItem('userToken');
         navigation.reset({
           index: 0,
           routes: [{ name: 'SignIn' }],
         });
-      } else {
-        Alert.alert('Error', 'No se pudieron cargar los items');
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [navigation]);
 
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    loadItems(true);
+  }, [loadItems]);
+
   useEffect(() => {
     loadItems();
-  }, []);
+  }, [loadItems]);
 
   const handleItemPress = useCallback((item) => {
     navigation.navigate('Tasks', { 
@@ -243,17 +256,46 @@ const TaskCard = memo(() => {
     });
   }, [navigation]);
 
-  return (
-    <View style={commonStyles.cardContainer}>
-      <CardHeader 
-        icon="format-list-checks"
-        title="Mis Pendientes"
-        onViewAll={() => navigation.navigate('Tasks', { mode: 'list' })}
-      />
+  const renderContent = () => {
+    if (loading) {
+      return <ActivityIndicator color={cardColors.primary} style={commonStyles.loader} />;
+    }
 
-      {loading ? (
-        <ActivityIndicator color={cardColors.primary} style={commonStyles.loader} />
-      ) : items.length > 0 ? (
+    if (error && !refreshing) {
+      return (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="alert-circle" size={40} color={cardColors.error} />
+          <Text style={styles.errorText}>Error al cargar las tareas</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => loadItems()}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (items.length === 0) {
+      return (
+        <EmptyState 
+          icon="clipboard-text-outline"
+          message="No hay tareas pendientes"
+          onAdd={() => navigation.navigate('Tasks', { mode: 'create', openModal: true })}
+          addButtonText="Agregar tarea"
+        />
+      );
+    }
+
+    return (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[cardColors.primary]}
+            tintColor={cardColors.primary}
+          />
+        }
+      >
         <View style={styles.tasksContainer}>
           {items.map((item) => (
             <TaskItem
@@ -263,14 +305,18 @@ const TaskCard = memo(() => {
             />
           ))}
         </View>
-      ) : (
-        <EmptyState 
-          icon="clipboard-text-outline"
-          message="No hay tareas pendientes"
-          onAdd={() => navigation.navigate('Tasks', { mode: 'create', openModal: true })}
-          addButtonText="Agregar tarea"
-        />
-      )}
+      </ScrollView>
+    );
+  };
+
+  return (
+    <View style={commonStyles.cardContainer}>
+      <CardHeader 
+        icon="format-list-checks"
+        title="Mis Pendientes"
+        onViewAll={() => navigation.navigate('Tasks', { mode: 'list' })}
+      />
+      {renderContent()}
     </View>
   );
 });
@@ -386,6 +432,32 @@ const styles = StyleSheet.create({
   overdueText: {
     color: cardColors.error,
     fontSize: 12,
+    fontWeight: '500',
+  },
+  tasksContainer: {
+    gap: 8,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  errorText: {
+    color: cardColors.error,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.2)',
+  },
+  retryButtonText: {
+    color: cardColors.error,
+    fontSize: 14,
     fontWeight: '500',
   },
 });

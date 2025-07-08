@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Modal, 
   View, 
@@ -9,10 +9,13 @@ import {
   Platform,
   StyleSheet,
   Alert,
-  Switch
+  Switch,
+  ScrollView,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Haptics from 'expo-haptics';
 
 const CreateTaskModal = ({
   visible,
@@ -23,21 +26,70 @@ const CreateTaskModal = ({
 }) => {
   const [pickerMode, setPickerMode] = useState(null);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const slideAnim = new Animated.Value(0);
+  
   const isTask = formData.itemType === 'task';
 
   useEffect(() => {
-    setNotificationEnabled(true);
+    if (visible) {
+      setNotificationEnabled(true);
+      setErrors({});
+      setIsSubmitting(false);
+      Animated.spring(slideAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
   }, [visible]);
 
-  const formatTime = (date) => {
-    return date.toLocaleTimeString([], { 
+  const formatTime = useCallback((date) => {
+    return date.toLocaleTimeString('es-ES', { 
       hour: '2-digit', 
       minute: '2-digit',
       hour12: true 
     });
-  };
+  }, []);
 
-  const handleDateChange = (event, selectedDate) => {
+  const formatDate = useCallback((date) => {
+    return date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  }, []);
+
+  const validateForm = useCallback(() => {
+    const newErrors = {};
+
+    if (!formData.title.trim()) {
+      newErrors.title = 'El título es requerido';
+    } else if (formData.title.trim().length < 3) {
+      newErrors.title = 'El título debe tener al menos 3 caracteres';
+    }
+
+    if (formData.dueDate < new Date()) {
+      newErrors.dueDate = 'La fecha no puede ser anterior a la actual';
+    }
+
+    if (isTask && formData.description && formData.description.trim().length > 500) {
+      newErrors.description = 'La descripción no puede exceder 500 caracteres';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [formData, isTask]);
+
+  const handleDateChange = useCallback((event, selectedDate) => {
     setPickerMode(null);
     if (selectedDate) {
       const currentDate = new Date(formData.dueDate);
@@ -46,15 +98,16 @@ const CreateTaskModal = ({
       
       // Validar que la fecha no sea anterior a la actual
       if (selectedDate < new Date()) {
-        Alert.alert('Error', 'La fecha no puede ser anterior a la actual');
+        setErrors(prev => ({ ...prev, dueDate: 'La fecha no puede ser anterior a la actual' }));
         return;
       }
       
       setFormData({...formData, dueDate: selectedDate});
+      setErrors(prev => ({ ...prev, dueDate: null }));
     }
-  };
+  }, [formData, setFormData]);
 
-  const handleTimeChange = (event, selectedTime) => {
+  const handleTimeChange = useCallback((event, selectedTime) => {
     setPickerMode(null);
     if (selectedTime) {
       const currentDate = new Date(formData.dueDate);
@@ -70,45 +123,50 @@ const CreateTaskModal = ({
         selectedTime.getFullYear() === now.getFullYear() &&
         selectedTime < now
       ) {
-        Alert.alert('Error', 'La hora no puede ser anterior a la actual');
+        setErrors(prev => ({ ...prev, dueDate: 'La hora no puede ser anterior a la actual' }));
         return;
       }
       
       setFormData({...formData, dueDate: selectedTime});
+      setErrors(prev => ({ ...prev, dueDate: null }));
     }
-  };
+  }, [formData, setFormData]);
 
-  const handleSubmit = () => {
-    if (!formData.title.trim()) {
-      Alert.alert('Error', 'Por favor ingresa un título');
-      return;
-    }
-    if (formData.dueDate < new Date()) {
-      Alert.alert('Error', 'La fecha no puede ser anterior a la actual');
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm()) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       return;
     }
 
-    const notifications = [{
-      enabled: notificationEnabled,
-      time: formData.dueDate
-    }];
+    setIsSubmitting(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const dataToSubmit = {
-      title: formData.title.trim(),
-      dueDate: formData.dueDate,
-      itemType: formData.itemType,
-      notifications,
-      ...(isTask && {
-        description: formData.description?.trim() || '',
-        priority: formData.priority || 'medium',
-        completed: false
-      }),
-    };
+    try {
+      const notifications = [{
+        enabled: notificationEnabled,
+        time: formData.dueDate
+      }];
 
-    onSubmit(dataToSubmit);
-  };
+      const dataToSubmit = {
+        title: formData.title.trim(),
+        dueDate: formData.dueDate,
+        itemType: formData.itemType,
+        notifications,
+        ...(isTask && {
+          description: formData.description?.trim() || '',
+          priority: formData.priority || 'medium',
+          completed: false
+        }),
+      };
 
-  const handleTypeChange = (type) => {
+      await onSubmit(dataToSubmit);
+    } catch (error) {
+      setIsSubmitting(false);
+    }
+  }, [validateForm, formData, notificationEnabled, isTask, onSubmit]);
+
+  const handleTypeChange = useCallback((type) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFormData({
       ...formData,
       itemType: type,
@@ -122,203 +180,292 @@ const CreateTaskModal = ({
         description: undefined
       })
     });
-  };
+    setErrors({});
+  }, [formData, setFormData]);
+
+  const handlePriorityChange = useCallback((priority) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFormData({...formData, priority});
+  }, [formData, setFormData]);
+
+  const handleClose = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onClose();
+  }, [onClose]);
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalContainer}
       >
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {isTask ? 'Nueva Tarea' : 'Nuevo Recordatorio'}
-            </Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={onClose}
-            >
-              <Ionicons name="close" size={24} color="#A3B8E8" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.typeSelector}>
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
-                isTask && styles.typeButtonActive
-              ]}
-              onPress={() => handleTypeChange('task')}
-            >
-              <Ionicons 
-                name="checkbox-outline" 
-                size={20} 
-                color={isTask ? '#1ADDDB' : '#A3B8E8'} 
-              />
-              <Text style={[
-                styles.typeButtonText,
-                isTask && styles.typeButtonTextActive
-              ]}>Tarea</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
-                !isTask && styles.reminderTypeButtonActive
-              ]}
-              onPress={() => handleTypeChange('reminder')}
-            >
-              <Ionicons 
-                name="alarm-outline" 
-                size={20} 
-                color={!isTask ? '#FF6B6B' : '#A3B8E8'} 
-              />
-              <Text style={[
-                styles.typeButtonText,
-                !isTask && styles.reminderTypeButtonTextActive
-              ]}>Recordatorio</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TextInput
-            style={[styles.input, !isTask && styles.reminderInput]}
-            placeholder="Título"
-            placeholderTextColor="#A3B8E8"
-            value={formData.title}
-            onChangeText={(text) => setFormData({...formData, title: text})}
-          />
-
-          {isTask && (
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Descripción (opcional)"
-              placeholderTextColor="#A3B8E8"
-              value={formData.description}
-              onChangeText={(text) => setFormData({...formData, description: text})}
-              multiline
-              numberOfLines={4}
-            />
-          )}
-
-          <View style={styles.dateTimeContainer}>
-            <TouchableOpacity
-              style={[
-                styles.dateTimeButton,
-                styles.dateButton,
-                !isTask && styles.reminderDateTimeButton
-              ]}
-              onPress={() => setPickerMode('date')}
-            >
-              <Ionicons 
-                name="calendar-outline" 
-                size={20} 
-                color={!isTask ? '#FF6B6B' : '#1ADDDB'} 
-              />
-              <Text style={[
-                styles.dateTimeButtonText,
-                !isTask && styles.reminderDateTimeText
-              ]}>
-                {formData.dueDate.toLocaleDateString()}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.dateTimeButton,
-                styles.timeButton,
-                !isTask && styles.reminderDateTimeButton
-              ]}
-              onPress={() => setPickerMode('time')}
-            >
-              <Ionicons 
-                name="time-outline" 
-                size={20} 
-                color={!isTask ? '#FF6B6B' : '#1ADDDB'} 
-              />
-              <Text style={[
-                styles.dateTimeButtonText,
-                !isTask && styles.reminderDateTimeText
-              ]}>
-                {formatTime(formData.dueDate)}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {pickerMode && (
-            <View style={styles.pickerContainer}>
-              <DateTimePicker
-                value={formData.dueDate}
-                mode={pickerMode}
-                is24Hour={false}
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={pickerMode === 'date' ? handleDateChange : handleTimeChange}
-                minimumDate={pickerMode === 'date' ? new Date() : undefined}
-                textColor="#FFFFFF"
-                style={styles.picker}
-              />
-            </View>
-          )}
-
-          {isTask && (
-            <View style={styles.prioritySelector}>
-              <Text style={styles.sectionTitle}>Prioridad</Text>
-              <View style={styles.priorityButtons}>
-                {[
-                  { value: 'high', label: 'Alta', color: '#FF6B6B' },
-                  { value: 'medium', label: 'Media', color: '#FFD93D' },
-                  { value: 'low', label: 'Baja', color: '#6BCB77' }
-                ].map((priority) => (
-                  <TouchableOpacity
-                    key={priority.value}
-                    style={[
-                      styles.priorityButton,
-                      formData.priority === priority.value && styles.priorityButtonActive,
-                      { backgroundColor: priority.color + '40' }
-                    ]}
-                    onPress={() => setFormData({...formData, priority: priority.value})}
-                  >
-                    <Text style={[
-                      styles.priorityButtonText,
-                      { color: priority.color }
-                    ]}>
-                      {priority.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
-            <Switch
-              value={notificationEnabled}
-              onValueChange={setNotificationEnabled}
-              thumbColor={notificationEnabled ? "#1ADDDB" : "#ccc"}
-              trackColor={{ false: "#A3B8E8", true: "#1ADDDB" }}
-            />
-            <Text style={{ color: '#A3B8E8', marginLeft: 12 }}>
-              {notificationEnabled ? 'Notificación activada' : 'Notificación desactivada'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              !isTask && styles.reminderSubmitButton
-            ]}
-            onPress={handleSubmit}
+        <Animated.View 
+          style={[
+            styles.modalContent,
+            {
+              transform: [{
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [300, 0],
+                })
+              }]
+            }
+          ]}
+        >
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
           >
-            <Text style={styles.submitButtonText}>
-              {isTask ? 'Crear Tarea' : 'Crear Recordatorio'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isTask ? 'Nueva Tarea' : 'Nuevo Recordatorio'}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleClose}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={24} color="#A3B8E8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.typeSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  isTask && styles.typeButtonActive
+                ]}
+                onPress={() => handleTypeChange('task')}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="checkbox-outline" 
+                  size={20} 
+                  color={isTask ? '#1ADDDB' : '#A3B8E8'} 
+                />
+                <Text style={[
+                  styles.typeButtonText,
+                  isTask && styles.typeButtonTextActive
+                ]}>Tarea</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  !isTask && styles.reminderTypeButtonActive
+                ]}
+                onPress={() => handleTypeChange('reminder')}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="alarm-outline" 
+                  size={20} 
+                  color={!isTask ? '#FF6B6B' : '#A3B8E8'} 
+                />
+                <Text style={[
+                  styles.typeButtonText,
+                  !isTask && styles.reminderTypeButtonTextActive
+                ]}>Recordatorio</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Título *</Text>
+              <TextInput
+                style={[
+                  styles.input, 
+                  !isTask && styles.reminderInput,
+                  errors.title && styles.inputError
+                ]}
+                placeholder="Ingresa el título"
+                placeholderTextColor="#A3B8E8"
+                value={formData.title}
+                onChangeText={(text) => {
+                  setFormData({...formData, title: text});
+                  if (errors.title) setErrors(prev => ({ ...prev, title: null }));
+                }}
+                maxLength={100}
+              />
+              {errors.title && (
+                <Text style={styles.errorText}>{errors.title}</Text>
+              )}
+            </View>
+
+            {isTask && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Descripción (opcional)</Text>
+                <TextInput
+                  style={[
+                    styles.input, 
+                    styles.textArea,
+                    errors.description && styles.inputError
+                  ]}
+                  placeholder="Describe tu tarea..."
+                  placeholderTextColor="#A3B8E8"
+                  value={formData.description}
+                  onChangeText={(text) => {
+                    setFormData({...formData, description: text});
+                    if (errors.description) setErrors(prev => ({ ...prev, description: null }));
+                  }}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={500}
+                />
+                {errors.description && (
+                  <Text style={styles.errorText}>{errors.description}</Text>
+                )}
+                <Text style={styles.charCount}>
+                  {formData.description?.length || 0}/500
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.dateTimeContainer}>
+              <Text style={styles.inputLabel}>Fecha y Hora *</Text>
+              <View style={styles.dateTimeButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.dateTimeButton,
+                    styles.dateButton,
+                    !isTask && styles.reminderDateTimeButton,
+                    errors.dueDate && styles.inputError
+                  ]}
+                  onPress={() => setPickerMode('date')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name="calendar-outline" 
+                    size={20} 
+                    color={!isTask ? '#FF6B6B' : '#1ADDDB'} 
+                  />
+                  <Text style={[
+                    styles.dateTimeButtonText,
+                    !isTask && styles.reminderDateTimeText
+                  ]}>
+                    {formatDate(formData.dueDate)}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.dateTimeButton,
+                    styles.timeButton,
+                    !isTask && styles.reminderDateTimeButton,
+                    errors.dueDate && styles.inputError
+                  ]}
+                  onPress={() => setPickerMode('time')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name="time-outline" 
+                    size={20} 
+                    color={!isTask ? '#FF6B6B' : '#1ADDDB'} 
+                  />
+                  <Text style={[
+                    styles.dateTimeButtonText,
+                    !isTask && styles.reminderDateTimeText
+                  ]}>
+                    {formatTime(formData.dueDate)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {errors.dueDate && (
+                <Text style={styles.errorText}>{errors.dueDate}</Text>
+              )}
+            </View>
+
+            {pickerMode && (
+              <View style={styles.pickerContainer}>
+                <DateTimePicker
+                  value={formData.dueDate}
+                  mode={pickerMode}
+                  is24Hour={false}
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={pickerMode === 'date' ? handleDateChange : handleTimeChange}
+                  minimumDate={pickerMode === 'date' ? new Date() : undefined}
+                  textColor="#FFFFFF"
+                  style={styles.picker}
+                />
+              </View>
+            )}
+
+            {isTask && (
+              <View style={styles.prioritySelector}>
+                <Text style={styles.sectionTitle}>Prioridad</Text>
+                <View style={styles.priorityButtons}>
+                  {[
+                    { value: 'high', label: 'Alta', color: '#FF6B6B', icon: 'alert-circle' },
+                    { value: 'medium', label: 'Media', color: '#FFD93D', icon: 'alert' },
+                    { value: 'low', label: 'Baja', color: '#6BCB77', icon: 'checkmark-circle' }
+                  ].map((priority) => (
+                    <TouchableOpacity
+                      key={priority.value}
+                      style={[
+                        styles.priorityButton,
+                        formData.priority === priority.value && styles.priorityButtonActive,
+                        { backgroundColor: priority.color + '20' }
+                      ]}
+                      onPress={() => handlePriorityChange(priority.value)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons 
+                        name={priority.icon} 
+                        size={16} 
+                        color={priority.color} 
+                      />
+                      <Text style={[
+                        styles.priorityButtonText,
+                        { color: priority.color }
+                      ]}>
+                        {priority.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.notificationContainer}>
+              <View style={styles.notificationHeader}>
+                <Ionicons name="notifications-outline" size={20} color="#A3B8E8" />
+                <Text style={styles.notificationLabel}>Notificación</Text>
+              </View>
+              <Switch
+                value={notificationEnabled}
+                onValueChange={setNotificationEnabled}
+                thumbColor={notificationEnabled ? "#1ADDDB" : "#ccc"}
+                trackColor={{ false: "#A3B8E8", true: "#1ADDDB" }}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                !isTask && styles.reminderSubmitButton,
+                isSubmitting && styles.submitButtonDisabled
+              ]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+              activeOpacity={0.8}
+            >
+              {isSubmitting ? (
+                <View style={styles.loadingContainer}>
+                  <Ionicons name="hourglass-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.submitButtonText}>Creando...</Text>
+                </View>
+              ) : (
+                <Text style={styles.submitButtonText}>
+                  {isTask ? 'Crear Tarea' : 'Crear Recordatorio'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -334,6 +481,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(29, 43, 95, 0.95)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    maxHeight: '90%',
+  },
+  scrollContent: {
     padding: 20,
     gap: 16,
   },
@@ -344,12 +494,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   typeSelector: {
     flexDirection: 'row',
@@ -362,19 +514,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   typeButtonActive: {
     backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderColor: 'rgba(26, 221, 219, 0.3)',
   },
   reminderTypeButtonActive: {
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderColor: 'rgba(255, 107, 107, 0.3)',
   },
   typeButtonText: {
     color: '#A3B8E8',
     fontSize: 16,
+    fontWeight: '500',
   },
   typeButtonTextActive: {
     color: '#1ADDDB',
@@ -382,33 +539,61 @@ const styles = StyleSheet.create({
   reminderTypeButtonTextActive: {
     color: '#FF6B6B',
   },
+  inputContainer: {
+    gap: 8,
+  },
+  inputLabel: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     color: '#FFFFFF',
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  inputError: {
+    borderColor: '#FF6B6B',
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
   },
   reminderInput: {
     borderColor: 'rgba(255, 107, 107, 0.3)',
-    borderWidth: 1,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  charCount: {
+    color: '#A3B8E8',
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
+  },
   dateTimeContainer: {
+    gap: 8,
+  },
+  dateTimeButtons: {
     flexDirection: 'row',
     gap: 12,
   },
   dateTimeButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
     backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   reminderDateTimeButton: {
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
@@ -422,6 +607,7 @@ const styles = StyleSheet.create({
   dateTimeButtonText: {
     color: '#1ADDDB',
     fontSize: 16,
+    fontWeight: '500',
   },
   reminderDateTimeText: {
     color: '#FF6B6B',
@@ -445,7 +631,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#FFFFFF',
     fontSize: 16,
-    marginBottom: 8,
+    fontWeight: '600',
+    marginBottom: 12,
   },
   priorityButtons: {
     flexDirection: 'row',
@@ -453,17 +640,41 @@ const styles = StyleSheet.create({
   },
   priorityButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     padding: 12,
     borderRadius: 12,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   priorityButtonActive: {
-    borderWidth: 1,
     borderColor: '#1ADDDB',
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
   },
   priorityButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  notificationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  notificationLabel: {
+    color: '#A3B8E8',
+    fontSize: 16,
+    fontWeight: '500',
   },
   submitButton: {
     backgroundColor: '#1ADDDB',
@@ -471,17 +682,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: '#1ADDDB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
   reminderSubmitButton: {
     backgroundColor: '#FF6B6B',
+    shadowColor: '#FF6B6B',
   },
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
-  prioritySelector: {
-    marginBottom: 16,
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });
 
