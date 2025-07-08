@@ -39,11 +39,13 @@ router.use(authenticateToken);
 // --- Esquemas de validación con Joi ---
 const subtaskSchema = Joi.object({
   title: Joi.string()
-    .min(1, 'El título de la subtarea debe tener al menos 1 carácter')
-    .max(100, 'El título de la subtarea debe tener máximo 100 caracteres')
+    .min(1)
+    .max(100)
     .required()
     .messages({
       'string.empty': 'El título de la subtarea es requerido',
+      'string.min': 'El título de la subtarea debe tener al menos 1 carácter',
+      'string.max': 'El título de la subtarea debe tener máximo 100 caracteres',
       'any.required': 'El título de la subtarea es requerido'
     })
 });
@@ -57,9 +59,13 @@ const notificationSchema = Joi.object({
   }),
   repeatReminder: Joi.boolean().default(false),
   reminderInterval: Joi.number()
-    .min(5, 'El intervalo mínimo es 5 minutos')
-    .max(1440, 'El intervalo máximo es 24 horas')
+    .min(5)
+    .max(1440)
     .default(30)
+    .messages({
+      'number.min': 'El intervalo mínimo es 5 minutos',
+      'number.max': 'El intervalo máximo es 24 horas'
+    })
 });
 
 const repeatSchema = Joi.object({
@@ -67,8 +73,11 @@ const repeatSchema = Joi.object({
     .valid('none', 'daily', 'weekly', 'monthly', 'yearly', 'custom')
     .default('none'),
   interval: Joi.number()
-    .min(1, 'El intervalo debe ser al menos 1')
-    .default(1),
+    .min(1)
+    .default(1)
+    .messages({
+      'number.min': 'El intervalo debe ser al menos 1'
+    }),
   endDate: Joi.date().optional(),
   daysOfWeek: Joi.array().items(
     Joi.number().min(0).max(6)
@@ -77,21 +86,27 @@ const repeatSchema = Joi.object({
 
 const taskSchema = Joi.object({
   title: Joi.string()
-    .min(1, 'El título debe tener al menos 1 carácter')
-    .max(100, 'El título debe tener máximo 100 caracteres')
+    .min(1)
+    .max(100)
     .required()
     .messages({
       'string.empty': 'El título es requerido',
+      'string.min': 'El título debe tener al menos 1 carácter',
+      'string.max': 'El título debe tener máximo 100 caracteres',
       'any.required': 'El título es requerido'
     }),
   description: Joi.string()
-    .max(500, 'La descripción debe tener máximo 500 caracteres')
+    .max(500)
     .allow('', null)
-    .default(''),
+    .default('')
+    .messages({
+      'string.max': 'La descripción debe tener máximo 500 caracteres'
+    }),
   dueDate: Joi.date()
-    .min('now', 'La fecha de vencimiento no puede ser anterior a hoy')
+    .min('now')
     .required()
     .messages({
+      'date.min': 'La fecha de vencimiento no puede ser anterior a hoy',
       'any.required': 'La fecha de vencimiento es requerida'
     }),
   priority: Joi.string()
@@ -104,22 +119,38 @@ const taskSchema = Joi.object({
     .valid('task', 'reminder', 'goal')
     .default('task'),
   category: Joi.string()
-    .max(50, 'La categoría debe tener máximo 50 caracteres')
-    .default('General'),
+    .max(50)
+    .default('General')
+    .messages({
+      'string.max': 'La categoría debe tener máximo 50 caracteres'
+    }),
   tags: Joi.array()
-    .items(Joi.string().max(20, 'Cada etiqueta debe tener máximo 20 caracteres'))
+    .items(Joi.string().max(20).messages({
+      'string.max': 'Cada etiqueta debe tener máximo 20 caracteres'
+    }))
     .default([]),
   estimatedTime: Joi.number()
-    .min(0, 'El tiempo estimado no puede ser negativo')
-    .max(1440, 'El tiempo estimado máximo es 24 horas')
-    .optional(),
+    .min(0)
+    .max(1440)
+    .optional()
+    .messages({
+      'number.min': 'El tiempo estimado no puede ser negativo',
+      'number.max': 'El tiempo estimado máximo es 24 horas'
+    }),
   actualTime: Joi.number()
-    .min(0, 'El tiempo real no puede ser negativo')
-    .optional(),
+    .min(0)
+    .optional()
+    .messages({
+      'number.min': 'El tiempo real no puede ser negativo'
+    }),
   progress: Joi.number()
-    .min(0, 'El progreso no puede ser negativo')
-    .max(100, 'El progreso no puede exceder 100%')
-    .default(0),
+    .min(0)
+    .max(100)
+    .default(0)
+    .messages({
+      'number.min': 'El progreso no puede ser negativo',
+      'number.max': 'El progreso no puede exceder 100%'
+    }),
   subtasks: Joi.array()
     .items(subtaskSchema)
     .default([]),
