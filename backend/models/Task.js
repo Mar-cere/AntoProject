@@ -8,12 +8,13 @@
  * @author AntoApp Team
  */
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const taskSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
-    default: () => require('crypto').randomBytes(16).toString('hex'),
+    default: () => crypto.randomBytes(16).toString('hex'),
     unique: true,
     index: true
   },
@@ -94,15 +95,7 @@ const taskSchema = new mongoose.Schema({
     },
     reminderTime: {
       type: Date,
-      validate: {
-        validator: function(value) {
-          if (this.notifications.enabled && !value) {
-            return false;
-          }
-          return true;
-        },
-        message: 'La hora de recordatorio es requerida cuando las notificaciones están habilitadas'
-      }
+      default: undefined
     },
     repeatReminder: {
       type: Boolean,
@@ -263,7 +256,7 @@ taskSchema.virtual('completionRate').get(function() {
 taskSchema.pre('save', function(next) {
   // Generar ID si no existe
   if (!this.id) {
-    this.id = require('crypto').randomBytes(16).toString('hex');
+    this.id = crypto.randomBytes(16).toString('hex');
   }
   
   // Actualizar isReminder basado en itemType
