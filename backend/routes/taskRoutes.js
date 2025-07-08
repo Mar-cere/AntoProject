@@ -302,6 +302,8 @@ router.post('/', createTaskLimiter, async (req, res) => {
   }
 });
 
+
+
 // Obtener una tarea específica
 router.get('/:id', validateObjectId, async (req, res) => {
   try {
@@ -556,6 +558,26 @@ router.patch('/:id/subtasks/:subtaskIndex/complete', validateObjectId, async (re
     console.error('Error al completar subtarea:', error);
     res.status(400).json({ 
       message: error.message || 'Error al completar la subtarea',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener tareas pendientes
+router.get('/pending', async (req, res) => {
+  try {
+    const { type, limit = 10 } = req.query;
+    
+    const tasks = await Task.getPendingItems(req.user._id, type, {
+      limit: parseInt(limit),
+      sort: { dueDate: 1 }
+    });
+    
+    res.json({ success: true, data: tasks });
+  } catch (error) {
+    console.error('Error al obtener tareas pendientes:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener las tareas pendientes',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
