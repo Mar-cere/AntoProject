@@ -220,12 +220,14 @@ router.get('/', async (req, res) => {
     const sortOrder = order === 'desc' ? -1 : 1;
     const sortObj = { [sort]: sortOrder };
 
-    const tasks = await Task.getPendingItems(req.user._id, type, {
-      ...options,
-      sort: sortObj,
-      limit: parseInt(limit),
-      skip
-    });
+    // Agregar filtro de soft delete
+    query.deletedAt = { $exists: false };
+
+    const tasks = await Task.find(query)
+      .sort(sortObj)
+      .limit(parseInt(limit))
+      .skip(skip)
+      .populate('parentTask', 'title status');
 
     // Contar total para paginación
     const total = await Task.countDocuments(query);

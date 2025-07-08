@@ -73,8 +73,9 @@ const TaskScreen = ({ route }) => {
         throw new Error(errorData.message || 'Error al obtener las tareas');
       }
 
-      const data = await response.json();
-      const sortedItems = data.sort((a, b) => {
+      const responseData = await response.json();
+      const itemsArray = responseData.data || [];
+      const sortedItems = itemsArray.sort((a, b) => {
         if (a.itemType !== b.itemType) {
           return a.itemType === 'reminder' ? -1 : 1;
         }
