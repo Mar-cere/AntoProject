@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { 
   View, Text, TouchableOpacity, ActivityIndicator, Animated, 
-  Easing 
+  Easing, Alert, RefreshControl, ScrollView
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -127,50 +127,121 @@ const HabitCard = memo(() => {
   const navigation = useNavigation();
   const [habits, setHabits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const loadHabits = useCallback(async () => {
+  const loadHabits = useCallback(async (isRefresh = false) => {
     try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+      
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_URL}/api/habits?status=active`, {
+      
+      if (!token) {
+        throw new Error('No se encontró token de autenticación');
+      }
+
+      const response = await fetch(`${API_URL}/api/habits/active`, {
+        method: 'GET',
         headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
       });
 
       if (!response.ok) {
-        throw new Error('Error al obtener los hábitos');
+        const errorText = await response.text();
+        throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
-      // Acceso correcto al array de hábitos:
-      const habitsArray = data.data?.habits || [];
+      const habitsArray = data.data || [];
+      
+      // Ordenar por streak y tomar los top 3
       const topHabits = habitsArray
         .sort((a, b) => (b.progress?.streak || 0) - (a.progress?.streak || 0))
         .slice(0, 3);
       
       setHabits(topHabits);
-      setLoading(false);
     } catch (error) {
-      console.error('Error al cargar hábitos:', error);
+      console.error('Error cargando hábitos:', error);
+      setError(error.message);
+      
+      if (error.message.includes('401') || error.message.includes('403')) {
+        Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente');
+        await AsyncStorage.removeItem('userToken');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'SignIn' }],
+        });
+      }
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [navigation]);
+
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    loadHabits(true);
+  }, [loadHabits]);
 
   useEffect(() => {
     loadHabits();
-  }, []);
+  }, [loadHabits]);
 
-  return (
-    <View style={commonStyles.cardContainer}>
-      <CardHeader 
-        icon="lightning-bolt"
-        title="Mis Hábitos"
-        onViewAll={() => navigation.navigate('Habits')}
-      />
+  const renderContent = () => {
+    if (loading) {
+      return <ActivityIndicator color={cardColors.primary} style={commonStyles.loader} />;
+    }
 
-      {loading ? (
-        <ActivityIndicator color={cardColors.primary} style={commonStyles.loader} />
-      ) : habits.length > 0 ? (
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons 
+            name="alert-circle" 
+            size={24} 
+            color={cardColors.error} 
+          />
+          <Text style={styles.errorText}>Error al cargar hábitos</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => loadHabits()}
+          >
+            <Text style={styles.retryText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (habits.length === 0) {
+      return (
+        <EmptyState 
+          icon="lightning-bolt"
+          message="No hay hábitos activos"
+          onAdd={() => navigation.navigate('Habits', { openModal: true })}
+          addButtonText="Crear hábito"
+        />
+      );
+    }
+
+    return (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[cardColors.primary]}
+            tintColor={cardColors.primary}
+          />
+        }
+      >
         <View style={styles.habitsContainer}>
           {habits.map((habit) => (
             <HabitItem
@@ -191,14 +262,19 @@ const HabitCard = memo(() => {
             <Text style={styles.addHabitText}>Nuevo hábito</Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <EmptyState 
-          icon="lightning-bolt"
-          message="No hay hábitos activos"
-          onAdd={() => navigation.navigate('Habits', { openModal: true })}
-          addButtonText="Crear hábito"
-        />
-      )}
+      </ScrollView>
+    );
+  };
+
+  return (
+    <View style={commonStyles.cardContainer}>
+      <CardHeader 
+        icon="lightning-bolt"
+        title="Mis Hábitos"
+        onViewAll={() => navigation.navigate('Habits')}
+      />
+
+      {renderContent()}
     </View>
   );
 });
@@ -285,6 +361,27 @@ const styles = {
   },
   addHabitText: {
     ...commonStyles.addButtonText,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    padding: 20,
+    gap: 12,
+  },
+  errorText: {
+    color: cardColors.error,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: cardColors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
   }
 };
 

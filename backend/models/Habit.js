@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const habitSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: true,
+    default: () => crypto.randomBytes(16).toString('hex'),
+    unique: true,
+    index: true
+  },
   title: {
     type: String,
     required: [true, 'El título es requerido'],
@@ -120,29 +128,14 @@ const habitSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  deletedAt: {
+    type: Date,
+    select: false
   }
 });
 
-// Middleware para actualizar updatedAt y verificar estado
-habitSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  
-  // Actualizar bestStreak si el streak actual es mayor
-  if (this.progress.streak > this.progress.bestStreak) {
-    this.progress.bestStreak = this.progress.streak;
-  }
 
-  // Verificar si está vencido
-  const now = new Date();
-  const reminderTime = new Date(this.reminder.time);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const reminderToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 
-                               reminderTime.getHours(), reminderTime.getMinutes());
-
-  this.status.isOverdue = !this.status.completedToday && now > reminderToday;
-  
-  next();
-});
 
 // Método para marcar como completado
 habitSchema.methods.toggleComplete = async function() {
@@ -278,6 +271,97 @@ habitSchema.methods.shouldNotify = function() {
   // Verificar si es la hora del recordatorio
   return now.getHours() === reminderTime.getHours() &&
          now.getMinutes() === reminderTime.getMinutes();
+};
+
+// Índices para mejorar rendimiento
+habitSchema.index({ userId: 1, createdAt: -1 });
+habitSchema.index({ userId: 1, status: 1 });
+habitSchema.index({ userId: 1, priority: 1 });
+habitSchema.index({ userId: 1, frequency: 1 });
+habitSchema.index({ 'reminder.time': 1 });
+habitSchema.index({ 'status.completedToday': 1 });
+habitSchema.index({ 'status.archived': 1 });
+habitSchema.index({ 'progress.streak': -1 });
+
+// Virtuals útiles
+habitSchema.virtual('isActive').get(function() {
+  return !this.status.archived && !this.deletedAt;
+});
+
+habitSchema.virtual('completionRate').get(function() {
+  if (this.progress.totalDays === 0) return 0;
+  return Math.round((this.progress.completedDays / this.progress.totalDays) * 100);
+});
+
+habitSchema.virtual('daysSinceLastCompleted').get(function() {
+  if (!this.status.lastCompleted) return null;
+  const now = new Date();
+  const lastCompleted = new Date(this.status.lastCompleted);
+  const diffTime = now - lastCompleted;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+});
+
+// Middleware pre-save mejorado
+habitSchema.pre('save', function(next) {
+  // Generar ID si no existe
+  if (!this.id) {
+    this.id = crypto.randomBytes(16).toString('hex');
+  }
+  
+  this.updatedAt = new Date();
+  
+  // Actualizar bestStreak si el streak actual es mayor
+  if (this.progress.streak > this.progress.bestStreak) {
+    this.progress.bestStreak = this.progress.streak;
+  }
+
+  // Verificar si está vencido
+  const now = new Date();
+  const reminderTime = new Date(this.reminder.time);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const reminderToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 
+                               reminderTime.getHours(), reminderTime.getMinutes());
+
+  this.status.isOverdue = !this.status.completedToday && now > reminderToday;
+  
+  next();
+});
+
+// Método para soft delete
+habitSchema.methods.softDelete = function() {
+  this.deletedAt = new Date();
+  return this.save();
+};
+
+// Método para restaurar
+habitSchema.methods.restore = function() {
+  this.deletedAt = undefined;
+  return this.save();
+};
+
+// Método para archivar/desarchivar
+habitSchema.methods.toggleArchive = function() {
+  this.status.archived = !this.status.archived;
+  return this.save();
+};
+
+// Método estático para obtener hábitos activos
+habitSchema.statics.getActiveHabits = function(userId) {
+  return this.find({
+    userId,
+    deletedAt: { $exists: false },
+    'status.archived': false
+  }).sort({ createdAt: -1 });
+};
+
+// Método estático para obtener hábitos vencidos
+habitSchema.statics.getOverdueHabits = function(userId) {
+  return this.find({
+    userId,
+    deletedAt: { $exists: false },
+    'status.archived': false,
+    'status.isOverdue': true
+  }).sort({ 'reminder.time': 1 });
 };
 
 const Habit = mongoose.models.Habit || mongoose.model('Habit', habitSchema);

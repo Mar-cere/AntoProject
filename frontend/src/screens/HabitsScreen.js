@@ -11,7 +11,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  StatusBar
+  StatusBar,
+  RefreshControl
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,6 +40,8 @@ const HabitsScreen = ({ route }) => {
   const [habits, setHabits] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('active'); // 'active', 'archived'
   const [formData, setFormData] = useState({
     title: '',
@@ -51,37 +54,65 @@ const HabitsScreen = ({ route }) => {
   const navigation = useNavigation();
 
   // Cargar hábitos desde la API con filtros
-  const loadHabits = useCallback(async () => {
+  const loadHabits = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+      
       const token = await AsyncStorage.getItem('userToken');
+      
+      if (!token) {
+        throw new Error('No se encontró token de autenticación');
+      }
       
       const status = filterType; // 'active' o 'archived'
       const response = await fetch(`${API_URL}/api/habits?status=${status}`, {
+        method: 'GET',
         headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
       });
 
       if (!response.ok) {
-        throw new Error('Error al obtener los hábitos');
+        const errorText = await response.text();
+        throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
       setHabits(data.data || []);
-      console.log(data.data.map(h => h._id));
     } catch (error) {
       console.error('Error al cargar hábitos:', error);
-      Alert.alert('Error', 'No se pudieron cargar los hábitos');
+      setError(error.message);
+      
+      if (error.message.includes('401') || error.message.includes('403')) {
+        Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente');
+        await AsyncStorage.removeItem('userToken');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'SignIn' }],
+        });
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [filterType]);
+  }, [filterType, navigation]);
+
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    loadHabits(true);
+  }, [loadHabits]);
 
   // Recargar cuando cambia el filtro
   useEffect(() => {
     loadHabits();
-  }, [filterType]);
+  }, [loadHabits]);
 
   const handleHabitPress = useCallback((habit) => {
     navigation.navigate('Habits', { 
@@ -375,15 +406,68 @@ const HabitsScreen = ({ route }) => {
     <View style={styles.container}>
       {renderHeader()}
       
-      <FlatList
-        data={habits}
-        renderItem={renderHabitItem}
-        keyExtractor={item => item._id}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        onRefresh={loadHabits}
-        refreshing={loading}
-      />
+      {error ? (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons 
+            name="alert-circle" 
+            size={48} 
+            color="#FF6B6B" 
+          />
+          <Text style={styles.errorText}>Error al cargar hábitos</Text>
+          <Text style={styles.errorSubtext}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => loadHabits()}
+          >
+            <Text style={styles.retryText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={habits}
+          renderItem={renderHabitItem}
+          keyExtractor={item => item._id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#1ADDDB']}
+              tintColor="#1ADDDB"
+            />
+          }
+          ListEmptyComponent={
+            !loading && (
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons 
+                  name="lightning-bolt" 
+                  size={64} 
+                  color="#A3B8E8" 
+                />
+                <Text style={styles.emptyText}>
+                  {filterType === 'active' 
+                    ? 'No hay hábitos activos' 
+                    : 'No hay hábitos archivados'
+                  }
+                </Text>
+                {filterType === 'active' && (
+                  <TouchableOpacity 
+                    style={styles.addFirstButton}
+                    onPress={() => {
+                      resetForm();
+                      setModalVisible(true);
+                    }}
+                  >
+                    <MaterialCommunityIcons name="plus" size={20} color="#1ADDDB" />
+                    <Text style={styles.addFirstText}>Crear primer hábito</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )
+          }
+        />
+      )}
 
       <TouchableOpacity
         style={styles.fab}
@@ -546,6 +630,63 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 16,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    color: '#A3B8E8',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#1ADDDB',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 16,
+  },
+  emptyText: {
+    color: '#A3B8E8',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  addFirstButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(26, 221, 219, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(26, 221, 219, 0.2)',
+  },
+  addFirstText: {
+    color: '#1ADDDB',
+    fontSize: 16,
+    fontWeight: '500',
   },
   modalContainer: {
     flex: 1,

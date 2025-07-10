@@ -3,8 +3,26 @@ import Habit from '../models/Habit.js';
 import { authenticateToken } from '../middleware/auth.js';
 import Joi from 'joi';
 import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
+
+// Rate limiters
+const createHabitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // 10 hábitos por 15 minutos
+  message: 'Demasiados hábitos creados. Por favor, intente más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const updateHabitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 30, // 30 actualizaciones por 15 minutos
+  message: 'Demasiadas actualizaciones. Por favor, intente más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // Middleware de autenticación para todas las rutas
 router.use(authenticateToken);
@@ -20,30 +38,98 @@ const validateObjectId = (req, res, next) => {
 // Esquemas de validación
 const notificationSchema = Joi.object({
   enabled: Joi.boolean().default(true),
-  time: Joi.date().required(),
-  days: Joi.array().items(Joi.number().min(0).max(6)).default([0,1,2,3,4,5,6]),
-  message: Joi.string().max(200)
+  time: Joi.date().optional(),
+  days: Joi.array().items(
+    Joi.number().min(0).max(6).messages({
+      'number.min': 'Los días deben estar entre 0 y 6',
+      'number.max': 'Los días deben estar entre 0 y 6'
+    })
+  ).default([0,1,2,3,4,5,6]),
+  message: Joi.string().max(200).messages({
+    'string.max': 'El mensaje debe tener máximo 200 caracteres'
+  })
 });
 
 const habitSchema = Joi.object({
-  title: Joi.string().required().max(100).trim(),
-  description: Joi.string().max(500).trim(),
-  icon: Joi.string().required().valid(
-    'exercise', 'meditation', 'reading', 'water', 
-    'sleep', 'study', 'diet', 'coding', 'workout',
-    'yoga', 'journal', 'music', 'art', 'language'
-  ),
-  frequency: Joi.string().valid('daily', 'weekly', 'monthly').required(),
-  reminder: notificationSchema,
-  priority: Joi.string().valid('low', 'medium', 'high').default('medium'),
-  category: Joi.string().max(50).trim(),
-  tags: Joi.array().items(Joi.string().max(30).trim()),
-  color: Joi.string().pattern(/^#[0-9A-F]{6}$/i),
+  title: Joi.string()
+    .required()
+    .max(100)
+    .trim()
+    .messages({
+      'string.empty': 'El título es requerido',
+      'string.max': 'El título debe tener máximo 100 caracteres',
+      'any.required': 'El título es requerido'
+    }),
+  description: Joi.string()
+    .max(500)
+    .trim()
+    .allow('', null)
+    .default('')
+    .messages({
+      'string.max': 'La descripción debe tener máximo 500 caracteres'
+    }),
+  icon: Joi.string()
+    .required()
+    .valid(
+      'exercise', 'meditation', 'reading', 'water', 
+      'sleep', 'study', 'diet', 'coding', 'workout',
+      'yoga', 'journal', 'music', 'art', 'language'
+    )
+    .messages({
+      'any.required': 'El icono es requerido',
+      'any.only': 'Icono no válido'
+    }),
+  frequency: Joi.string()
+    .valid('daily', 'weekly', 'monthly')
+    .required()
+    .messages({
+      'any.required': 'La frecuencia es requerida',
+      'any.only': 'Frecuencia no válida'
+    }),
+  reminder: notificationSchema.default({}),
+  priority: Joi.string()
+    .valid('low', 'medium', 'high')
+    .default('medium')
+    .messages({
+      'any.only': 'Prioridad no válida'
+    }),
+  category: Joi.string()
+    .max(50)
+    .trim()
+    .default('General')
+    .messages({
+      'string.max': 'La categoría debe tener máximo 50 caracteres'
+    }),
+  tags: Joi.array()
+    .items(
+      Joi.string().max(30).trim().messages({
+        'string.max': 'Cada etiqueta debe tener máximo 30 caracteres'
+      })
+    )
+    .default([]),
+  color: Joi.string()
+    .pattern(/^#[0-9A-F]{6}$/i)
+    .optional()
+    .messages({
+      'string.pattern.base': 'El color debe ser un código hexadecimal válido'
+    }),
   goal: Joi.object({
-    target: Joi.number().min(1),
-    unit: Joi.string().max(20),
-    period: Joi.string().valid('day', 'week', 'month')
-  })
+    target: Joi.number()
+      .min(1)
+      .messages({
+        'number.min': 'El objetivo debe ser al menos 1'
+      }),
+    unit: Joi.string()
+      .max(20)
+      .messages({
+        'string.max': 'La unidad debe tener máximo 20 caracteres'
+      }),
+    period: Joi.string()
+      .valid('day', 'week', 'month')
+      .messages({
+        'any.only': 'Período no válido'
+      })
+  }).optional()
 });
 
 // Obtener todos los hábitos del usuario con filtros
@@ -61,7 +147,10 @@ router.get('/', async (req, res) => {
       sort = '-createdAt'
     } = req.query;
 
-    const query = { userId: req.user._id };
+    const query = { 
+      userId: req.user._id,
+      deletedAt: { $exists: false }
+    };
 
     // Filtrar por estado (active/archived)
     if (status) {
@@ -170,7 +259,7 @@ router.get('/', async (req, res) => {
 });
 
 // Crear nuevo hábito
-router.post('/', async (req, res) => {
+router.post('/', createHabitLimiter, async (req, res) => {
   try {
     // Validar datos de entrada
     const { error, value } = habitSchema.validate(req.body, { stripUnknown: true });
@@ -218,7 +307,7 @@ router.post('/', async (req, res) => {
 });
 
 // Actualizar hábito
-router.put('/:id', validateObjectId, async (req, res) => {
+router.put('/:id', validateObjectId, updateHabitLimiter, async (req, res) => {
   try {
     // Validar datos de entrada
     const { error, value } = habitSchema.validate(req.body, { stripUnknown: true });
@@ -261,10 +350,10 @@ router.put('/:id', validateObjectId, async (req, res) => {
   }
 });
 
-// Eliminar hábito
-router.delete('/:id', validateObjectId, async (req, res) => {
+// Archivar/desarchivar hábito
+router.patch('/:id/archive', validateObjectId, async (req, res) => {
   try {
-    const habit = await Habit.findOneAndDelete({
+    const habit = await Habit.findOne({
       _id: req.params.id,
       userId: req.user._id
     });
@@ -276,6 +365,38 @@ router.delete('/:id', validateObjectId, async (req, res) => {
       });
     }
 
+    await habit.toggleArchive();
+    res.json({ 
+      success: true,
+      data: habit,
+      message: habit.status.archived ? 'Hábito archivado' : 'Hábito desarchivado'
+    });
+  } catch (error) {
+    console.error('Error al archivar hábito:', error);
+    res.status(400).json({ 
+      success: false,
+      message: 'Error al archivar el hábito',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Eliminar hábito (soft delete)
+router.delete('/:id', validateObjectId, async (req, res) => {
+  try {
+    const habit = await Habit.findOne({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+    
+    if (!habit) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Hábito no encontrado' 
+      });
+    }
+
+    await habit.softDelete();
     res.json({ 
       success: true,
       message: 'Hábito eliminado correctamente',
@@ -324,6 +445,42 @@ router.patch('/:id/toggle', validateObjectId, async (req, res) => {
     res.status(400).json({ 
       success: false,
       message: 'Error al actualizar el hábito', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener hábitos activos
+router.get('/active', async (req, res) => {
+  try {
+    const habits = await Habit.getActiveHabits(req.user._id);
+    res.json({
+      success: true,
+      data: habits
+    });
+  } catch (error) {
+    console.error('Error al obtener hábitos activos:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener los hábitos activos',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Obtener hábitos vencidos
+router.get('/overdue', async (req, res) => {
+  try {
+    const habits = await Habit.getOverdueHabits(req.user._id);
+    res.json({
+      success: true,
+      data: habits
+    });
+  } catch (error) {
+    console.error('Error al obtener hábitos vencidos:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener los hábitos vencidos',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

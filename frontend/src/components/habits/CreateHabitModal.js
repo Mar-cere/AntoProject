@@ -40,6 +40,21 @@ const CreateHabitModal = ({
       return;
     }
 
+    if (formData.title.trim().length < 3) {
+      Alert.alert('Error', 'El título debe tener al menos 3 caracteres');
+      return;
+    }
+
+    if (formData.title.trim().length > 50) {
+      Alert.alert('Error', 'El título no puede exceder 50 caracteres');
+      return;
+    }
+
+    if (formData.description && formData.description.trim().length > 200) {
+      Alert.alert('Error', 'La descripción no puede exceder 200 caracteres');
+      return;
+    }
+
     const dataToSubmit = {
       title: formData.title.trim(),
       description: formData.description?.trim() || '',
@@ -92,6 +107,8 @@ const CreateHabitModal = ({
               placeholderTextColor="#A3B8E8"
               value={formData.title}
               onChangeText={(text) => setFormData({...formData, title: text})}
+              maxLength={50}
+              autoFocus={true}
             />
 
             <TextInput
@@ -102,6 +119,7 @@ const CreateHabitModal = ({
               onChangeText={(text) => setFormData({...formData, description: text})}
               multiline
               numberOfLines={4}
+              maxLength={200}
             />
 
             <View style={styles.sectionContainer}>
@@ -272,6 +290,7 @@ const CreateHabitModal = ({
             <TouchableOpacity
               style={styles.submitButton}
               onPress={handleSubmit}
+              activeOpacity={0.8}
             >
               <Text style={styles.submitButtonText}>Crear Hábito</Text>
             </TouchableOpacity>
@@ -414,6 +433,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     marginBottom: 16,
+    shadowColor: '#1ADDDB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   submitButtonText: {
     color: '#FFFFFF',
