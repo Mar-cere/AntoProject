@@ -1,23 +1,17 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Modal,
-  TextInput,
   Alert,
   Platform,
-  KeyboardAvoidingView,
-  ScrollView,
   StatusBar,
   RefreshControl
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import FloatingNavBar from '../components/FloatingNavBar';
 import CreateHabitModal from '../components/habits/CreateHabitModal';
@@ -36,13 +30,14 @@ const HABIT_ICONS = {
   coding: 'code-tags',
 };
 
-const HabitsScreen = ({ route }) => {
+const HabitsScreen = ({ route, navigation }) => {
+  // Estados
   const [habits, setHabits] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [filterType, setFilterType] = useState('active'); // 'active', 'archived'
+  const [filterType, setFilterType] = useState('active');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -51,10 +46,8 @@ const HabitsScreen = ({ route }) => {
     reminder: new Date(),
   });
 
-  const navigation = useNavigation();
-
-  // Cargar hábitos desde la API con filtros
-  const loadHabits = useCallback(async (isRefresh = false) => {
+  // Cargar hábitos
+  const loadHabits = async (isRefresh = false) => {
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -64,13 +57,11 @@ const HabitsScreen = ({ route }) => {
       setError(null);
       
       const token = await AsyncStorage.getItem('userToken');
-      
       if (!token) {
         throw new Error('No se encontró token de autenticación');
       }
       
-      const status = filterType; // 'active' o 'archived'
-      const response = await fetch(`${API_URL}/api/habits?status=${status}`, {
+      const response = await fetch(`${API_URL}/api/habits?status=${filterType}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -85,7 +76,7 @@ const HabitsScreen = ({ route }) => {
       }
 
       const data = await response.json();
-      setHabits(data.data || []);
+      setHabits(data.data?.habits || []);
     } catch (error) {
       console.error('Error al cargar hábitos:', error);
       setError(error.message);
@@ -93,36 +84,28 @@ const HabitsScreen = ({ route }) => {
       if (error.message.includes('401') || error.message.includes('403')) {
         Alert.alert('Sesión expirada', 'Por favor, inicia sesión nuevamente');
         await AsyncStorage.removeItem('userToken');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'SignIn' }],
-        });
+        setTimeout(() => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'SignIn' }],
+          });
+        }, 100);
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filterType, navigation]);
+  };
 
   // Pull to refresh
-  const onRefresh = useCallback(() => {
+  const onRefresh = () => {
     loadHabits(true);
-  }, [loadHabits]);
+  };
 
-  // Recargar cuando cambia el filtro
+  // Cargar hábitos al montar y cuando cambia el filtro
   useEffect(() => {
     loadHabits();
-  }, [loadHabits]);
-
-  const handleHabitPress = useCallback((habit) => {
-    navigation.navigate('Habits', { 
-      screen: 'HabitDetails',
-      params: {
-        habitId: habit._id,
-        habit: habit
-      }
-    });
-  }, [navigation]);
+  }, [filterType]);
 
   // Manejar apertura automática del modal
   useEffect(() => {
@@ -131,6 +114,17 @@ const HabitsScreen = ({ route }) => {
       navigation.setParams({ openModal: undefined });
     }
   }, [route.params?.openModal]);
+
+  // Navegar a detalles del hábito
+  const handleHabitPress = (habit) => {
+    navigation.navigate('Habits', { 
+      screen: 'HabitDetails',
+      params: {
+        habitId: habit._id,
+        habit: habit
+      }
+    });
+  };
 
   // Agregar nuevo hábito
   const handleAddHabit = async (data) => {
@@ -164,9 +158,7 @@ const HabitsScreen = ({ route }) => {
       setModalVisible(false);
       resetForm();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Programa la notificación
-      await scheduleHabitNotification(createdHabit);
+      // await scheduleHabitNotification(createdHabit);
 
     } catch (error) {
       console.error('Error:', error);
@@ -279,7 +271,7 @@ const HabitsScreen = ({ route }) => {
     });
   };
 
-  // Header fijo con transparencia
+  // Header
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <StatusBar barStyle="light-content" />
@@ -325,7 +317,7 @@ const HabitsScreen = ({ route }) => {
     </View>
   );
 
-  // Renderizar item de hábito actualizado
+  // Renderizar item de hábito
   const renderHabitItem = ({ item }) => (
     <TouchableOpacity
       style={[
@@ -402,11 +394,10 @@ const HabitsScreen = ({ route }) => {
     </TouchableOpacity>
   );
 
-  return (
-    <View style={styles.container}>
-      {renderHeader()}
-      
-      {error ? (
+  // Renderizar contenido
+  const renderContent = () => {
+    if (error) {
+      return (
         <View style={styles.errorContainer}>
           <MaterialCommunityIcons 
             name="alert-circle" 
@@ -422,52 +413,61 @@ const HabitsScreen = ({ route }) => {
             <Text style={styles.retryText}>Reintentar</Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <FlatList
-          data={habits}
-          renderItem={renderHabitItem}
-          keyExtractor={item => item._id}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#1ADDDB']}
-              tintColor="#1ADDDB"
-            />
-          }
-          ListEmptyComponent={
-            !loading && (
-              <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons 
-                  name="lightning-bolt" 
-                  size={64} 
-                  color="#A3B8E8" 
-                />
-                <Text style={styles.emptyText}>
-                  {filterType === 'active' 
-                    ? 'No hay hábitos activos' 
-                    : 'No hay hábitos archivados'
-                  }
-                </Text>
-                {filterType === 'active' && (
-                  <TouchableOpacity 
-                    style={styles.addFirstButton}
-                    onPress={() => {
-                      resetForm();
-                      setModalVisible(true);
-                    }}
-                  >
-                    <MaterialCommunityIcons name="plus" size={20} color="#1ADDDB" />
-                    <Text style={styles.addFirstText}>Crear primer hábito</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )
-          }
-        />
-      )}
+      );
+    }
+
+    return (
+      <FlatList
+        data={habits}
+        renderItem={renderHabitItem}
+        keyExtractor={item => item._id}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#1ADDDB']}
+            tintColor="#1ADDDB"
+          />
+        }
+        ListEmptyComponent={
+          !loading && (
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons 
+                name="lightning-bolt" 
+                size={64} 
+                color="#A3B8E8" 
+              />
+              <Text style={styles.emptyText}>
+                {filterType === 'active' 
+                  ? 'No hay hábitos activos' 
+                  : 'No hay hábitos archivados'
+                }
+              </Text>
+              {filterType === 'active' && (
+                <TouchableOpacity 
+                  style={styles.addFirstButton}
+                  onPress={() => {
+                    resetForm();
+                    setModalVisible(true);
+                  }}
+                >
+                  <MaterialCommunityIcons name="plus" size={20} color="#1ADDDB" />
+                  <Text style={styles.addFirstText}>Crear primer hábito</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )
+        }
+      />
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      {renderHeader()}
+      {renderContent()}
 
       <TouchableOpacity
         style={styles.fab}
@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 16,
     gap: 12,
-    paddingBottom: 100, // Espacio para FloatingNavBar
+    paddingBottom: 100,
   },
   habitCard: {
     backgroundColor: 'rgba(29, 43, 95, 0.8)',
@@ -591,6 +591,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#A3B8E8',
   },
+  habitFooter: {
+    marginTop: 8,
+  },
   habitStats: {
     flexDirection: 'row',
     gap: 16,
@@ -618,7 +621,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 100, // Ajustado para FloatingNavBar
+    bottom: 100,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -687,111 +690,6 @@ const styles = StyleSheet.create({
     color: '#1ADDDB',
     fontSize: 16,
     fontWeight: '500',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: '#1D2B5F',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 12,
-    color: '#FFFFFF',
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  iconSelector: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  iconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  iconButtonSelected: {
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-  },
-  frequencySelector: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  frequencyButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-  },
-  frequencyButtonSelected: {
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-  },
-  frequencyButtonText: {
-    color: '#A3B8E8',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  frequencyButtonTextSelected: {
-    color: '#1ADDDB',
-  },
-  reminderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(26, 221, 219, 0.1)',
-    marginBottom: 16,
-  },
-  reminderButtonText: {
-    color: '#1ADDDB',
-    fontSize: 16,
-  },
-  addButton: {
-    backgroundColor: '#1ADDDB',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 
